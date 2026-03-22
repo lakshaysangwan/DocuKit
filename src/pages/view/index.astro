@@ -1,0 +1,32 @@
+---
+import BaseLayout from '@/components/layout/BaseLayout.astro';
+import Header from '@/components/layout/Header.astro';
+import Footer from '@/components/layout/Footer.astro';
+import ViewOnceRecipient from '@/components/islands/view-once/ViewOnceRecipient';
+
+// Static page — Cloudflare Pages rewrites /view/:id → /view via _redirects
+---
+
+<BaseLayout
+  title="View Once Image — Docukit"
+  description="Securely view a one-time encrypted image sent via Docukit."
+  noIndex={true}
+>
+  <Header />
+  <main id="main-content" class="flex flex-1 flex-col">
+    <div class="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+      <div class="mb-6 flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-primary)]/10 text-xl">
+          🔒
+        </div>
+        <div>
+          <h1 class="text-lg font-semibold text-[var(--color-text-primary)]">View-Once Image</h1>
+          <p class="text-sm text-[var(--color-text-secondary)]">End-to-end encrypted · Deleted after viewing</p>
+        </div>
+      </div>
+
+      <ViewOnceRecipient client:load />
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

@@ -1,0 +1,95 @@
+---
+import BaseLayout from '@/components/layout/BaseLayout.astro';
+import Header from '@/components/layout/Header.astro';
+import TrustBanner from '@/components/layout/TrustBanner.astro';
+import Footer from '@/components/layout/Footer.astro';
+import ToolHero from './ToolHero.astro';
+import HowToSteps from './HowToSteps.astro';
+import FeatureGrid from './FeatureGrid.astro';
+import FaqSection from './FaqSection.astro';
+import RelatedTools from './RelatedTools.astro';
+import type { ToolDef } from '@/lib/tools-registry';
+import { getRelatedTools } from '@/lib/tools-registry';
+
+interface Props {
+  tool: ToolDef;
+}
+const { tool } = Astro.props;
+const relatedTools = getRelatedTools(tool);
+
+// JSON-LD structured data
+const softwareAppSchema = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: tool.name,
+  description: tool.longDescription,
+  applicationCategory: 'Utility',
+  operatingSystem: 'Web',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  url: `https://docukit.uk/${tool.slug}`,
+});
+
+const breadcrumbSchema = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://docukit.uk' },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: tool.category === 'pdf' ? 'PDF Tools' : 'Image Tools',
+      item: `https://docukit.uk/#${tool.category}-tools`,
+    },
+    { '@type': 'ListItem', position: 3, name: tool.name, item: `https://docukit.uk/${tool.slug}` },
+  ],
+});
+
+const howToSchema = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: `How to ${tool.name}`,
+  description: tool.longDescription,
+  step: tool.howToSteps.map((step, i) => ({
+    '@type': 'HowToStep',
+    position: i + 1,
+    name: step.title,
+    text: step.description,
+  })),
+});
+---
+
+<BaseLayout
+  title={tool.pageTitle}
+  description={tool.metaDescription}
+  canonical={`https://docukit.uk/${tool.slug}`}
+>
+  <!-- JSON-LD structured data -->
+  <script type="application/ld+json" set:html={softwareAppSchema} slot="head" />
+  <script type="application/ld+json" set:html={breadcrumbSchema} slot="head" />
+  <script type="application/ld+json" set:html={howToSchema} slot="head" />
+
+  <TrustBanner />
+  <Header />
+
+  <main id="main-content" class="flex-1">
+    <!-- Hero: H1 + description + trust indicators -->
+    <ToolHero
+      headline={tool.h1}
+      description={tool.longDescription}
+      category={tool.category}
+    />
+
+    <!-- React Island — the interactive tool component -->
+    <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <slot />
+    </div>
+
+    <!-- Static SEO content sections (pure HTML, no JS) -->
+    <HowToSteps steps={tool.howToSteps} toolName={tool.name} />
+    <FeatureGrid features={tool.features} toolName={tool.name} />
+    <FaqSection faqs={tool.faqs} toolName={tool.name} />
+    {relatedTools.length > 0 && <RelatedTools tools={relatedTools} />}
+  </main>
+
+  <Footer />
+</BaseLayout>

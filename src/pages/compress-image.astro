@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import CompressImageTool from '@/components/islands/compress-image/CompressImageTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('compress-image')!;
+---
+
+<ToolPageLayout {tool}>
+  <CompressImageTool client:idle />
+</ToolPageLayout>

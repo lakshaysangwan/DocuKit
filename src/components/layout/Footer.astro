@@ -1,0 +1,99 @@
+---
+import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
+---
+
+<footer class="mt-auto border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+  <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+    <div class="grid grid-cols-2 gap-8 md:grid-cols-4">
+      <!-- Brand -->
+      <div class="col-span-2 md:col-span-1">
+        <a href="/" class="flex items-center gap-2 font-semibold text-[var(--color-text-primary)]">
+          <img src="/favicon.svg" alt="" class="h-6 w-6" width="24" height="24" />
+          Docukit
+        </a>
+        <p class="mt-3 text-sm text-[var(--color-text-muted)]">
+          Process PDFs & images privately in your browser. No uploads, no accounts, no limits.
+        </p>
+        <p class="mt-4 text-xs text-[var(--color-text-muted)]">
+          🔒 Your files never leave your browser.
+        </p>
+      </div>
+
+      <!-- PDF Tools -->
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">PDF Tools</h3>
+        <ul class="mt-3 space-y-2">
+          {PDF_TOOLS.slice(0, 8).map(tool => (
+            <li>
+              <a
+                href={`/${tool.slug}`}
+                class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+              >
+                {tool.name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- More PDF Tools -->
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">More PDF Tools</h3>
+        <ul class="mt-3 space-y-2">
+          {PDF_TOOLS.slice(8).map(tool => (
+            <li>
+              <a
+                href={`/${tool.slug}`}
+                class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+              >
+                {tool.name}
+              </a>
+            </li>
+          ))}
+          <li class="mt-4">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Image Tools</h4>
+          </li>
+          {IMAGE_TOOLS.map(tool => (
+            <li>
+              <a
+                href={`/${tool.slug}`}
+                class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+              >
+                {tool.name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Links -->
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Company</h3>
+        <ul class="mt-3 space-y-2">
+          <li>
+            <a href="/privacy" class="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">Privacy Policy</a>
+          </li>
+          <li>
+            <a
+              href="https://github.com/lakshaysangwan/DocuKit"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+            >
+              GitHub
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-10 flex flex-col items-center justify-between gap-4 border-t border-[var(--color-border)] pt-8 sm:flex-row">
+      <p class="text-xs text-[var(--color-text-muted)]">
+        © {new Date().getFullYear()} Docukit. All processing happens in your browser — files are never uploaded.
+      </p>
+      <p class="text-xs text-[var(--color-text-muted)]">
+        Made with ❤️ — Your files never leave your browser.
+      </p>
+    </div>
+  </div>
+</footer>

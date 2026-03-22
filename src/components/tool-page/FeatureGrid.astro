@@ -1,0 +1,34 @@
+---
+interface Props {
+  features: string[];
+  toolName: string;
+}
+const { features, toolName } = Astro.props;
+---
+
+<section class="px-4 py-12 sm:px-6" aria-labelledby="features-heading">
+  <div class="mx-auto max-w-4xl">
+    <h2 id="features-heading" class="text-xl font-semibold text-[var(--color-text-primary)]">
+      Features
+    </h2>
+    <ul class="mt-6 grid gap-3 sm:grid-cols-2" role="list">
+      {features.map(feature => (
+        <li class="flex items-start gap-3">
+          <svg
+            class="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-success)]"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <span class="text-sm text-[var(--color-text-secondary)]">{feature}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>

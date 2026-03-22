@@ -1,0 +1,55 @@
+---
+import type { ToolFaq } from '@/lib/tools-registry';
+
+interface Props {
+  faqs: ToolFaq[];
+  toolName: string;
+}
+const { faqs, toolName } = Astro.props;
+
+const faqJsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+});
+---
+
+<script type="application/ld+json" set:html={faqJsonLd} />
+
+<section class="px-4 py-12 sm:px-6" aria-labelledby="faq-heading">
+  <div class="mx-auto max-w-4xl">
+    <h2 id="faq-heading" class="text-xl font-semibold text-[var(--color-text-primary)]">
+      Frequently Asked Questions
+    </h2>
+
+    <dl class="mt-8 space-y-4">
+      {faqs.map(({ q, a }) => (
+        <details class="group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <summary
+            class="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 text-sm font-medium text-[var(--color-text-primary)] marker:hidden [&::-webkit-details-marker]:hidden"
+          >
+            <dt>{q}</dt>
+            <svg
+              class="h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform group-open:rotate-180"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </summary>
+          <dd class="faq-answer border-t border-[var(--color-border)]">
+            <div class="faq-answer-inner">
+              <div class="px-5 py-4 text-sm text-[var(--color-text-secondary)]">{a}</div>
+            </div>
+          </dd>
+        </details>
+      ))}
+    </dl>
+  </div>
+</section>

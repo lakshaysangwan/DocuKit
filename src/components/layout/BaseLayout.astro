@@ -1,0 +1,101 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import '@/styles/global.css';
+import ToastProvider from '@/components/islands/shared/ToastProvider';
+
+interface Props {
+  title: string;
+  description: string;
+  ogImage?: string;
+  canonical?: string;
+  noIndex?: boolean;
+}
+
+const {
+  title,
+  description,
+  ogImage = '/og-default.png',
+  canonical = Astro.url.href,
+  noIndex = false,
+} = Astro.props;
+
+const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url.origin).href;
+---
+
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noIndex && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={canonical} />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Dancing+Script:wght@400..700&family=Pacifico&family=Sacramento&display=swap" rel="stylesheet">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="Docukit" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Preload critical fonts -->
+    <link
+      rel="preload"
+      href="/fonts/inter-variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+
+    <ClientRouter />
+
+    <!--
+      Dark mode initialization — runs before body paint to prevent FOUC.
+      Must be inline and synchronous.
+    -->
+    <script is:inline>
+      (function () {
+        var stored = localStorage.getItem('docukit-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (stored === 'dark' || (!stored && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+      // Reapply dark class after Astro view transition swaps the <html> element
+      document.addEventListener('astro:after-swap', function () {
+        var stored = localStorage.getItem('docukit-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (stored === 'dark' || (!stored && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      });
+    </script>
+  </head>
+  <body class="flex min-h-full flex-col">
+    <!-- Skip to main content (accessibility) -->
+    <a class="skip-to-content" href="#main-content">Skip to tool</a>
+
+    <slot />
+
+    <!-- Toast notifications (Sonner) — mounted once globally -->
+    <ToastProvider client:load />
+  </body>
+</html>

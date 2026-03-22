@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import ProtectPdfTool from '@/components/islands/protect-pdf/ProtectPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('unlock-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <ProtectPdfTool client:idle defaultMode="unlock" />
+</ToolPageLayout>

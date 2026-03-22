@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /assets/
+Disallow: /wasm/
+
+Sitemap: https://docukit.uk/sitemap-index.xml

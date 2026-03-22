@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import OrganizePagesTool from '@/components/islands/organize-pages/OrganizePagesTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('rearrange-pdf-pages')!;
+---
+
+<ToolPageLayout {tool}>
+  <OrganizePagesTool client:idle />
+</ToolPageLayout>

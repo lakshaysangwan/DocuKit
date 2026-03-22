@@ -1,0 +1,45 @@
+---
+import type { ToolDef } from '@/lib/tools-registry';
+
+interface Props {
+  tool: ToolDef;
+}
+const { tool } = Astro.props;
+---
+
+<a
+  href={`/${tool.slug}`}
+  class="group flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary-light)] hover:shadow-[var(--shadow-card-hover)]"
+  aria-label={`${tool.name} — ${tool.shortDescription}`}
+>
+  <!-- Icon -->
+  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] transition-transform duration-200 group-hover:scale-110">
+    <img
+      src={tool.icon}
+      alt=""
+      class="h-5 w-5"
+      width="20"
+      height="20"
+      loading="lazy"
+      onerror="this.style.display='none'"
+    />
+  </div>
+
+  <!-- Text -->
+  <div>
+    <h3 class="font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)]">
+      {tool.name}
+    </h3>
+    <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+      {tool.shortDescription}
+    </p>
+  </div>
+
+  <!-- Arrow indicator -->
+  <div class="mt-auto flex items-center gap-1 text-xs font-medium text-[var(--color-primary)] opacity-0 transition-opacity group-hover:opacity-100">
+    Open tool
+    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+    </svg>
+  </div>
+</a>

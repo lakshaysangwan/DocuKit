@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import EditPdfTool from '@/components/islands/edit-pdf/EditPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('edit-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <EditPdfTool client:idle />
+</ToolPageLayout>

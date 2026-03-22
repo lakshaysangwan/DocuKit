@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import ConvertImageTool from '@/components/islands/convert-image/ConvertImageTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('convert-image')!;
+---
+
+<ToolPageLayout {tool}>
+  <ConvertImageTool client:idle />
+</ToolPageLayout>

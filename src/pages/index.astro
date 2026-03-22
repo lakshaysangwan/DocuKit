@@ -1,0 +1,39 @@
+---
+import BaseLayout from '@/components/layout/BaseLayout.astro';
+import Header from '@/components/layout/Header.astro';
+import TrustBanner from '@/components/layout/TrustBanner.astro';
+import Footer from '@/components/layout/Footer.astro';
+import Hero from '@/components/home/Hero.astro';
+import ToolGrid from '@/components/home/ToolGrid.astro';
+import TrustSection from '@/components/home/TrustSection.astro';
+import HowItWorks from '@/components/home/HowItWorks.astro';
+import { TOOLS } from '@/lib/tools-registry';
+
+const websiteSchema = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Docukit',
+  url: 'https://docukit.uk',
+  description: 'Free online PDF and image processing tools. 100% browser-based — no uploads, no accounts.',
+});
+---
+
+<BaseLayout
+  title="Free Online PDF & Image Tools — Docukit"
+  description="Process PDFs and images privately in your browser. 19 free tools — merge, split, compress, sign, watermark, convert, and more. No uploads, no accounts, no limits."
+  canonical="https://docukit.uk"
+>
+  <script type="application/ld+json" set:html={websiteSchema} slot="head" />
+
+  <TrustBanner />
+  <Header />
+
+  <main id="main-content" class="flex-1">
+    <Hero />
+    <ToolGrid tools={TOOLS} />
+    <TrustSection />
+    <HowItWorks />
+  </main>
+
+  <Footer />
+</BaseLayout>

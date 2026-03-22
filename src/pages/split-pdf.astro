@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import SplitPdfTool from '@/components/islands/split-pdf/SplitPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('split-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <SplitPdfTool client:idle />
+</ToolPageLayout>

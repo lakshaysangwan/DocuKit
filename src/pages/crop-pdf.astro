@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import CropPdfTool from '@/components/islands/crop-pdf/CropPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('crop-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <CropPdfTool client:idle />
+</ToolPageLayout>

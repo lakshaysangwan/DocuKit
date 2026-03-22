@@ -1,0 +1,38 @@
+---
+import type { ToolDef } from '@/lib/tools-registry';
+
+interface Props {
+  tools: ToolDef[];
+}
+const { tools } = Astro.props;
+
+if (tools.length === 0) return;
+---
+
+<section class="bg-[var(--color-surface)] px-4 py-12 sm:px-6" aria-labelledby="related-heading">
+  <div class="mx-auto max-w-4xl">
+    <h2 id="related-heading" class="text-xl font-semibold text-[var(--color-text-primary)]">
+      Related Tools
+    </h2>
+    <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {tools.map(tool => (
+        <a
+          href={`/${tool.slug}`}
+          class="group flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-4 transition-all hover:border-[var(--color-primary-light)] hover:shadow-sm"
+        >
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-primary)]/10 transition-transform group-hover:scale-110">
+            <img src={tool.icon} alt="" class="h-4 w-4" loading="lazy" />
+          </div>
+          <div>
+            <div class="text-sm font-medium text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)]">
+              {tool.name}
+            </div>
+            <div class="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              {tool.shortDescription}
+            </div>
+          </div>
+        </a>
+      ))}
+    </div>
+  </div>
+</section>

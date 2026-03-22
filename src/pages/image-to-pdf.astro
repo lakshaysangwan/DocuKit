@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import ImageToPdfTool from '@/components/islands/image-to-pdf/ImageToPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('image-to-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <ImageToPdfTool client:idle />
+</ToolPageLayout>

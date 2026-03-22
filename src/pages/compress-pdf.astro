@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import CompressPdfTool from '@/components/islands/compress-pdf/CompressPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('compress-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <CompressPdfTool client:idle />
+</ToolPageLayout>

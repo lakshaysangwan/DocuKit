@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import LockImageTool from '@/components/islands/lock-image/LockImageTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('lock-image')!;
+---
+
+<ToolPageLayout {tool}>
+  <LockImageTool client:idle />
+</ToolPageLayout>

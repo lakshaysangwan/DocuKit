@@ -1,0 +1,148 @@
+---
+import BaseLayout from '@/components/layout/BaseLayout.astro';
+import Header from '@/components/layout/Header.astro';
+import Footer from '@/components/layout/Footer.astro';
+---
+
+<BaseLayout
+  title="Privacy Policy — Docukit"
+  description="Docukit privacy policy. All processing happens in your browser — no uploads, no tracking, no ads."
+  canonical="https://docukit.uk/privacy"
+>
+  <Header />
+
+  <main id="main-content" class="flex-1">
+    <section class="privacy">
+      <div class="privacy__container">
+        <h1 class="privacy__title">Privacy Policy</h1>
+        <p class="privacy__updated">Last updated: March 2026</p>
+
+        <div class="privacy__section">
+          <h2 class="privacy__heading">No File Uploads</h2>
+          <p class="privacy__text">
+            All PDF and image processing happens entirely in your browser using
+            WebAssembly and Web Workers. Your files never leave your device.
+          </p>
+        </div>
+
+        <div class="privacy__section">
+          <h2 class="privacy__heading">View-Once Feature</h2>
+          <p class="privacy__text">
+            The View-Once Image tool is the only feature that communicates with
+            our servers. The image is encrypted in your browser before upload —
+            the decryption key is only in the share URL fragment and never sent
+            to the server. Encrypted data is stored temporarily with a
+            configurable TTL and permanently deleted after the first view.
+          </p>
+        </div>
+
+        <div class="privacy__section">
+          <h2 class="privacy__heading">No Tracking</h2>
+          <p class="privacy__text">
+            We do not use cookies, analytics, or tracking scripts. No personal
+            data is collected.
+          </p>
+        </div>
+
+        <div class="privacy__section">
+          <h2 class="privacy__heading">No Ads</h2>
+          <p class="privacy__text">
+            Docukit does not display advertisements.
+          </p>
+        </div>
+
+        <div class="privacy__section">
+          <h2 class="privacy__heading">Open Source</h2>
+          <p class="privacy__text">
+            Docukit is open source. You can review all code at
+            <a
+              href="https://github.com/lakshaysangwan/DocuKit"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="privacy__link"
+            >
+              github.com/lakshaysangwan/DocuKit</a
+            >.
+          </p>
+        </div>
+
+        <div class="privacy__section">
+          <h2 class="privacy__heading">Contact</h2>
+          <p class="privacy__text">
+            For privacy concerns, open an issue on
+            <a
+              href="https://github.com/lakshaysangwan/DocuKit/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="privacy__link"
+            >
+              GitHub</a
+            >.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .privacy {
+    padding: 3rem 1.5rem 4rem;
+    max-width: 48rem;
+    margin: 0 auto;
+  }
+
+  .privacy__container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .privacy__title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 0.25rem;
+  }
+
+  .privacy__updated {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: 2rem;
+  }
+
+  .privacy__section {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .privacy__section:last-child {
+    border-bottom: none;
+  }
+
+  .privacy__heading {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .privacy__text {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+  }
+
+  .privacy__link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.15s ease;
+  }
+
+  .privacy__link:hover {
+    color: var(--color-primary-dark);
+  }
+</style>

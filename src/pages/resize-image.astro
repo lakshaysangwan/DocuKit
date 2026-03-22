@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import ResizeImageTool from '@/components/islands/resize-image/ResizeImageTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('resize-image')!;
+---
+
+<ToolPageLayout {tool}>
+  <ResizeImageTool client:idle />
+</ToolPageLayout>

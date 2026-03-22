@@ -1,0 +1,37 @@
+---
+import ToolCard from './ToolCard.astro';
+import type { ToolDef } from '@/lib/tools-registry';
+
+interface Props {
+  tools: ToolDef[];
+}
+const { tools } = Astro.props;
+
+const pdfTools = tools.filter(t => t.category === 'pdf');
+const imageTools = tools.filter(t => t.category === 'image');
+---
+
+<section class="mx-auto max-w-7xl px-4 py-16 sm:px-6" id="tools" aria-labelledby="tools-heading">
+  <!-- PDF Tools -->
+  <div>
+    <h2
+      id="tools-heading"
+      class="mb-8 text-2xl font-semibold text-[var(--color-text-primary)]"
+    >
+      PDF Tools
+    </h2>
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {pdfTools.map(tool => <ToolCard tool={tool} />)}
+    </div>
+  </div>
+
+  <!-- Image Tools -->
+  <div class="mt-16">
+    <h2 class="mb-8 text-2xl font-semibold text-[var(--color-text-primary)]">
+      Image Tools
+    </h2>
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {imageTools.map(tool => <ToolCard tool={tool} />)}
+    </div>
+  </div>
+</section>

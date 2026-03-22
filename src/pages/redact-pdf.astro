@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import RedactPdfTool from '@/components/islands/redact-pdf/RedactPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('redact-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <RedactPdfTool client:idle />
+</ToolPageLayout>

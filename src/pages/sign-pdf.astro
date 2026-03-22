@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import SignPdfTool from '@/components/islands/sign-pdf/SignPdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('sign-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <SignPdfTool client:idle />
+</ToolPageLayout>

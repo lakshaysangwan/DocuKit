@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import ViewOnceImageTool from '@/components/islands/view-once/ViewOnceImageTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('view-once-image')!;
+---
+
+<ToolPageLayout {tool}>
+  <ViewOnceImageTool client:idle />
+</ToolPageLayout>

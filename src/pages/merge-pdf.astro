@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import MergePdfTool from '@/components/islands/merge-pdf/MergePdfTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('merge-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <MergePdfTool client:idle />
+</ToolPageLayout>

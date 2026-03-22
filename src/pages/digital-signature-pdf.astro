@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import DigitalSignatureTool from '@/components/islands/digital-signature/DigitalSignatureTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('digital-signature-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <DigitalSignatureTool client:idle />
+</ToolPageLayout>

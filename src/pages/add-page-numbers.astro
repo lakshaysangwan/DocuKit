@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import PageNumbersTool from '@/components/islands/page-numbers/PageNumbersTool';
+import { getToolBySlug } from '@/lib/tools-registry';
+
+const tool = getToolBySlug('add-page-numbers')!;
+---
+
+<ToolPageLayout {tool}>
+  <PageNumbersTool client:idle />
+</ToolPageLayout>

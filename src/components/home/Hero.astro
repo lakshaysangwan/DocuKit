@@ -1,0 +1,66 @@
+---
+// Hero section — fully static HTML, zero JS
+---
+
+<section class="relative overflow-hidden bg-[var(--color-background)] px-4 py-20 text-center sm:px-6 sm:py-28">
+  <!-- Background gradient -->
+  <div
+    class="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--color-primary)]/5 to-transparent"
+    aria-hidden="true"
+  />
+
+  <div class="relative mx-auto max-w-3xl">
+    <!-- Trust badge -->
+    <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 px-4 py-1.5 text-sm font-medium text-[var(--color-primary)]">
+      <span aria-hidden="true">🔒</span>
+      100% Private — Files Never Leave Your Browser
+    </div>
+
+    <!-- Headline -->
+    <h1 class="text-4xl font-bold tracking-tight text-[var(--color-text-primary)] sm:text-5xl md:text-6xl">
+      Process PDFs &amp; Images.<br />
+      <span class="text-[var(--color-primary)]">Privately. Instantly.</span>
+    </h1>
+
+    <!-- Subheading -->
+    <p class="mx-auto mt-6 max-w-2xl text-lg text-[var(--color-text-secondary)] sm:text-xl">
+      Browser-based PDF and image tools powered by WebAssembly. No uploads,
+      no sign-up, no usage limits — your files never leave your device.
+    </p>
+
+    <!-- CTAs -->
+    <div class="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+      <a
+        href="#tools"
+        class="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 text-base font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[var(--color-primary-dark)] hover:shadow-md active:scale-[0.98]"
+      >
+        Choose a Tool
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </a>
+      <a
+        href="/privacy"
+        class="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] px-6 py-3 text-base font-semibold text-[var(--color-text-secondary)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+      >
+        How it works
+      </a>
+    </div>
+
+    <!-- Stats row -->
+    <div class="mt-14 grid grid-cols-3 gap-6 border-t border-[var(--color-border)] pt-10">
+      <div>
+        <div class="text-2xl font-bold text-[var(--color-text-primary)]">19</div>
+        <div class="mt-1 text-sm text-[var(--color-text-muted)]">Free tools</div>
+      </div>
+      <div>
+        <div class="text-2xl font-bold text-[var(--color-text-primary)]">0</div>
+        <div class="mt-1 text-sm text-[var(--color-text-muted)]">Files uploaded</div>
+      </div>
+      <div>
+        <div class="text-2xl font-bold text-[var(--color-text-primary)]">∞</div>
+        <div class="mt-1 text-sm text-[var(--color-text-muted)]">Usage limits</div>
+      </div>
+    </div>
+  </div>
+</section>
