@@ -1,3 +1,2 @@
-# Rewrite /view/:id to the static recipient page (200 = passthrough, no redirect)
-# The island reads window.location.pathname to extract the UUID
-/view/*  /view/index.html  200
+# Redirects and rewrites are handled by Pages Functions (functions/ directory).
+# This file is kept intentionally empty.
