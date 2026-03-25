@@ -238,6 +238,13 @@ export default function PdfToImageTool() {
           </p>
         </div>
       )}
+
+      {status === 'done' && results.length > 0 && (
+        <div className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
+          Exported images may be large at high DPI. Optimize with{' '}
+          <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
+        </div>
+      )}
     </div>
   );
 }

@@ -222,6 +222,13 @@ export default function ResizeImageTool() {
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatBytes(resultBlob.size)}</p>
         </div>
       )}
+
+      {status === 'done' && resultBlob && resultBlob.size > 500 * 1024 && (
+        <div className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
+          File still large? Optimize it further with{' '}
+          <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
+        </div>
+      )}
     </div>
   );
 }

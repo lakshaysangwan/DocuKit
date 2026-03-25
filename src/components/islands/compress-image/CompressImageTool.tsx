@@ -240,6 +240,14 @@ export default function CompressImageTool() {
           </div>
         </div>
       )}
+
+      {status === 'done' && resultBlob && (savedPct <= 0 || (mode === 'target-size' && resultBlob.size > targetKb * 1024)) && (
+        <div className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
+          Still too large? Reducing dimensions with{' '}
+          <a href="/resize-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Resize Image</a>
+          {' '}can cut file size significantly.
+        </div>
+      )}
     </div>
   );
 }

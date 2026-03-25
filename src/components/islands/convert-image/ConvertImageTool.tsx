@@ -163,6 +163,13 @@ export default function ConvertImageTool() {
           <p className="text-sm font-medium text-[var(--color-success)]">{results.length} image{results.length !== 1 ? 's' : ''} converted!</p>
         </div>
       )}
+
+      {status === 'done' && results.length > 0 && (
+        <div className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
+          Want a smaller file? Try{' '}
+          <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
+        </div>
+      )}
     </div>
   );
 }
