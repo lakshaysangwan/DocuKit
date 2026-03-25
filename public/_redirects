@@ -1,3 +1,3 @@
 # Rewrite /view/:id to the static recipient page (200 = passthrough, no redirect)
 # The island reads window.location.pathname to extract the UUID
-/view/*  /view/index  200
+/view/*  /view/index.html  200
