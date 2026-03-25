@@ -9,7 +9,7 @@ import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { triggerDownload, createZipAndDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
-import { parsePageRange, parseMultiRanges, formatPageRange } from '@/lib/pdf-page-range';
+import { parsePageRange, parseMultiRanges } from '@/lib/pdf-page-range';
 import type { WorkerResponse } from '@/types/worker-messages';
 import { cn } from '@/lib/utils';
 

@@ -38,7 +38,7 @@ interface PlacedAnnotation {
 export default function SignPdfTool() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
-  const [step, setStep] = useState<Step>('create');
+  const [, setStep] = useState<Step>('create');
   const [signatureMode, setSignatureMode] = useState<SignatureMode>('draw');
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [typedText, setTypedText] = useState('');
@@ -47,7 +47,7 @@ export default function SignPdfTool() {
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [activePage, setActivePage] = useState(0);
+  const [_activePage] = useState(0);
 
   const padRef = useRef<SignaturePadHandle>(null);
 

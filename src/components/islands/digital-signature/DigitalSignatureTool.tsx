@@ -27,7 +27,7 @@ interface ParsedCert {
 }
 
 // Placeholder markers for ByteRange — must be fixed length
-const BYTERANGE_PLACEHOLDER = '/ByteRange [0 /********** /********** /**********]';
+const _BYTERANGE_PLACEHOLDER = '/ByteRange [0 /********** /********** /**********]';
 const CONTENTS_LENGTH = 8192; // 8KB hex placeholder for PKCS#7 DER
 const CONTENTS_HEX_LENGTH = CONTENTS_LENGTH * 2; // hex-encoded length
 
@@ -57,7 +57,7 @@ async function signPdfWithPkcs7(
     doc = await PDFDocument.load(new Uint8Array(pdfBuffer));
   } catch (err) {
     if (err instanceof Error && err.message.includes('encrypted')) {
-      throw new Error('This PDF is encrypted. Please use the Unlock PDF tool first to remove the password.');
+      throw new Error('This PDF is encrypted. Please use the Unlock PDF tool first to remove the password.', { cause: err });
     }
     // Fallback if some other error occurred but maybe ignoreEncryption lets it load
     doc = await PDFDocument.load(new Uint8Array(pdfBuffer), { ignoreEncryption: true });
@@ -407,7 +407,8 @@ export default function DigitalSignatureTool() {
         privateKey = keys[0]?.key as ForgeTypes.pki.rsa.PrivateKey;
 
         const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-        certificate = certBags[forge.pki.oids.certBag]?.[0]?.cert!;
+        const certEntry = certBags[forge.pki.oids.certBag]?.[0];
+        certificate = certEntry?.cert ?? undefined as any;
 
         if (!privateKey || !certificate) throw new Error('Could not extract key/cert from .p12 file');
       }

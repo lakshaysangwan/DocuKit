@@ -4,11 +4,9 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
-import ProgressBar from '@/components/islands/shared/ProgressBar';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
-import { createZipAndDownload, triggerDownload } from '@/lib/download';
-import { formatBytes } from '@/lib/utils';
+import { createZipAndDownload } from '@/lib/download';
 import { parsePageRange } from '@/lib/pdf-page-range';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +33,7 @@ export default function PdfToImageTool() {
   const [convertProgress, setConvertProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const { thumbnails, pageCount, isLoading, loadThumbnails } = usePdfThumbnails();
+  const { pageCount, loadThumbnails } = usePdfThumbnails();
 
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;

@@ -5,7 +5,7 @@ interface Props {
   faqs: ToolFaq[];
   toolName: string;
 }
-const { faqs, toolName } = Astro.props;
+const { faqs } = Astro.props;
 
 const faqJsonLd = JSON.stringify({
   '@context': 'https://schema.org',

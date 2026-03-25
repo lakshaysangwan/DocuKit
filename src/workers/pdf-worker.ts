@@ -202,7 +202,7 @@ async function signVisual(
   options: SignVisualOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, PDFFont, StandardFonts, degrees, grayscale, rgb } = await import('pdf-lib');
+  const { PDFDocument, StandardFonts, degrees, rgb } = await import('pdf-lib');
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
@@ -305,7 +305,7 @@ async function watermark(
   options: WatermarkOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, StandardFonts, degrees, rgb, setCharacterSpacing } = await import('pdf-lib');
+  const { PDFDocument, StandardFonts, degrees, rgb } = await import('pdf-lib');
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
@@ -616,7 +616,6 @@ async function compressPdf(
       if (res) {
         const fonts = res.get(PDFName.of('Font'));
         if (fonts && fonts.constructor.name === 'PDFDict') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const fDict = fonts as any;
           const kArray = fDict.keys();
           kArray.forEach((k: any) => fDict.delete(k));
@@ -777,7 +776,6 @@ async function compressPdf(
         newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
         newDict.set(PDFName.of('Length'), context.obj(outBuf.byteLength));
         const replacementStream = PDFRawStream.of(newDict, outBuf);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         context.assign(ref as any, replacementStream);
       } catch {
         continue;

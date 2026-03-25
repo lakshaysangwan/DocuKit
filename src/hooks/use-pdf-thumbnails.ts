@@ -43,7 +43,7 @@ export function usePdfThumbnails(): UsePdfThumbnailsResult {
       // still succeed but individual page operations will fail. However, pdfjs also
       // exposes metadata we can check:
       try {
-        const perms = await doc.getPermissions();
+        await doc.getPermissions();
         // If we got here, the PDF is either unencrypted or has an empty password (owner-only restriction).
         // Empty-password PDFs are readable, so we allow them.
       } catch {

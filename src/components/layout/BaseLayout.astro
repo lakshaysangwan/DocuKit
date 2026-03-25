@@ -71,16 +71,16 @@ const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url.origin).href;
     -->
     <script is:inline>
       (function () {
-        var stored = localStorage.getItem('docukit-theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const stored = localStorage.getItem('docukit-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (stored === 'dark' || (!stored && prefersDark)) {
           document.documentElement.classList.add('dark');
         }
       })();
       // Reapply dark class after Astro view transition swaps the <html> element
       document.addEventListener('astro:after-swap', function () {
-        var stored = localStorage.getItem('docukit-theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const stored = localStorage.getItem('docukit-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (stored === 'dark' || (!stored && prefersDark)) {
           document.documentElement.classList.add('dark');
         } else {

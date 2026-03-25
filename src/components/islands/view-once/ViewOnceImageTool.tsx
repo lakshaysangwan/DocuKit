@@ -3,8 +3,6 @@ import { toast } from 'sonner';
 import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import { fileToArrayBuffer, validateFileSize, VIEW_ONCE_MAX_SIZE } from '@/lib/file-utils';
-import { formatBytes } from '@/lib/utils';
-
 type Status = 'idle' | 'encrypting' | 'uploading' | 'done' | 'error';
 
 const TTL_OPTIONS = [

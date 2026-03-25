@@ -7,8 +7,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { triggerDownload } from '@/lib/download';
-import { formatBytes, percentDiff } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { formatBytes, cn } from '@/lib/utils';
 import type { WorkerResponse, CompressPdfOptions } from '@/types/worker-messages';
 
 type Level = 'low' | 'medium' | 'high' | 'custom';
@@ -73,8 +72,6 @@ export default function CompressPdfTool() {
       const { port1, port2 } = new MessageChannel();
       const bufCopy = buffer.slice(0);
 
-      // Low compression uses pdf-worker (pdf-lib lossless); medium/high would use mupdf-worker
-      // For now, all levels use pdf-worker; mupdf integration added in mupdf-worker
       const response: WorkerResponse | null = await run(
         'pdf',
         { op: 'compress-pdf', buffer: bufCopy, options, progressPort: port2 },

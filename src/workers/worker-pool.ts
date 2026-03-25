@@ -1,6 +1,11 @@
 import type { WorkerRequest, WorkerResponse, ProgressMessage } from '../types/worker-messages';
 
-export type WorkerModule = 'pdf' | 'pdfjs' | 'mupdf' | 'image';
+// Vite ?worker&url imports — ensures workers are compiled to JS at build time
+import pdfWorkerUrl from './pdf-worker.ts?worker&url';
+import pdfjsWorkerUrl from './pdfjs-worker.ts?worker&url';
+import imageWorkerUrl from './image-worker.ts?worker&url';
+
+export type WorkerModule = 'pdf' | 'pdfjs' | 'image';
 
 export interface JobOptions {
   module: WorkerModule;
@@ -21,11 +26,10 @@ interface PendingJob {
   reject: (err: Error) => void;
 }
 
-const WORKER_URLS: Record<WorkerModule, () => URL> = {
-  pdf:   () => new URL('./pdf-worker.ts',   import.meta.url),
-  pdfjs: () => new URL('./pdfjs-worker.ts', import.meta.url),
-  mupdf: () => new URL('./mupdf-worker.ts', import.meta.url),
-  image: () => new URL('./image-worker.ts', import.meta.url),
+const WORKER_URLS: Record<WorkerModule, string> = {
+  pdf: pdfWorkerUrl,
+  pdfjs: pdfjsWorkerUrl,
+  image: imageWorkerUrl,
 };
 
 class WorkerPool {
@@ -53,7 +57,7 @@ class WorkerPool {
   }
 
   private createWorker(module: WorkerModule): Worker {
-    return new Worker(WORKER_URLS[module](), { type: 'module' });
+    return new Worker(WORKER_URLS[module], { type: 'module' });
   }
 
   private dispatch(module: WorkerModule, entry: WorkerEntry, job: PendingJob): void {

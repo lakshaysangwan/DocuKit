@@ -62,7 +62,6 @@ function ThumbnailCard({
   size,
 }: ThumbnailCardProps) {
   const prefersReduced = useReducedMotion();
-  const [showMenu, setShowMenu] = useState(false);
 
   // Disable layout animation while actively dragging to prevent jitter
   const animateLayoutChanges: AnimateLayoutChanges = (args) =>
@@ -98,7 +97,7 @@ function ThumbnailCard({
         else if (e.ctrlKey || e.metaKey) onSelect('toggle');
         else onSelect('single');
       }}
-      onContextMenu={(e) => { e.preventDefault(); setShowMenu((v) => !v); }}
+      onContextMenu={(e) => { e.preventDefault(); }}
       role="checkbox"
       aria-checked={isSelected}
       aria-label={`Page ${page.originalIndex + 1}`}

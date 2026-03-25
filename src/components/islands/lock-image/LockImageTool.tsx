@@ -4,7 +4,6 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import { fileToArrayBuffer } from '@/lib/file-utils';
-import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 type Status = 'idle' | 'encrypting' | 'done' | 'error';

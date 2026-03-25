@@ -32,7 +32,7 @@ export default function RedactPdfTool() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
-  const { thumbnails, pageCount, loadThumbnails } = usePdfThumbnails();
+  const { thumbnails, loadThumbnails } = usePdfThumbnails();
 
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;
@@ -127,7 +127,6 @@ export default function RedactPdfTool() {
         const canvas = new OffscreenCanvas(vp.width, vp.height);
         const ctx = canvas.getContext('2d')!;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await page.render({ canvasContext: ctx as any, viewport: vp, canvas: canvas as any } as any).promise;
 
         // Draw black rectangles over redacted areas on this page

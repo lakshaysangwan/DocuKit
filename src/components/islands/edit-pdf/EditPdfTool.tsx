@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import DropZone from '@/components/islands/shared/DropZone';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import AnnotationToolbar, { type AnnotationTool, type StampType } from './AnnotationToolbar';
-import FabricCanvas, { type FabricCanvasRef } from './FabricCanvas';
+import AnnotationCanvas, { type AnnotationCanvasRef, type AnnotationObject, renderObjects, preloadImages } from './AnnotationCanvas';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { formatBytes } from '@/lib/utils';
 import { triggerDownload } from '@/lib/download';
@@ -46,7 +46,7 @@ export default function EditPdfTool() {
 
   // Per-page canvas JSON (persisted when switching pages)
   const pageStateRef = useRef<Record<number, string>>({});
-  const fabricCanvasRef = useRef<FabricCanvasRef>(null);
+  const fabricCanvasRef = useRef<AnnotationCanvasRef>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const [scaleFactor, setScaleFactor] = useState(1);
 
@@ -244,9 +244,7 @@ export default function EditPdfTool() {
       const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
       const pdfPages = pdfDoc.getPages();
 
-      // We need to initialize an offscreen Canvas for rendering the objects
-      const { Canvas } = await import('fabric');
-      const hiddenCanvasEl = document.createElement('canvas');
+      const imageCache = new Map<string, HTMLImageElement>();
 
       for (let i = 0; i < pages.length; i++) {
         const pageJson = pageStateRef.current[i];
@@ -256,34 +254,23 @@ export default function EditPdfTool() {
         const pdfPage = pdfPages[i];
         const { width: pdfW, height: pdfH } = pdfPage.getSize();
 
-        // Create offscreen Fabric canvas at native PDF dimensions (annotations are in this space)
-        const tempFabric = new Canvas(hiddenCanvasEl, {
-          width: pageData.width,
-          height: pageData.height,
-          enableRetinaScaling: false,
-        });
+        // Parse annotation objects from JSON
+        let objects: AnnotationObject[];
+        try { objects = JSON.parse(pageJson); } catch { continue; }
+        if (!Array.isArray(objects) || objects.length === 0) continue;
 
-        await new Promise<void>(resolve => {
-          tempFabric.loadFromJSON(JSON.parse(pageJson)).then(() => resolve());
-        });
-
-        // Remove the background image so we only export the drawn annotations
-        const objects = tempFabric.getObjects();
-        const bg = objects.find((o: any) => o.selectable === false && !o.evented);
-        if (bg) tempFabric.remove(bg);
-
-        // If no objects remain, skip embedding for performance
-        if (tempFabric.getObjects().length === 0) {
-          tempFabric.dispose();
-          continue;
-        }
-
-        tempFabric.renderAll();
-
-        // Scale up to PDF native resolution for high-quality overlay
+        // Render annotations onto offscreen canvas at high resolution
         const scaleUp = Math.max(pdfW / pageData.width, 1) * 2;
-        const dataUrl = tempFabric.toDataURL({ format: 'png', multiplier: scaleUp });
-        tempFabric.dispose();
+        const offscreen = document.createElement('canvas');
+        offscreen.width = pageData.width * scaleUp;
+        offscreen.height = pageData.height * scaleUp;
+        const ctx = offscreen.getContext('2d')!;
+        ctx.scale(scaleUp, scaleUp);
+
+        await preloadImages(objects, imageCache);
+        renderObjects(ctx, objects, imageCache);
+
+        const dataUrl = offscreen.toDataURL('image/png');
 
         // Extract base64 and generate Uint8Array
         const base64 = dataUrl.split(',')[1];
@@ -397,7 +384,7 @@ export default function EditPdfTool() {
                 transform: `scale(${scaleFactor})`,
                 transformOrigin: 'top left',
               }}>
-                <FabricCanvas
+                <AnnotationCanvas
                   ref={fabricCanvasRef}
                   backgroundUrl={currentPageData.dataUrl}
                   width={currentPageData.width}

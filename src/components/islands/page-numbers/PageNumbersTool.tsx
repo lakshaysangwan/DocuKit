@@ -35,8 +35,8 @@ export default function PageNumbersTool() {
   const [skipFirstN, setSkipFirstN] = useState(0);
   const [fontSize, setFontSize] = useState(10);
   const [color, setColor] = useState('#333333');
-  const [marginX, setMarginX] = useState(20);
-  const [marginY, setMarginY] = useState(15);
+  const [marginX] = useState(20);
+  const [marginY] = useState(15);
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

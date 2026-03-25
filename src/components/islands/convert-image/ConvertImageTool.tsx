@@ -5,10 +5,8 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileList, { type FileItem } from '@/components/islands/shared/FileList';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
-import { fileToArrayBuffer } from '@/lib/file-utils';
 import { createZipAndDownload } from '@/lib/download';
-import { formatBytes, generateId } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { generateId, cn } from '@/lib/utils';
 
 type TargetFormat = 'jpeg' | 'png' | 'webp';
 type Status = 'idle' | 'processing' | 'done' | 'error';
@@ -48,7 +46,7 @@ export default function ConvertImageTool() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<Status>('idle');
   const [results, setResults] = useState<{ name: string; blob: Blob }[]>([]);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg] = useState<string | null>(null);
 
   const handleFiles = useCallback((newFiles: File[]) => {
     const items: FileItem[] = newFiles.map((f) => ({ id: generateId(), file: f }));
@@ -67,7 +65,7 @@ export default function ConvertImageTool() {
         const blob = await convertSingleImage(files[i].file, targetFormat, quality);
         const base = files[i].file.name.replace(/\.[^.]+$/, '');
         out.push({ name: `${base}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`, blob });
-      } catch (err) {
+      } catch {
         toast.error(`Failed to convert ${files[i].file.name}`);
       }
     }

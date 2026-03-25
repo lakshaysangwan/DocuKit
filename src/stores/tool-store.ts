@@ -35,7 +35,7 @@ const initialState = {
 
 /** Factory — call this inside each tool island to get an isolated store */
 export function createToolStore() {
-  return create<ToolState>((set, get) => ({
+  return create<ToolState>((set, _get) => ({
     ...initialState,
 
     addFiles: (newFiles) => {

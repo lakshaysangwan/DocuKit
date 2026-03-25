@@ -7,7 +7,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { triggerDownload } from '@/lib/download';
-import { formatBytes, generateId } from '@/lib/utils';
+import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import type { WorkerResponse, EncryptOptions } from '@/types/worker-messages';
 
@@ -53,8 +53,8 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
   const [userPassword, setUserPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [ownerPassword, setOwnerPassword] = useState('');
-  const [useOwnerPw, setUseOwnerPw] = useState(false);
+  const [ownerPassword] = useState('');
+  const [useOwnerPw] = useState(false);
   const [permissions, setPermissions] = useState({
     print: true, copyContents: true, modifyContents: false, fillForms: true, annotations: true, assemble: false,
   });
