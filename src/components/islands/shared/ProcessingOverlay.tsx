@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
 import ProgressBar from './ProgressBar';
 import { cn } from '@/lib/utils';
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 interface ProcessingOverlayProps {
   progress: number;        // 0–100
@@ -65,17 +63,14 @@ export default function ProcessingOverlay({
   onCancel,
   className,
 }: ProcessingOverlayProps) {
-  const prefersReduced = useReducedMotion();
   const lottieAvailable = typeof window !== 'undefined';
+  const prefersReduced = typeof window !== 'undefined'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   return (
-    <motion.div
-      initial={prefersReduced ? {} : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={prefersReduced ? {} : { opacity: 0 }}
-      transition={{ duration: 0.2 }}
+    <div
       className={cn(
-        'flex flex-col items-center gap-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-10',
+        'flex flex-col items-center gap-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-10 animate-fade-in',
         className
       )}
       role="status"
@@ -108,6 +103,6 @@ export default function ProcessingOverlay({
           Cancel
         </button>
       )}
-    </motion.div>
+    </div>
   );
 }

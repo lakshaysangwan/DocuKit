@@ -1,6 +1,6 @@
 # Docukit
 
-**Free PDF & Image Tools — 100% in your browser.**
+**Private PDF & Image Tools — 100% in your browser.**
 
 [![CI](https://github.com/lakshaysangwan/DocuKit/actions/workflows/ci.yml/badge.svg)](https://github.com/lakshaysangwan/DocuKit/actions/workflows/ci.yml)
 [![Website](https://img.shields.io/badge/website-docukit.uk-blue)](https://docukit.uk)

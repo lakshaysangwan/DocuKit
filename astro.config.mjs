@@ -14,8 +14,8 @@ export default defineConfig({
     AstroPWA({
       registerType: 'autoUpdate',
       workbox: {
-        // Cache-first for hashed assets (JS/CSS/WASM/fonts/images)
-        globPatterns: ['**/*.{js,css,wasm,woff2,ico,svg,png}'],
+        // Only precache the shell (CSS, fonts, icons) — not tool-specific JS/WASM
+        globPatterns: ['**/*.{css,woff2,ico,svg}'],
         runtimeCaching: [
           {
             // Stale-while-revalidate for HTML pages (10 min)
@@ -26,12 +26,30 @@ export default defineConfig({
               expiration: { maxAgeSeconds: 600 },
             },
           },
+          {
+            // Cache-first for hashed JS chunks (cache on first use)
+            urlPattern: /\/_astro\/.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'js-cache',
+              expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 3600 },
+            },
+          },
+          {
+            // Cache-first for WASM and worker files
+            urlPattern: /\.(wasm|mjs)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'wasm-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 30 * 24 * 3600 },
+            },
+          },
         ],
       },
       manifest: {
         name: 'Docukit',
         short_name: 'Docukit',
-        description: 'Free PDF & Image Tools — 100% browser-based, no uploads',
+        description: 'Private PDF & Image Tools — 100% browser-based, no uploads',
         theme_color: '#1A56DB',
         background_color: '#0F172A',
         display: 'standalone',

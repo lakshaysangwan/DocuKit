@@ -18,9 +18,7 @@ import {
   type AnimateLayoutChanges,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import type { ThumbnailResult } from '@/hooks/use-pdf-thumbnails';
 
 export interface PageItem {
@@ -61,8 +59,6 @@ function ThumbnailCard({
   onDelete,
   size,
 }: ThumbnailCardProps) {
-  const prefersReduced = useReducedMotion();
-
   // Disable layout animation while actively dragging to prevent jitter
   const animateLayoutChanges: AnimateLayoutChanges = (args) =>
     args.isSorting || args.wasDragging ? false : true;
@@ -76,15 +72,13 @@ function ThumbnailCard({
     transform: CSS.Translate.toString(transform),
     transition,
     width: size,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       style={style}
-      layout={!prefersReduced && !isDragging}
-      animate={{ opacity: isDragging ? 0.3 : 1, scale: isDragging ? 0.95 : 1 }}
-      transition={{ duration: 0.15 }}
       className={cn(
         'group relative flex cursor-pointer flex-col items-center gap-1.5 rounded-xl p-2',
         'border-2 transition-colors duration-100',
@@ -184,7 +178,7 @@ function ThumbnailCard({
       <span className="text-xs font-medium tabular-nums text-[var(--color-text-secondary)]">
         {page.originalIndex + 1}
       </span>
-    </motion.div>
+    </div>
   );
 }
 
@@ -247,23 +241,21 @@ export default function PageThumbnailGrid({
           role="group"
           aria-label={`${pages.length} pages, ${selectedIds.size} selected`}
         >
-          <AnimatePresence initial={false}>
-            {pages.map((page) => {
-              const thumbnail = thumbnails.find((t) => t.pageIndex === page.originalIndex);
-              return (
-                <ThumbnailCard
-                  key={page.id}
-                  page={page}
-                  thumbnail={thumbnail}
-                  isSelected={selectedIds.has(page.id)}
-                  onSelect={(mode) => handleSelect(page.id, mode)}
-                  onRotate={(dir) => onRotate(page.id, dir)}
-                  onDelete={() => onDelete(page.id)}
-                  size={thumbnailSize}
-                />
-              );
-            })}
-          </AnimatePresence>
+          {pages.map((page) => {
+            const thumbnail = thumbnails.find((t) => t.pageIndex === page.originalIndex);
+            return (
+              <ThumbnailCard
+                key={page.id}
+                page={page}
+                thumbnail={thumbnail}
+                isSelected={selectedIds.has(page.id)}
+                onSelect={(mode) => handleSelect(page.id, mode)}
+                onRotate={(dir) => onRotate(page.id, dir)}
+                onDelete={() => onDelete(page.id)}
+                size={thumbnailSize}
+              />
+            );
+          })}
         </div>
       </SortableContext>
 

@@ -32,11 +32,6 @@ const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url.origin).href;
     {noIndex && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={canonical} />
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Dancing+Script:wght@400..700&family=Pacifico&family=Sacramento&display=swap" rel="stylesheet">
-
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -96,6 +91,6 @@ const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url.origin).href;
     <slot />
 
     <!-- Toast notifications (Sonner) — mounted once globally -->
-    <ToastProvider client:load />
+    <ToastProvider client:idle />
   </body>
 </html>

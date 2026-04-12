@@ -1,5 +1,3 @@
-import JSZip from 'jszip';
-
 export function triggerDownload(buffer: ArrayBuffer, filename: string, mimeType = 'application/octet-stream'): void {
   const blob = new Blob([buffer], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -17,6 +15,7 @@ export async function createZipAndDownload(
   files: { name: string; buffer: ArrayBuffer }[],
   zipName = 'docukit-output.zip'
 ): Promise<void> {
+  const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   for (const file of files) {
     zip.file(file.name, file.buffer);

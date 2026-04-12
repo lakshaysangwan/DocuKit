@@ -18,9 +18,7 @@ import {
   type AnimateLayoutChanges,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatBytes } from '@/lib/utils';
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 export interface FileItem {
   id: string;
@@ -43,8 +41,6 @@ interface SortableFileCardProps {
 }
 
 function SortableFileCard({ item, onRemove }: SortableFileCardProps) {
-  const prefersReduced = useReducedMotion();
-
   // Disable layout animation while sorting to prevent jitter
   const animateLayoutChanges: AnimateLayoutChanges = (args) =>
     args.isSorting || args.wasDragging ? false : true;
@@ -61,19 +57,15 @@ function SortableFileCard({ item, onRemove }: SortableFileCardProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       style={style}
-      layout={!prefersReduced && !isDragging}
-      initial={prefersReduced ? {} : { opacity: 0, y: 8 }}
-      animate={{ opacity: isDragging ? 0.3 : 1, y: 0, scale: isDragging ? 0.98 : 1 }}
-      exit={prefersReduced ? {} : { opacity: 0, x: -20 }}
-      transition={{ duration: 0.15 }}
       className={cn(
-        'flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3',
+        'flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 animate-fade-in-up',
         'transition-shadow duration-150',
         isDragging ? 'shadow-lg' : 'shadow-sm hover:shadow-md'
       )}
@@ -153,7 +145,7 @@ function SortableFileCard({ item, onRemove }: SortableFileCardProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
-    </motion.div>
+    </div>
   );
 }
 
@@ -223,13 +215,11 @@ export default function FileList({ files, onReorder, onRemove, className }: File
           role="list"
           aria-label={`${files.length} file${files.length === 1 ? '' : 's'} queued`}
         >
-          <AnimatePresence initial={false}>
-            {files.map((item) => (
-              <li key={item.id}>
-                <SortableFileCard item={item} onRemove={onRemove} />
-              </li>
-            ))}
-          </AnimatePresence>
+          {files.map((item) => (
+            <li key={item.id}>
+              <SortableFileCard item={item} onRemove={onRemove} />
+            </li>
+          ))}
         </ul>
       </SortableContext>
 
@@ -243,4 +233,3 @@ export default function FileList({ files, onReorder, onRemove, className }: File
     </DndContext>
   );
 }
-
