@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Class-based dark mode. The app toggles a `.dark` class on <html> (see the
+   inline script in BaseLayout); without this, Tailwind v4's `dark:` utilities
+   default to the `prefers-color-scheme` media query and silently no-op whenever
+   the user's manual choice differs from their OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* ── Typography ──────────────────────────── */
   --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
@@ -52,10 +58,16 @@
     /* #9E9EA8 clears 4.5:1 on the dark surfaces (#18181C / #202027);
        the previous #71717A was ~3.6:1 (fails). */
     --color-text-muted:       #9E9EA8;
-    /* Keep the brighter success/error on dark: the light-mode darkening
-       (green-700 / red-700) would fail against these dark surfaces. */
-    --color-success:          #16A34A;
-    --color-error:            #DC2626;
+    /* Indigo-600 (#4F46E5) as accent *text* on the near-black background is only
+       ~3.1:1; lift to indigo-400 for dark so links / "browse" / selected labels
+       clear AA. Action buttons use --color-text-primary as their fill, not this,
+       so no white-on-primary button regresses. */
+    --color-primary:          #818CF8;
+    /* Lighter success/error on dark so accent *text* (notices, messages) clears
+       AA against the dark surfaces and their /5 tints; the light-mode green-700 /
+       red-700 would fail here. */
+    --color-success:          #22C55E;
+    --color-error:            #EF4444;
     /* Brighter accent washes so the category icons glow on dark cards. */
     --color-pdf-bg:           rgba(225, 29, 72, 0.16);
     --color-image-bg:         rgba(13, 148, 136, 0.16);

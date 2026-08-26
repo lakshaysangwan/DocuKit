@@ -36,6 +36,17 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      // The full functional/a11y suite runs on desktop; mobile-only specs are
+      // exercised by the `mobile` project below.
+      testIgnore: '**/mobile/**',
+    },
+    {
+      // P5.4 — phone-viewport pass: layout/rendering smoke on a real mobile
+      // device profile. Scoped to tests/e2e/mobile so the heavy WASM functional
+      // suite isn't re-run on mobile.
+      name: 'mobile',
+      use: { ...devices['Pixel 5'] },
+      testMatch: '**/mobile/**',
     },
   ],
   webServer: {

@@ -174,8 +174,22 @@ Phase 0 → 1.
   pdf-to-image / split / redact / sign / organize check the 0-count and surface the actionable error
   (drop zone stays, so the user retries after unlocking). New `tests/e2e/ux/errors.spec.ts` feeds an
   unreadable PDF and asserts the actionable Unlock link appears.
-- **Next up:** Phase 5 — P5.3 large-file UX (size warnings, cancellable long ops, ETAs) →
-  P5.4 mobile & dark-mode pass (add a mobile Playwright project). Then Phases 6 (perf), 7 (gates).
+- **✅ P5.4 done (mobile + dark)** — Added a scoped **`mobile` Playwright project** (Pixel 5;
+  `testMatch **/mobile/**`, desktop project `testIgnore`s it) + `tests/e2e/mobile/mobile-smoke.spec.ts`:
+  every route renders its H1 with **no horizontal overflow** on a phone (22 pass). For dark mode,
+  `tests/e2e/a11y/axe-dark.spec.ts` forces `.dark` via `localStorage` and re-runs axe on every route
+  (22 pass). Fixes uncovered: **(major) class-based dark mode was broken** — the app toggles a `.dark`
+  class but Tailwind v4's `dark:` variant defaults to the `prefers-color-scheme` media query, so every
+  `dark:` utility silently no-op'd whenever the manual choice differed from the OS. Added
+  `@custom-variant dark (&:where(.dark, .dark *))` so `dark:` keys off the class. Dark tokens for AA:
+  `--color-primary` → indigo-400 `#818CF8` (accent text/links/"browse" were ~3:1 on the near-black bg),
+  and dark `--color-success`/`--color-error` lightened to `#22C55E`/`#EF4444` for readable notice text.
+- **✅ Phase 5 all UX slices except P5.3 done.** Suite: **224 passed** across desktop + mobile projects
+  (1 pre-existing WASM-timeout flake in the local-resources guard, passes on retry). New: `NextStep`
+  component, `src/lib/notify.ts`, `@custom-variant dark`; specs `ux/{feedback,errors}`,
+  `mobile/mobile-smoke`, `a11y/axe-dark`.
+- **Next up:** P5.3 large-file UX (size/page warnings, cancellable long ops, progress ETAs).
+  Then Phases 6 (perf), 7 (gates).
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed
