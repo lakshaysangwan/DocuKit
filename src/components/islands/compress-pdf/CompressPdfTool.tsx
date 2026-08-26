@@ -7,6 +7,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import BeforeAfterSlider from '@/components/islands/shared/BeforeAfterSlider';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { renderPdfPageToDataUrl } from '@/lib/pdf-preview';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes, cn } from '@/lib/utils';
@@ -68,7 +69,7 @@ export default function CompressPdfTool() {
       const buf = await fileToArrayBuffer(f);
       setBuffer(buf);
     } catch {
-      setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.');
+      setFile(null); setBuffer(null); notifyPdfLoadError();
     }
   }, []);
 

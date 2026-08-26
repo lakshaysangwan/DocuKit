@@ -6,6 +6,7 @@ import FileList, { type FileItem } from '@/components/islands/shared/FileList';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import BeforeAfterSlider from '@/components/islands/shared/BeforeAfterSlider';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { createZipAndDownload } from '@/lib/download';
@@ -295,6 +296,10 @@ export default function CompressImageTool() {
             <span>{formatBytes(file.size)}</span><span>→</span><span>{formatBytes(resultBlob.size)}</span>
           </div>
         </div>
+      )}
+
+      {status === 'done' && (isBatch ? batchResults.length > 0 : resultBlob) && (
+        <NextStep href="/resize-image" label="Resize Image">Need different dimensions? Try</NextStep>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { useWorker } from '@/hooks/use-worker';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload, createZipAndDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
 import { parsePageRange, parseMultiRanges } from '@/lib/pdf-page-range';
@@ -50,9 +51,10 @@ export default function SplitPdfTool() {
     try {
       const buf = await fileToArrayBuffer(f);
       setBuffer(buf);
-      await loadThumbnails(buf, 80);
+      const count = await loadThumbnails(buf, 80);
+      if (count === 0) { setFile(null); setBuffer(null); notifyPdfLoadError(); }
     } catch {
-      setFile(null); setBuffer(null); toast.error('Failed to load. If it is encrypted, please unlock it first.');
+      setFile(null); setBuffer(null); notifyPdfLoadError();
     }
   }, [loadThumbnails]);
 

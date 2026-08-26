@@ -4,9 +4,11 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import WatermarkPreview from './WatermarkPreview';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -37,7 +39,7 @@ export default function WatermarkPdfTool() {
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;
     setFile(f); setStatus('idle'); setResult(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.'); }
+    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, []);
 
   const handleRemoveFile = useCallback(() => {
@@ -72,7 +74,7 @@ export default function WatermarkPdfTool() {
     port1.close();
     if (!response) { setStatus('idle'); return; }
     if (response.status === 'error') { setStatus('error'); setErrorMsg(response.message); toast.error(response.message); return; }
-    if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Watermark applied!'); }
+    if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Watermark added — ready to download'); }
   }, [buffer, file, watermarkType, text, imageDataUrl, fontSize, color, opacity, rotation, placement, applyTo, run]);
 
   const handleDownload = useCallback(async () => {
@@ -201,6 +203,10 @@ export default function WatermarkPdfTool() {
           <p className="text-sm font-medium text-[var(--color-success)]">Watermark applied!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatBytes(result.byteLength)}</p>
         </div>
+      )}
+
+      {status === 'done' && result && file && (
+        <NextStep href="/protect-pdf" label="Protect PDF">Keep it private? Add a password with</NextStep>
       )}
     </div>
   );

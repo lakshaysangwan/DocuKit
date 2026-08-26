@@ -99,7 +99,7 @@ export default function ViewOnceImageTool() {
       const url = `${window.location.origin}/view/${id}#${keyB64}.${ivB64}`;
       setShareUrl(url);
       setStatus('done');
-      toast.success('View-once link created!');
+      toast.success('Secure link ready to share');
     } catch (err) {
       let msg = err instanceof Error ? err.message : 'Failed to create link';
       if (err instanceof TypeError && (err.message.includes('fetch') || err.message.includes('network'))) {

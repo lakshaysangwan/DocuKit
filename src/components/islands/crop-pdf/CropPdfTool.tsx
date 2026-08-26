@@ -7,6 +7,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import CropPreview from './CropPreview';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
 import type { WorkerResponse, CropOptions } from '@/types/worker-messages';
@@ -33,7 +34,7 @@ export default function CropPdfTool() {
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;
     setFile(f); setStatus('idle'); setResult(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.'); }
+    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, []);
 
   const handleRemoveFile = useCallback(() => {

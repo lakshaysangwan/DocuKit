@@ -155,8 +155,27 @@ Phase 0 → 1.
 - **✅ Phase 4 COMPLETE.** Full suite: **178 passed / 0 skipped** (116 prior + 62 a11y:
   16 labels + 22 headings + 1 keyboard + 23 axe). New harness helpers: `unlabelledFormControls`,
   `collectHeadingSkips`. New dep: `@axe-core/playwright` (dev).
-- **Next up:** Phase 5 (UX polish) — P5.1 feedback consistency → P5.2 robust error/empty states →
-  P5.3 large-file UX → P5.4 mobile & dark-mode pass → P5.5 cross-tool flow. Then Phases 6 (perf), 7 (gates).
+- **✅ P5.1 done (fixes L-3)** — Feedback consistency. Eight tools emitted a transient toast whose text
+  was identical to the persistent result panel already on screen (image-to-pdf, watermark, page-numbers,
+  protect-unlock, sign-pdf, view-once, digital-signature, lock-image). Toasts reworded to short,
+  action-oriented confirmations distinct from the panel headline (panels — which the e2e specs assert
+  on — left intact). New `tests/e2e/ux/feedback.spec.ts` proves the toast (sonner portal, outside
+  `#main-content`) differs from the persistent panel.
+- **✅ P5.5 done** — Cross-tool flow. Extracted the ad-hoc inline "next step" links into a shared
+  `NextStep` component (`data-testid="next-step"`); migrated the three existing ones (convert / resize /
+  pdf-to-image → Compress Image) and added consistent in-flow suggestions to image-to-pdf & merge →
+  Compress PDF, watermark → Protect PDF, compress-image → Resize Image. Test asserts the panel offers a
+  correctly-linked next step. Suite green (+3 UX tests).
+- **✅ P5.2 done** — Actionable, non-silent PDF load errors. New shared `src/lib/notify.ts`
+  `notifyPdfLoadError()` shows one consistent message with a **one-click "Unlock PDF" deep-link**
+  (sonner action), replacing 11 tools' plain dead-end "Failed to load" toasts. Fixed a real **silent
+  failure**: `usePdfThumbnails.loadThumbnails` swallows parse/encryption errors and returns 0, and the
+  thumbnail tools ignored it — so an encrypted PDF left the tool blank with no message. Now
+  pdf-to-image / split / redact / sign / organize check the 0-count and surface the actionable error
+  (drop zone stays, so the user retries after unlocking). New `tests/e2e/ux/errors.spec.ts` feeds an
+  unreadable PDF and asserts the actionable Unlock link appears.
+- **Next up:** Phase 5 — P5.3 large-file UX (size warnings, cancellable long ops, ETAs) →
+  P5.4 mobile & dark-mode pass (add a mobile Playwright project). Then Phases 6 (perf), 7 (gates).
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed

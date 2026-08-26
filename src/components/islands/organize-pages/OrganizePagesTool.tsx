@@ -9,6 +9,7 @@ import PageThumbnailGrid, { type PageItem } from '@/components/islands/shared/Pa
 import { useWorker } from '@/hooks/use-worker';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes, generateId } from '@/lib/utils';
 import type { WorkerResponse } from '@/types/worker-messages';
@@ -99,9 +100,11 @@ export default function OrganizePagesTool() {
       const count = await loadThumbnails(buf, 150);
       if (count > 0) {
         dispatch({ type: 'push', pages: makePageItems(count) });
+      } else {
+        setFile(null); setBuffer(null); notifyPdfLoadError();
       }
     } catch {
-      setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.');
+      setFile(null); setBuffer(null); notifyPdfLoadError();
     }
   }, [loadThumbnails]);
 

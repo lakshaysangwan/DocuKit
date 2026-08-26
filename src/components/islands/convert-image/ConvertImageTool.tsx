@@ -5,6 +5,7 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileList, { type FileItem } from '@/components/islands/shared/FileList';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import { createZipAndDownload } from '@/lib/download';
 import { bufferToImageData, encodeImageData, formatMime } from '@/lib/image-codec';
 import { formatBytes, generateId, cn } from '@/lib/utils';
@@ -168,10 +169,7 @@ export default function ConvertImageTool() {
         </div>
       )}
       {status === 'done' && results.length > 0 && (
-        <div className="rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
-          Want a smaller file? Try{' '}
-          <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
-        </div>
+        <NextStep href="/compress-image" label="Compress Image">Want a smaller file?</NextStep>
       )}
     </div>
   );

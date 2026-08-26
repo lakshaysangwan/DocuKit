@@ -5,6 +5,7 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileList, { type FileItem } from '@/components/islands/shared/FileList';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { triggerDownload } from '@/lib/download';
@@ -71,7 +72,7 @@ export default function ImageToPdfTool() {
       port1.close();
       if (!response) { setStatus('idle'); return; }
       if (response.status === 'error') { setStatus('error'); setErrorMsg(response.message); toast.error(response.message); return; }
-      if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('PDF created!'); }
+      if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('PDF ready to download'); }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Conversion failed';
       setStatus('error'); setErrorMsg(msg); toast.error(msg);
@@ -184,6 +185,10 @@ export default function ImageToPdfTool() {
           <p className="text-sm font-medium text-[var(--color-success)]">PDF created!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatBytes(result.byteLength)}</p>
         </div>
+      )}
+
+      {status === 'done' && result && (
+        <NextStep href="/compress-pdf" label="Compress PDF">Large file? Shrink it with</NextStep>
       )}
     </div>
   );

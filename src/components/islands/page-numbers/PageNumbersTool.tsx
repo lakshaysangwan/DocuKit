@@ -7,6 +7,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import PageNumbersPreview from './PageNumbersPreview';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -47,7 +48,7 @@ export default function PageNumbersTool() {
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;
     setFile(f); setStatus('idle'); setResult(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.'); }
+    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, []);
 
   const handleRemoveFile = useCallback(() => {
@@ -70,7 +71,7 @@ export default function PageNumbersTool() {
     port1.close();
     if (!response) { setStatus('idle'); return; }
     if (response.status === 'error') { setStatus('error'); setErrorMsg(response.message); toast.error(response.message); return; }
-    if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Page numbers added!'); }
+    if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Page numbers ready to download'); }
   }, [buffer, file, position, format, startNumber, skipFirstN, fontSize, color, marginX, marginY, run]);
 
   const handleDownload = useCallback(async () => {

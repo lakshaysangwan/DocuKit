@@ -6,6 +6,7 @@ import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -73,7 +74,7 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
     const f = files[0];
     if (!f) return;
     setFile(f); setStatus('idle'); setResult(null); setErrorMsg(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.'); }
+    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, []);
 
   const handleRemoveFile = useCallback(() => {
@@ -115,7 +116,7 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
     port1.close();
     if (!response) { setStatus('idle'); return; }
     if (response.status === 'error') { setStatus('error'); setErrorMsg('Incorrect password or decryption failed'); toast.error('Incorrect password'); return; }
-    if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('PDF unlocked!'); }
+    if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Password removed — ready to download'); }
   }, [buffer, file, unlockPassword, run]);
 
   const handleDownload = useCallback(async () => {

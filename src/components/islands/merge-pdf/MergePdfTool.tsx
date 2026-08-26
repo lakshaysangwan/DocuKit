@@ -5,6 +5,7 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileList, { type FileItem } from '@/components/islands/shared/FileList';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { getPdfjs } from '@/lib/pdfjs';
@@ -214,6 +215,10 @@ export default function MergePdfTool() {
             {formatBytes(result.byteLength)} · merged from {files.length} files
           </p>
         </div>
+      )}
+
+      {status === 'done' && result && (
+        <NextStep href="/compress-pdf" label="Compress PDF">Large merged file? Shrink it with</NextStep>
       )}
     </div>
   );

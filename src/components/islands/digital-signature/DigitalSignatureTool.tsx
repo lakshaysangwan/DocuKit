@@ -5,6 +5,7 @@ import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { generateSelfSignedCert, loadP12, signPdfWithPkcs7 } from '@/lib/pdf-sign';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
@@ -46,7 +47,7 @@ export default function DigitalSignatureTool() {
     try {
       setPdfBuffer(await fileToArrayBuffer(f));
     } catch {
-      setPdfFile(null); setPdfBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.');
+      setPdfFile(null); setPdfBuffer(null); notifyPdfLoadError();
     }
   }, []);
 
@@ -132,7 +133,7 @@ export default function DigitalSignatureTool() {
 
       setResult(signedPdf);
       setStatus('done');
-      toast.success('PDF digitally signed with PKCS#7!');
+      toast.success('PDF signed — ready to download');
 
       // Clear private key from memory
       (privateKey as unknown as Record<string, null>).d = null;

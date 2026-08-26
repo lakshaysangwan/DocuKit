@@ -5,6 +5,7 @@ import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import FileList, { type FileItem } from '@/components/islands/shared/FileList';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { createZipAndDownload } from '@/lib/download';
 import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
@@ -372,10 +373,7 @@ export default function ResizeImageTool() {
       )}
 
       {status === 'done' && resultBlob && resultBlob.size > 500 * 1024 && (
-        <div className="rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
-          File still large? Optimize it further with{' '}
-          <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
-        </div>
+        <NextStep href="/compress-image" label="Compress Image">File still large? Optimize it further with</NextStep>
       )}
     </div>
   );

@@ -146,7 +146,7 @@ export default function LockImageTool() {
       const html = buildLockedHtml(cipherB64, ivB64, saltB64, file.type || 'image/jpeg');
       setResultHtml(html);
       setStatus('done');
-      toast.success('Image locked! Download the HTML file to share.');
+      toast.success('Image encrypted — download the HTML to share');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Encryption failed';
       setStatus('error'); setErrorMsg(msg); toast.error(msg);

@@ -8,6 +8,7 @@ import SignaturePad, { type SignaturePadHandle } from './SignaturePad';
 import { useWorker } from '@/hooks/use-worker';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes, generateId } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -73,9 +74,10 @@ export default function SignPdfTool() {
     try {
       const buf = await fileToArrayBuffer(f);
       setPdfBuffer(buf);
-      await loadThumbnails(buf, 200);
+      const count = await loadThumbnails(buf, 200);
+      if (count === 0) throw new Error('PDF could not be parsed');
     } catch {
-      setPdfFile(null); setPdfBuffer(null); setStatus('idle'); setAnnotations([]); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.');
+      setPdfFile(null); setPdfBuffer(null); setStatus('idle'); setAnnotations([]); notifyPdfLoadError();
     }
   }, [loadThumbnails]);
 
@@ -187,7 +189,7 @@ export default function SignPdfTool() {
       if (response.status === 'success') {
         setResult(response.result);
         setStatus('done');
-        toast.success('Signature applied!');
+        toast.success('Signature added — ready to download');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed';

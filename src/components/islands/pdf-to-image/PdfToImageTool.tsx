@@ -4,8 +4,10 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import NextStep from '@/components/islands/shared/NextStep';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { createZipAndDownload } from '@/lib/download';
 import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
 import { parsePageRange } from '@/lib/pdf-page-range';
@@ -44,8 +46,11 @@ export default function PdfToImageTool() {
     try {
       const buf = await fileToArrayBuffer(f);
       setBuffer(buf);
-      await loadThumbnails(buf, 120);
-    } catch { setFile(null); setBuffer(null); toast.error('Failed to load PDF. If it is encrypted, please unlock it first.'); }
+      // loadThumbnails swallows parse/encryption failures and returns 0 — surface
+      // that as an actionable error instead of leaving the tool silently empty.
+      const count = await loadThumbnails(buf, 120);
+      if (count === 0) { setFile(null); setBuffer(null); notifyPdfLoadError(); }
+    } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, [loadThumbnails]);
 
   const handleRemoveFile = useCallback(() => {
@@ -236,10 +241,7 @@ export default function PdfToImageTool() {
       )}
 
       {status === 'done' && results.length > 0 && (
-        <div className="rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
-          Exported images may be large at high DPI. Optimize with{' '}
-          <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
-        </div>
+        <NextStep href="/compress-image" label="Compress Image">Exported images large at high DPI? Optimize with</NextStep>
       )}
     </div>
   );

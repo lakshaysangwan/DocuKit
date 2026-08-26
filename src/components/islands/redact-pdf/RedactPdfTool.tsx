@@ -6,6 +6,7 @@ import DownloadButton from '@/components/islands/shared/DownloadButton';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { notifyPdfLoadError } from '@/lib/notify';
 import { getPdfjs } from '@/lib/pdfjs';
 import { redactWithMupdf } from '@/lib/redact-with-mupdf';
 import { triggerDownload } from '@/lib/download';
@@ -169,10 +170,11 @@ export default function RedactPdfTool() {
     try {
       const buf = await fileToArrayBuffer(f);
       setBuffer(buf);
-      await loadThumbnails(buf); // Default is 800 now for high-clarity
-    } catch { 
+      const count = await loadThumbnails(buf); // Default is 800 now for high-clarity
+      if (count === 0) throw new Error('PDF could not be parsed');
+    } catch {
       setFile(null); setStatus('idle'); setMarks([]); setBuffer(null);
-      toast.error('Failed to read PDF. If it is encrypted, please unlock it first.'); 
+      notifyPdfLoadError();
     }
   }, [loadThumbnails]);
 
