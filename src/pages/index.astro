@@ -5,8 +5,6 @@ import TrustBanner from '@/components/layout/TrustBanner.astro';
 import Footer from '@/components/layout/Footer.astro';
 import Hero from '@/components/home/Hero.astro';
 import ToolGrid from '@/components/home/ToolGrid.astro';
-import TrustSection from '@/components/home/TrustSection.astro';
-import HowItWorks from '@/components/home/HowItWorks.astro';
 import { TOOLS } from '@/lib/tools-registry';
 
 const websiteSchema = JSON.stringify({
@@ -14,13 +12,13 @@ const websiteSchema = JSON.stringify({
   '@type': 'WebSite',
   name: 'Docukit',
   url: 'https://docukit.uk',
-  description: 'Online PDF and image processing tools. 100% browser-based — no uploads, no accounts.',
+  description: 'Browser-based PDF and image tools. No uploads, no accounts.',
 });
 ---
 
 <BaseLayout
-  title="Online PDF & Image Tools — Private & Instant | Docukit"
-  description="Process PDFs and images privately in your browser. 19 tools — merge, split, compress, sign, watermark, convert, and more. No uploads, no accounts, no limits."
+  title="Docukit — PDF & Image Tools in Your Browser"
+  description="Browser-based PDF and image tools. Merge, split, compress, sign, watermark, convert, and more. No uploads, no accounts, no limits."
   canonical="https://docukit.uk"
 >
   <script type="application/ld+json" set:html={websiteSchema} slot="head" />
@@ -31,8 +29,6 @@ const websiteSchema = JSON.stringify({
   <main id="main-content" class="flex-1">
     <Hero />
     <ToolGrid tools={TOOLS} />
-    <TrustSection />
-    <HowItWorks />
   </main>
 
   <Footer />

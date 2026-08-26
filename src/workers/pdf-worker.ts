@@ -83,7 +83,11 @@ async function merge(
   for (let di = 0; di < docs.length; di++) {
     const doc = docs[di];
     const count = doc.getPageCount();
-    const indices = Array.from({ length: count }, (_, i) => i);
+    // Honor an optional per-file page selection; default to all pages.
+    const selection = options.pageSelections?.[di];
+    const indices = (selection && selection.length > 0)
+      ? selection.filter((i) => i >= 0 && i < count)
+      : Array.from({ length: count }, (_, i) => i);
     const copied = await merged.copyPages(doc, indices);
     copied.forEach((page) => merged.addPage(page));
 
@@ -788,6 +792,24 @@ async function compressPdf(
     useObjectStreams: true,
     addDefaultPage: false,
   });
+
+  // Final lossless structural pass: object streams + max-level flate recompression.
+  // This is the only reduction at the "Low" tier (no image recompression there) and
+  // squeezes extra bytes out of every tier. Falls back to the pdf-lib output if qpdf
+  // can't improve on it.
+  sendProgress(92, 'Optimizing structure…');
+  try {
+    const { qpdfCompress } = await import('./qpdf-helper');
+    const optimized = await qpdfCompress(new Uint8Array(savedBytes));
+    if (optimized.byteLength < savedBytes.byteLength) {
+      return optimized.buffer.slice(
+        optimized.byteOffset,
+        optimized.byteOffset + optimized.byteLength,
+      ) as ArrayBuffer;
+    }
+  } catch {
+    /* keep pdf-lib output */
+  }
 
   return savedBytes.buffer as ArrayBuffer;
 }

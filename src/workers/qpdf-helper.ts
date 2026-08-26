@@ -25,6 +25,34 @@ function getModule(): Promise<QpdfExt> {
   return modulePromise;
 }
 
+/**
+ * Lossless structural compression: bundle objects into object streams and
+ * (re)compress all stream data at max flate level. No image/quality loss — this
+ * is the "Low" tier and a final pass for every tier. Returns the original bytes
+ * unchanged if qpdf fails or doesn't actually shrink the file.
+ */
+export async function qpdfCompress(pdfBytes: Uint8Array): Promise<Uint8Array> {
+  const qpdf = await getModule();
+  qpdf.FS.writeFile('/input.pdf', pdfBytes);
+  try {
+    qpdf.callMain([
+      '--object-streams=generate',
+      '--compress-streams=y',
+      '--recompress-flate',
+      '--compression-level=9',
+      '--',
+      '/input.pdf', '/output.pdf',
+    ]);
+    const result = qpdf.FS.readFile('/output.pdf');
+    return result.byteLength > 0 && result.byteLength < pdfBytes.byteLength ? result : pdfBytes;
+  } catch {
+    return pdfBytes;
+  } finally {
+    try { qpdf.FS.unlink('/input.pdf'); } catch { /* ignore */ }
+    try { qpdf.FS.unlink('/output.pdf'); } catch { /* ignore */ }
+  }
+}
+
 export async function qpdfEncrypt(
   pdfBytes: Uint8Array,
   userPassword: string,

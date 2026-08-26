@@ -1,6 +1,11 @@
 {
   "permissions": {
     "allow": [
+      "Bash",
+      "Edit",
+      "Write",
+      "Read",
+      "WebFetch",
       "Bash(dir \"d:\\\\Project\\\\DocuKit\")",
       "Bash(npm --version)",
       "Bash(npm info:*)",
@@ -46,7 +51,17 @@
       "Bash(ls -la \"C:\\\\Users\\\\LAKSHAY\\\\.claude\\\\projects\\\\d--Project-DocuKit\\\\memory\"\" 2>/dev/null || echo \"Memory directory does not exist \")",
       "Bash(grep -n \"case ''encrypt''\\\\|case ''decrypt''\" /d/Project/DocuKit/src/workers/pdf-worker.ts)",
       "WebSearch",
-      "WebFetch(domain:www.npmjs.com)"
-    ]
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(find src/components/islands -name \"*.tsx\" -exec sed -i -e 's/rounded-xl bg-\\\\[var\\(--color-primary\\)\\\\] px-6 py-3 font-semibold text-white/rounded-lg bg-[var\\(--color-text-primary\\)] px-6 py-2.5 text-sm font-medium text-[var\\(--color-background\\)]/g' -e 's/hover:bg-\\\\[var\\(--color-primary-dark\\)\\\\]/hover:opacity-80/g' {} +)",
+      "Bash(find src/components/islands -name \"*.tsx\" -exec sed -i -e 's/rounded-xl border border-\\\\[var\\(--color-error\\)\\\\]/rounded-lg border border-[var\\(--color-error\\)]/g' -e 's/rounded-xl border border-\\\\[var\\(--color-success\\)\\\\]/rounded-lg border border-[var\\(--color-success\\)]/g' -e 's/rounded-xl border border-\\\\[var\\(--color-border\\)\\\\]/rounded-lg border border-[var\\(--color-border\\)]/g' -e 's/rounded-xl border-2/rounded-lg border-2/g' -e 's/rounded-xl bg-\\\\[var\\(--color-surface\\)\\\\]/rounded-lg bg-[var\\(--color-surface\\)]/g' -e 's/rounded-xl p-/rounded-lg p-/g' {} +)",
+      "Bash(find src/components/islands -name \"*.tsx\" -exec sed -i 's/rounded-xl/rounded-lg/g' {} +)",
+      "Bash(cd:*)",
+      "PowerShell(foreach \\($p in 4321,4322,4323\\) { Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop } catch {} } }; Remove-Item -Recurse -Force node_modules\\\\.vite -ErrorAction SilentlyContinue; \"reset\")",
+      "PowerShell(foreach \\($p in 4321,4322,4323\\) { Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop } catch {} } }; Remove-Item -Recurse -Force node_modules\\\\.vite -ErrorAction SilentlyContinue; \"reset to original config\")",
+      "PowerShell(foreach \\($p in 4321,4322,4323\\) { Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop } catch {} } }; Remove-Item -Recurse -Force node_modules\\\\.vite -ErrorAction SilentlyContinue; \"reset for entries config\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4321 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; if \\(Test-Path node_modules\\\\.vite\\) { Remove-Item -Recurse -Force node_modules\\\\.vite }; Write-Output \"cleaned\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4321 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output \"killed\")"
+    ],
+    "defaultMode": "bypassPermissions"
   }
 }

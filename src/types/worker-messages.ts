@@ -3,6 +3,11 @@
 export type MergeOptions = {
   insertBlankPages?: boolean;
   preserveBookmarks?: boolean;
+  /**
+   * Optional per-file page selection (0-indexed), aligned to the `buffers`
+   * array. `undefined`/`null` for a file means include all of its pages.
+   */
+  pageSelections?: (number[] | null)[];
 };
 
 export type SplitOptions = {

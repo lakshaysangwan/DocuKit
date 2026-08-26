@@ -4,6 +4,7 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import PageNumbersPreview from './PageNumbersPreview';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { triggerDownload } from '@/lib/download';
@@ -92,7 +93,7 @@ export default function PageNumbersTool() {
               <div className="grid grid-cols-3 gap-2">
                 {POSITIONS.map((p) => (
                   <button key={p} onClick={() => setPosition(p)}
-                    className={cn('rounded-xl border py-2 text-xs capitalize transition-colors',
+                    className={cn('rounded-lg border py-2 text-xs capitalize transition-colors',
                       position === p ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
                     )}>
                     {p.replace('-', ' ')}
@@ -120,12 +121,12 @@ export default function PageNumbersTool() {
               <div>
                 <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Start number</label>
                 <input type="number" min={1} value={startNumber} onChange={(e) => setStartNumber(Math.max(1, Number(e.target.value)))}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Skip first N pages</label>
                 <input type="number" min={0} value={skipFirstN} onChange={(e) => setSkipFirstN(Math.max(0, Number(e.target.value)))}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
               </div>
               <div>
                 <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
@@ -137,22 +138,29 @@ export default function PageNumbersTool() {
               <div>
                 <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Color</label>
                 <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
-                  className="h-9 w-full cursor-pointer rounded-xl border border-[var(--color-border)]" />
+                  className="h-9 w-full cursor-pointer rounded-lg border border-[var(--color-border)]" />
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {file && (
+        <PageNumbersPreview
+          buffer={buffer}
+          options={{ position, format, startNumber, skipFirstN, fontSize, color, marginX, marginY }}
+        />
+      )}
+
       {isRunning && <ProcessingOverlay progress={progress} label={progressLabel || 'Adding page numbers…'} />}
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}
 
       {!isRunning && file && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleApply}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto">
+          <button onClick={handleApply} data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto">
             Add Page Numbers
           </button>
           {status === 'done' && result && <DownloadButton onClick={handleDownload} label="Download PDF" />}
@@ -160,7 +168,7 @@ export default function PageNumbersTool() {
       )}
 
       {status === 'done' && result && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">Page numbers added!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatBytes(result.byteLength)}</p>
         </div>

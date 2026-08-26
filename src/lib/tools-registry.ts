@@ -41,7 +41,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'merge pdf',
     pageTitle: 'Merge PDF Files Online — No Upload | Docukit',
     metaDescription: 'Merge PDF files online. 100% browser-based — no uploads, no sign-up. Drag to reorder, select pages, preserve bookmarks. Private and instant.',
-    h1: 'Merge PDF Files Online',
+    h1: 'Merge PDF Files',
     relatedSlugs: ['split-pdf', 'compress-pdf', 'rearrange-pdf-pages'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -74,7 +74,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'split pdf',
     pageTitle: 'Split PDF Online — Extract Pages | Docukit',
     metaDescription: 'Split PDF files online. Extract pages, split by range, or separate every page. 100% browser-based, no uploads.',
-    h1: 'Split PDF Files Online',
+    h1: 'Split PDF Files',
     relatedSlugs: ['merge-pdf', 'compress-pdf', 'rearrange-pdf-pages'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -106,7 +106,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'compress pdf',
     pageTitle: 'Compress PDF Online — Reduce File Size | Docukit',
     metaDescription: 'Compress PDF files online. Reduce file size by up to 90% with our browser-based compression. No uploads, no accounts.',
-    h1: 'Compress PDF Files Online',
+    h1: 'Compress PDF Files',
     relatedSlugs: ['merge-pdf', 'split-pdf', 'crop-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs', 'mupdf'],
     faqs: [
@@ -138,7 +138,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'rearrange pdf pages',
     pageTitle: 'Rearrange PDF Pages Online | Docukit',
     metaDescription: 'Rearrange, rotate, and delete PDF pages online. Drag-and-drop page reorder with undo/redo. 100% browser-based, no uploads.',
-    h1: 'Rearrange PDF Pages Online',
+    h1: 'Rearrange PDF Pages',
     relatedSlugs: ['split-pdf', 'merge-pdf', 'crop-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -172,7 +172,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'sign pdf online',
     pageTitle: 'Sign PDF Online — No Upload | Docukit',
     metaDescription: 'Sign PDF files online. Draw, type, or upload your signature. Place it anywhere. 100% browser-based — your document never leaves your device.',
-    h1: 'Sign PDF Files Online',
+    h1: 'Sign PDF Files',
     relatedSlugs: ['digital-signature-pdf', 'edit-pdf', 'protect-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -206,7 +206,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'digital signature pdf',
     pageTitle: 'Digital Signature PDF Online — PKCS#7 | Docukit',
     metaDescription: 'Add a cryptographic digital signature to PDF files privately in your browser. Self-signed or CA certificates. PKCS#7 / PAdES standard. 100% browser-based, private.',
-    h1: 'Digitally Sign PDF Online',
+    h1: 'Digitally Sign PDF',
     relatedSlugs: ['sign-pdf', 'protect-pdf', 'edit-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -240,7 +240,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'password protect pdf',
     pageTitle: 'Password Protect PDF Online | Docukit',
     metaDescription: 'Add password protection to PDF files online. AES-256 encryption, permission controls, strength meter. 100% browser-based.',
-    h1: 'Password Protect PDF Online',
+    h1: 'Password Protect PDF',
     relatedSlugs: ['unlock-pdf', 'sign-pdf', 'redact-pdf'],
     wasmDeps: ['pdf-lib'],
     faqs: [
@@ -273,7 +273,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'unlock pdf',
     pageTitle: 'Unlock PDF — Remove Password Online | Docukit',
     metaDescription: 'Remove password protection from PDF files online. Enter the password, download unlocked PDF. 100% browser-based, private.',
-    h1: 'Unlock PDF — Remove Password Online',
+    h1: 'Unlock PDF',
     relatedSlugs: ['protect-pdf', 'compress-pdf', 'merge-pdf'],
     wasmDeps: ['pdf-lib'],
     faqs: [
@@ -304,7 +304,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'pdf to jpg',
     pageTitle: 'PDF to Image Online — PNG, JPG, WebP | Docukit',
     metaDescription: 'Convert PDF to image online. Export pages as PNG, JPEG, WebP, or AVIF at custom DPI. 100% browser-based, no uploads.',
-    h1: 'Convert PDF to Image Online',
+    h1: 'Convert PDF to Image',
     relatedSlugs: ['image-to-pdf', 'compress-image', 'compress-pdf'],
     wasmDeps: ['pdfjs'],
     faqs: [
@@ -336,7 +336,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'image to pdf',
     pageTitle: 'Image to PDF Online — JPG, PNG to PDF | Docukit',
     metaDescription: 'Convert images to PDF online. JPEG, PNG, WebP, HEIC supported. Choose page size and layout. 100% browser-based.',
-    h1: 'Convert Images to PDF Online',
+    h1: 'Convert Images to PDF',
     relatedSlugs: ['pdf-to-image', 'compress-pdf', 'merge-pdf'],
     wasmDeps: ['pdf-lib'],
     faqs: [
@@ -368,7 +368,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'add watermark to pdf',
     pageTitle: 'Add Watermark to PDF Online | Docukit',
     metaDescription: 'Add text or image watermarks to PDF files online. Custom font, opacity, rotation, placement. 100% browser-based.',
-    h1: 'Add Watermark to PDF Online',
+    h1: 'Add Watermark to PDF',
     relatedSlugs: ['compress-image', 'edit-pdf', 'protect-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -401,7 +401,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'edit pdf online',
     pageTitle: 'Edit PDF Online — Annotate & Add Text | Docukit',
     metaDescription: 'Edit PDF files online. Add text, shapes, images, highlights, stamps, and freehand drawings. 100% browser-based annotation editor.',
-    h1: 'Edit PDF Online',
+    h1: 'Edit PDF',
     relatedSlugs: ['sign-pdf', 'redact-pdf', 'watermark-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
@@ -435,7 +435,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'add page numbers to pdf',
     pageTitle: 'Add Page Numbers to PDF Online | Docukit',
     metaDescription: 'Add page numbers to PDF files online. Choose position, format, font, and size. 100% browser-based.',
-    h1: 'Add Page Numbers to PDF Online',
+    h1: 'Add Page Numbers to PDF',
     relatedSlugs: ['edit-pdf', 'watermark-pdf', 'merge-pdf'],
     wasmDeps: ['pdf-lib'],
     faqs: [
@@ -468,7 +468,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'crop pdf',
     pageTitle: 'Crop PDF Online — Trim Pages | Docukit',
     metaDescription: 'Crop PDF pages online. Visual crop with drag handles or numeric input. Auto-crop whitespace. 100% browser-based.',
-    h1: 'Crop PDF Pages Online',
+    h1: 'Crop PDF Pages',
     relatedSlugs: ['compress-pdf', 'rearrange-pdf-pages', 'edit-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs', 'mupdf'],
     faqs: [
@@ -500,7 +500,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'redact pdf',
     pageTitle: 'Redact PDF Online — Permanently Remove Content | Docukit',
     metaDescription: 'Permanently redact sensitive content from PDF files online. True redaction destroys underlying text and images. 100% browser-based.',
-    h1: 'Redact PDF Online',
+    h1: 'Redact PDF',
     relatedSlugs: ['edit-pdf', 'protect-pdf', 'compress-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs', 'mupdf'],
     faqs: [
@@ -535,7 +535,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'compress image online',
     pageTitle: 'Compress Image Online — JPG, PNG, WebP | Docukit',
     metaDescription: 'Compress images online. JPEG, PNG, WebP, AVIF supported. Target file size, quality slider, or batch compression. 100% browser-based.',
-    h1: 'Compress Images Online',
+    h1: 'Compress Images',
     relatedSlugs: ['resize-image', 'convert-image', 'compress-pdf'],
     wasmDeps: ['image-wasm'],
     faqs: [
@@ -568,7 +568,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'resize image',
     pageTitle: 'Resize Image Online — Exact Dimensions | Docukit',
     metaDescription: 'Resize images online. Exact dimensions, percentages, or social media presets. Aspect ratio lock, multiple fit modes. 100% browser-based.',
-    h1: 'Resize Images Online',
+    h1: 'Resize Images',
     relatedSlugs: ['compress-image', 'convert-image', 'crop-pdf'],
     wasmDeps: ['image-wasm'],
     faqs: [
@@ -601,7 +601,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'convert image format',
     pageTitle: 'Convert Image Format Online — JPG, PNG, WebP | Docukit',
     metaDescription: 'Convert image formats online. JPEG, PNG, WebP, AVIF, HEIC, and more. Batch conversion. 100% browser-based.',
-    h1: 'Convert Image Format Online',
+    h1: 'Convert Image Format',
     relatedSlugs: ['compress-image', 'resize-image', 'pdf-to-image'],
     wasmDeps: ['image-wasm'],
     faqs: [
@@ -632,7 +632,7 @@ export const TOOLS: ToolDef[] = [
     primaryKeyword: 'encrypt image with password',
     pageTitle: 'Lock Image with Password — Encrypt Online | Docukit',
     metaDescription: 'Encrypt and password-protect images online. AES-256-GCM encryption into a self-contained HTML file. No server involved.',
-    h1: 'Lock Image with Password Online',
+    h1: 'Lock Image with Password',
     relatedSlugs: ['view-once-image', 'compress-image', 'protect-pdf'],
     wasmDeps: [],
     faqs: [

@@ -1,45 +1,74 @@
 ---
 import type { ToolDef } from '@/lib/tools-registry';
+import fs from 'node:fs';
+import path from 'node:path';
 
 interface Props {
   tool: ToolDef;
+  featured?: boolean;
 }
-const { tool } = Astro.props;
+const { tool, featured = false } = Astro.props;
+
+const isPdf = tool.category === 'pdf';
+const accentColor = isPdf ? 'var(--color-pdf)' : 'var(--color-image)';
+const accentBg = isPdf ? 'var(--color-pdf-bg)' : 'var(--color-image-bg)';
+
+// Inline SVG at build time for proper currentColor support
+let svgContent = '';
+try {
+  const svgPath = path.join(process.cwd(), 'public', tool.icon);
+  svgContent = fs.readFileSync(svgPath, 'utf-8');
+  // Strip width/height from SVG root so we control size via CSS
+  svgContent = svgContent.replace(/\s*width="24"\s*/g, ' ').replace(/\s*height="24"\s*/g, ' ');
+} catch {
+  // Fallback: no icon
+}
 ---
 
 <a
   href={`/${tool.slug}`}
-  class="group flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary-light)] hover:shadow-[var(--shadow-card-hover)]"
+  class:list={[
+    "group relative flex flex-col gap-4 border border-[var(--color-border)] bg-[var(--color-surface)] transition-all duration-150",
+    "hover:border-transparent hover:shadow-[var(--shadow-card-hover)]",
+    featured ? "rounded-xl p-5 sm:p-6" : "rounded-lg p-5",
+  ]}
   aria-label={`${tool.name} — ${tool.shortDescription}`}
 >
-  <!-- Icon -->
-  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] transition-transform duration-200 group-hover:scale-110">
-    <img
-      src={tool.icon}
-      alt=""
-      class="h-5 w-5"
-      width="20"
-      height="20"
-      loading="lazy"
-      onerror="this.style.display='none'"
-    />
+  <!-- Accent left border on hover -->
+  <div
+    class="absolute left-0 top-3 bottom-3 w-0.5 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+    style={`background: ${accentColor};`}
+    aria-hidden="true"
+  />
+
+  <!-- Icon — inlined SVG -->
+  <div
+    class:list={[
+      "flex items-center justify-center rounded-lg",
+      featured ? "h-11 w-11" : "h-10 w-10",
+    ]}
+    style={`background: ${accentBg}; color: ${accentColor};`}
+  >
+    {svgContent ? (
+      <div class:list={[featured ? "h-5 w-5" : "h-[18px] w-[18px]", "[&>svg]:h-full [&>svg]:w-full"]} set:html={svgContent} />
+    ) : (
+      <div class={featured ? "h-5 w-5" : "h-[18px] w-[18px]"} />
+    )}
   </div>
 
   <!-- Text -->
   <div>
-    <h3 class="font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)]">
+    <h3 class:list={[
+      "font-semibold text-[var(--color-text-primary)]",
+      featured ? "text-base" : "text-[15px]",
+    ]}>
       {tool.name}
     </h3>
-    <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+    <p class:list={[
+      "mt-1 text-[var(--color-text-muted)] leading-snug",
+      featured ? "text-sm" : "text-[13px]",
+    ]}>
       {tool.shortDescription}
     </p>
-  </div>
-
-  <!-- Arrow indicator -->
-  <div class="mt-auto flex items-center gap-1 text-xs font-medium text-[var(--color-primary)] opacity-0 transition-opacity group-hover:opacity-100">
-    Open tool
-    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-    </svg>
   </div>
 </a>

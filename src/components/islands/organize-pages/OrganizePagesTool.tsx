@@ -263,7 +263,7 @@ export default function OrganizePagesTool() {
       )}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
           {errorMsg}
         </div>
       )}
@@ -273,7 +273,8 @@ export default function OrganizePagesTool() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             onClick={handleApply}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto"
+            data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto"
           >
             Apply & Download
           </button>
@@ -284,7 +285,7 @@ export default function OrganizePagesTool() {
       )}
 
       {status === 'done' && result && file && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">Done!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">
             {pages.length} pages · {formatBytes(result.byteLength)}

@@ -134,7 +134,7 @@ export default function ViewOnceImageTool() {
   return (
     <div className="flex flex-col gap-6">
       {/* How it works */}
-      <div className="flex gap-3 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-4">
+      <div className="flex gap-3 rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-4">
         <svg className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -156,7 +156,7 @@ export default function ViewOnceImageTool() {
           {file && (
             <div className="flex flex-col gap-2">
               <FileInfoCard file={file} onRemove={handleRemoveFile} />
-              <div className="overflow-hidden rounded-xl border border-[var(--color-border)]">
+              <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
                 <img src={URL.createObjectURL(file)} alt={file.name} className="mx-auto max-h-48 object-contain" />
               </div>
             </div>
@@ -171,7 +171,7 @@ export default function ViewOnceImageTool() {
                     key={opt.value}
                     onClick={() => setTtl(opt.value)}
                     className={[
-                      'rounded-xl border px-4 py-2 text-sm transition-colors',
+                      'rounded-lg border px-4 py-2 text-sm transition-colors',
                       ttl === opt.value
                         ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] font-medium'
                         : 'border-[var(--color-border)] text-[var(--color-text-secondary)]',
@@ -185,7 +185,7 @@ export default function ViewOnceImageTool() {
           )}
 
           {status === 'error' && errorMsg && (
-            <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
+            <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
               {errorMsg}
             </div>
           )}
@@ -203,7 +203,8 @@ export default function ViewOnceImageTool() {
           {file && status !== 'encrypting' && status !== 'uploading' && (
             <button
               onClick={handleCreate}
-              className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto"
+              data-testid="tool-action"
+              className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto"
             >
               🔗 Create View-Once Link
             </button>
@@ -214,26 +215,26 @@ export default function ViewOnceImageTool() {
       {/* Success state */}
       {status === 'done' && shareUrl && (
         <div className="flex flex-col gap-4">
-          <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+          <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
             <p className="text-sm font-medium text-[var(--color-success)]">View-once link created!</p>
             <p className="mt-1 text-xs text-[var(--color-text-muted)]">
               Share the link below. The image will be permanently deleted after the first view.
             </p>
           </div>
 
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <label className="mb-2 block text-xs font-medium text-[var(--color-text-secondary)]">Share link</label>
             <div className="flex gap-2">
               <input
                 readOnly
                 value={shareUrl}
-                className="min-w-0 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm font-mono outline-none"
+                className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm font-mono outline-none"
                 onFocus={(e) => e.target.select()}
               />
               <button
                 onClick={handleCopy}
                 className={[
-                  'shrink-0 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors',
+                  'shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
                   copied
                     ? 'border-[var(--color-success)] bg-[var(--color-success)]/10 text-[var(--color-success)]'
                     : 'border-[var(--color-border)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]',
@@ -244,13 +245,13 @@ export default function ViewOnceImageTool() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 p-3 text-xs text-[var(--color-text-secondary)]">
+          <div className="rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 p-3 text-xs text-[var(--color-text-secondary)]">
             ⚠️ <strong>Important:</strong> This is the only time you can see this link. Once you leave the page, the link cannot be recovered. The recipient's browser will automatically delete the image from our servers.
           </div>
 
           <button
             onClick={handleReset}
-            className="w-full rounded-xl border border-[var(--color-border)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] sm:w-auto"
+            className="w-full rounded-lg border border-[var(--color-border)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] sm:w-auto"
           >
             Create another link
           </button>

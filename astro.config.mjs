@@ -8,6 +8,10 @@ import { viewOnceMockPlugin } from './src/lib/vite-view-once-mock.ts';
 
 // https://astro.build/config
 export default defineConfig({
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: 'viewport',
+  },
   integrations: [
     react(),
     sitemap(),
@@ -50,8 +54,8 @@ export default defineConfig({
         name: 'Docukit',
         short_name: 'Docukit',
         description: 'Private PDF & Image Tools — 100% browser-based, no uploads',
-        theme_color: '#1A56DB',
-        background_color: '#0F172A',
+        theme_color: '#4F46E5',
+        background_color: '#0A0A0A',
         display: 'standalone',
         icons: [
           { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
@@ -64,7 +68,14 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss(), viewOnceMockPlugin()],
     optimizeDeps: {
-      exclude: ['pdfjs-dist'],
+      // These ship their own WASM and must not be pre-bundled by esbuild.
+      exclude: ['pdfjs-dist', 'mupdf', '@jsquash/jpeg', '@jsquash/png', '@jsquash/webp', '@jsquash/avif', 'heic-to'],
+      // Crawl island + worker sources at server boot so heavy deps that are only
+      // imported at operation time inside Web Workers (e.g. qpdf-wasm in
+      // pdf-worker) are pre-bundled ONCE up front. Otherwise Vite discovers them
+      // mid-operation and issues a "504 Outdated Optimize Dep" full-page reload
+      // that wipes in-progress state. (Dev-only; production uses Rollup.)
+      entries: ['src/**/*.{astro,ts,tsx}'],
     },
     worker: {
       format: 'es',

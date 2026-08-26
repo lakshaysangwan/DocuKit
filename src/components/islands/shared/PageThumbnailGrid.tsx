@@ -79,8 +79,10 @@ function ThumbnailCard({
     <div
       ref={setNodeRef}
       style={style}
+      data-testid="page-thumb"
+      data-page-index={page.originalIndex}
       className={cn(
-        'group relative flex cursor-pointer flex-col items-center gap-1.5 rounded-xl p-2',
+        'group relative flex cursor-pointer flex-col items-center gap-1.5 rounded-lg p-2',
         'border-2 transition-colors duration-100',
         isSelected
           ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5'
@@ -102,7 +104,7 @@ function ThumbnailCard({
     >
       {/* Drag handle overlay */}
       <div
-        className="absolute inset-0 z-10 cursor-grab touch-none rounded-xl opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+        className="absolute inset-0 z-10 cursor-grab touch-none rounded-lg opacity-0 group-hover:opacity-100 active:cursor-grabbing"
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
@@ -268,7 +270,7 @@ export default function PageThumbnailGrid({
           return (
             <div
               style={{ width: thumbnailSize }}
-              className="rounded-xl border-2 border-[var(--color-primary)] bg-[var(--color-surface)] p-2 shadow-xl"
+              className="rounded-lg border-2 border-[var(--color-primary)] bg-[var(--color-surface)] p-2 shadow-xl"
             >
               <div
                 className="overflow-hidden rounded-md border border-[var(--color-border)]"

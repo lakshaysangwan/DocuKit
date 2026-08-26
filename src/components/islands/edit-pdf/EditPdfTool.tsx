@@ -5,6 +5,8 @@ import DownloadButton from '@/components/islands/shared/DownloadButton';
 import AnnotationToolbar, { type AnnotationTool, type StampType } from './AnnotationToolbar';
 import AnnotationCanvas, { type AnnotationCanvasRef, type AnnotationObject, renderObjects, preloadImages } from './AnnotationCanvas';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { embedAnnotations } from '@/lib/pdf-annotations';
+import { getPdfjs } from '@/lib/pdfjs';
 import { formatBytes } from '@/lib/utils';
 import { triggerDownload } from '@/lib/download';
 
@@ -84,8 +86,7 @@ export default function EditPdfTool() {
       const buf = await fileToArrayBuffer(f);
       setBuffer(buf);
 
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+      const pdfjsLib = await getPdfjs();
 
       const doc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
 
@@ -96,10 +97,17 @@ export default function EditPdfTool() {
 
       const pageList: PageData[] = [];
 
-      // Render all pages at 1.0 scale for universal UI compatibility
+      // The coordinate space stays at scale 1 (≈ PDF points) so annotation
+      // sizes/positions map 1:1 to the page. The *background raster*, however, is
+      // rendered at a higher pixel density and displayed crisply — otherwise the
+      // page image is CSS-upscaled to fill the editor and looks blurry.
+      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+      const renderScale = Math.min(3, Math.ceil(dpr) + 1);
+
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
-        const viewport = page.getViewport({ scale: 1 });
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: renderScale });
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
@@ -111,9 +119,9 @@ export default function EditPdfTool() {
         }).promise;
         pageList.push({
           index: i - 1,
-          dataUrl: canvas.toDataURL('image/jpeg', 0.8),
-          width: canvas.width,
-          height: canvas.height,
+          dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+          width: Math.round(baseViewport.width),
+          height: Math.round(baseViewport.height),
         });
       }
 
@@ -244,42 +252,54 @@ export default function EditPdfTool() {
       const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
       const pdfPages = pdfDoc.getPages();
 
-      const imageCache = new Map<string, HTMLImageElement>();
-
+      // Parse each page's annotation objects once.
+      const parsed: Record<number, AnnotationObject[]> = {};
+      const dims: Record<number, { width: number; height: number }> = {};
       for (let i = 0; i < pages.length; i++) {
         const pageJson = pageStateRef.current[i];
         if (!pageJson) continue;
-
-        const pageData = pages[i];
-        const pdfPage = pdfPages[i];
-        const { width: pdfW, height: pdfH } = pdfPage.getSize();
-
-        // Parse annotation objects from JSON
         let objects: AnnotationObject[];
         try { objects = JSON.parse(pageJson); } catch { continue; }
         if (!Array.isArray(objects) || objects.length === 0) continue;
+        parsed[i] = objects;
+        dims[i] = { width: pages[i].width, height: pages[i].height };
+      }
 
-        // Render annotations onto offscreen canvas at high resolution
-        const scaleUp = Math.max(pdfW / pageData.width, 1) * 2;
-        const offscreen = document.createElement('canvas');
-        offscreen.width = pageData.width * scaleUp;
-        offscreen.height = pageData.height * scaleUp;
-        const ctx = offscreen.getContext('2d')!;
-        ctx.scale(scaleUp, scaleUp);
+      if (saveMode === 'annotations') {
+        // Emit editable PDF annotation objects (viewable/removable in Adobe Reader).
+        await embedAnnotations(pdfDoc, parsed, dims);
+      } else {
+        // Flatten: composite annotations into each page as a raster overlay.
+        const imageCache = new Map<string, HTMLImageElement>();
+        for (const key of Object.keys(parsed)) {
+          const i = Number(key);
+          const objects = parsed[i];
+          const pageData = pages[i];
+          const pdfPage = pdfPages[i];
+          const { width: pdfW, height: pdfH } = pdfPage.getSize();
 
-        await preloadImages(objects, imageCache);
-        renderObjects(ctx, objects, imageCache);
+          // Render annotations onto offscreen canvas at high resolution
+          const scaleUp = Math.max(pdfW / pageData.width, 1) * 2;
+          const offscreen = document.createElement('canvas');
+          offscreen.width = pageData.width * scaleUp;
+          offscreen.height = pageData.height * scaleUp;
+          const ctx = offscreen.getContext('2d')!;
+          ctx.scale(scaleUp, scaleUp);
 
-        const dataUrl = offscreen.toDataURL('image/png');
+          await preloadImages(objects, imageCache);
+          renderObjects(ctx, objects, imageCache);
 
-        // Extract base64 and generate Uint8Array
-        const base64 = dataUrl.split(',')[1];
-        const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+          const dataUrl = offscreen.toDataURL('image/png');
 
-        const pdfImg = await pdfDoc.embedPng(imgBytes);
+          // Extract base64 and generate Uint8Array
+          const base64 = dataUrl.split(',')[1];
+          const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
-        // Overlay onto the PDF page maintaining its native dimensions
-        pdfPage.drawImage(pdfImg, { x: 0, y: 0, width: pdfW, height: pdfH });
+          const pdfImg = await pdfDoc.embedPng(imgBytes);
+
+          // Overlay onto the PDF page maintaining its native dimensions
+          pdfPage.drawImage(pdfImg, { x: 0, y: 0, width: pdfW, height: pdfH });
+        }
       }
 
       const pdfBytes = await pdfDoc.save();
@@ -292,7 +312,7 @@ export default function EditPdfTool() {
       setErrorMsg(msg);
       toast.error(msg);
     }
-  }, [buffer, file, pages, savePageState]);
+  }, [buffer, file, pages, savePageState, saveMode]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -311,7 +331,7 @@ export default function EditPdfTool() {
       )}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
           {errorMsg}
         </div>
       )}
@@ -374,7 +394,8 @@ export default function EditPdfTool() {
           {/* Canvas editor — Fabric stays at native PDF dims, CSS transform scales visually */}
           <div
             ref={canvasWrapperRef}
-            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] w-full overflow-hidden"
+            data-testid="editor-canvas"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] w-full overflow-hidden"
             style={{ height: currentPageData ? currentPageData.height * scaleFactor : undefined }}
           >
             {currentPageData && (
@@ -409,7 +430,7 @@ export default function EditPdfTool() {
                 {([['flatten', 'Flatten (permanent)'], ['annotations', 'Keep as Annotations']] as const).map(([v, l]) => (
                   <button key={v} onClick={() => setSaveMode(v)}
                     className={[
-                      'rounded-xl border px-4 py-2 text-sm transition-colors',
+                      'rounded-lg border px-4 py-2 text-sm transition-colors',
                       saveMode === v
                         ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] font-medium'
                         : 'border-[var(--color-border)] text-[var(--color-text-secondary)]',
@@ -431,7 +452,8 @@ export default function EditPdfTool() {
             <button
               onClick={handleSave}
               disabled={status === 'saving'}
-              className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-50 sm:w-auto"
+              data-testid="tool-action"
+              className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 disabled:opacity-50 sm:w-auto"
             >
               {status === 'saving' ? 'Saving…' : 'Save & Download PDF'}
             </button>

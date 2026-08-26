@@ -7,17 +7,20 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { createZipAndDownload } from '@/lib/download';
+import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
 import { parsePageRange } from '@/lib/pdf-page-range';
+import { getPdfjs } from '@/lib/pdfjs';
 import { cn } from '@/lib/utils';
 
-type OutputFormat = 'png' | 'jpeg' | 'webp';
-type DpiPreset = 72 | 150 | 300;
+type OutputFormat = ImageFormat;
+type DpiPreset = 72 | 150 | 300 | 600;
 type Status = 'idle' | 'processing' | 'done' | 'error';
 
 const DPI_PRESETS: { value: DpiPreset; label: string }[] = [
   { value: 72, label: '72 DPI (screen)' },
   { value: 150, label: '150 DPI (print)' },
   { value: 300, label: '300 DPI (high quality)' },
+  { value: 600, label: '600 DPI (archival)' },
 ];
 
 export default function PdfToImageTool() {
@@ -65,8 +68,7 @@ export default function PdfToImageTool() {
     setResults([]);
 
     try {
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+      const pdfjsLib = await getPdfjs();
 
       const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
       const scale = dpi / 72; // 72 is PDF base DPI
@@ -88,17 +90,10 @@ export default function PdfToImageTool() {
           viewport,
         }).promise;
 
-        const mimeType = format === 'png' ? 'image/png' : format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-        const q = format === 'png' ? undefined : quality / 100;
-
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob((b) => {
-            if (b) resolve(b);
-            else reject(new Error('Canvas toBlob failed'));
-          }, mimeType, q);
-        });
-
-        blobs.push(blob);
+        // Encode via jSquash so AVIF (and better JPEG/WebP) work in every browser.
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const encoded = await encodeImageData(data, format, quality);
+        blobs.push(new Blob([encoded], { type: formatMime(format) }));
         page.cleanup();
       }
 
@@ -147,9 +142,9 @@ export default function PdfToImageTool() {
           <div>
             <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">Output Format</label>
             <div className="flex gap-2">
-              {(['png', 'jpeg', 'webp'] as OutputFormat[]).map((f) => (
+              {(['png', 'jpeg', 'webp', 'avif'] as OutputFormat[]).map((f) => (
                 <button key={f} onClick={() => setFormat(f)}
-                  className={cn('rounded-xl border px-4 py-2 text-sm font-medium uppercase transition-colors',
+                  className={cn('rounded-lg border px-4 py-2 text-sm font-medium uppercase transition-colors',
                     format === f ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
                   )}>
                   {f}
@@ -164,7 +159,7 @@ export default function PdfToImageTool() {
             <div className="flex flex-wrap gap-2">
               {DPI_PRESETS.map((p) => (
                 <button key={p.value} onClick={() => setDpi(p.value)}
-                  className={cn('rounded-xl border px-4 py-2 text-sm transition-colors',
+                  className={cn('rounded-lg border px-4 py-2 text-sm transition-colors',
                     dpi === p.value ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
                   )}>
                   {p.label}
@@ -190,18 +185,18 @@ export default function PdfToImageTool() {
               <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">Pages</label>
               <div className="flex gap-2">
                 <button onClick={() => setPageMode('all')}
-                  className={cn('rounded-xl border px-4 py-2 text-sm transition-colors',
+                  className={cn('rounded-lg border px-4 py-2 text-sm transition-colors',
                     pageMode === 'all' ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
                   )}>All {pageCount} pages</button>
                 <button onClick={() => setPageMode('range')}
-                  className={cn('rounded-xl border px-4 py-2 text-sm transition-colors',
+                  className={cn('rounded-lg border px-4 py-2 text-sm transition-colors',
                     pageMode === 'range' ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
                   )}>Custom range</button>
               </div>
               {pageMode === 'range' && (
                 <input type="text" value={rangeInput} onChange={(e) => setRangeInput(e.target.value)}
                   placeholder="e.g. 1-5, 8, last"
-                  className="mt-2 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                  className="mt-2 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
               )}
             </div>
           )}
@@ -214,14 +209,14 @@ export default function PdfToImageTool() {
       )}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}
 
       {/* Actions */}
       {status !== 'processing' && file && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleConvert} disabled={!pageCount}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-50 sm:w-auto">
+          <button onClick={handleConvert} disabled={!pageCount} data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 disabled:opacity-50 sm:w-auto">
             Convert to {format.toUpperCase()}
           </button>
           {status === 'done' && results.length > 0 && (
@@ -232,7 +227,7 @@ export default function PdfToImageTool() {
       )}
 
       {status === 'done' && results.length > 0 && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">
             {results.length} image{results.length !== 1 ? 's' : ''} ready!
           </p>
@@ -240,7 +235,7 @@ export default function PdfToImageTool() {
       )}
 
       {status === 'done' && results.length > 0 && (
-        <div className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
+        <div className="rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-3 text-sm text-[var(--color-text-secondary)]">
           Exported images may be large at high DPI. Optimize with{' '}
           <a href="/compress-image" className="font-medium text-[var(--color-primary)] underline hover:no-underline">Compress Image</a>.
         </div>

@@ -5,51 +5,28 @@ interface Props {
   category?: 'pdf' | 'image';
 }
 const { headline, description, category = 'pdf' } = Astro.props;
+const isPdf = category === 'pdf';
 ---
 
-<div class="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-10 text-center sm:px-6">
-  <div class="mx-auto max-w-3xl">
-    <!-- Category badge -->
-    <span class="mb-4 inline-flex items-center gap-1.5 rounded-full border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 px-3 py-1 text-xs font-medium text-[var(--color-primary)]">
-      {category === 'pdf' ? '📄 PDF Tool' : '🖼️ Image Tool'}
-      <span aria-hidden="true">·</span>
-      <span>Private · No Upload · No Account</span>
-    </span>
+<div class="px-4 pb-6 pt-10 sm:px-6 sm:pt-14">
+  <div class="mx-auto max-w-6xl">
+    <div class="flex items-center gap-2 mb-4">
+      <div
+        class="h-1.5 w-1.5 rounded-full"
+        style={`background: ${isPdf ? 'var(--color-pdf)' : 'var(--color-image)'};`}
+        aria-hidden="true"
+      />
+      <span class="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+        {isPdf ? 'PDF' : 'Image'} Tool
+      </span>
+    </div>
 
-    <h1 class="text-3xl font-bold tracking-tight text-[var(--color-text-primary)] sm:text-4xl">
+    <h1 class="text-2xl font-bold tracking-tight text-[var(--color-text-primary)] sm:text-3xl" style="letter-spacing: -0.02em;">
       {headline}
     </h1>
 
-    <p class="mx-auto mt-4 max-w-2xl text-base text-[var(--color-text-secondary)] sm:text-lg">
+    <p class="mt-2 max-w-xl text-sm text-[var(--color-text-secondary)] sm:text-base" style="line-height: 1.6;">
       {description}
     </p>
-
-    <!-- Trust indicators -->
-    <div class="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs text-[var(--color-text-muted)]">
-      <span class="flex items-center gap-1">
-        <svg class="h-3.5 w-3.5 text-[var(--color-success)]" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-        </svg>
-        Files never uploaded
-      </span>
-      <span class="flex items-center gap-1">
-        <svg class="h-3.5 w-3.5 text-[var(--color-success)]" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-        </svg>
-        No account required
-      </span>
-      <span class="flex items-center gap-1">
-        <svg class="h-3.5 w-3.5 text-[var(--color-success)]" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-        </svg>
-        Unlimited use, no restrictions
-      </span>
-      <span class="flex items-center gap-1">
-        <svg class="h-3.5 w-3.5 text-[var(--color-success)]" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-        </svg>
-        WebAssembly-powered
-      </span>
-    </div>
   </div>
 </div>

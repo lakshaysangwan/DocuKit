@@ -210,7 +210,7 @@ export default function SignPdfTool() {
         </h3>
 
         {/* Mode tabs */}
-        <div className="mb-4 flex gap-1 rounded-xl bg-[var(--color-background)] p-1">
+        <div className="mb-4 flex gap-1 rounded-lg bg-[var(--color-background)] p-1">
           {(['draw', 'type', 'upload'] as SignatureMode[]).map((m) => (
             <button key={m} onClick={() => setSignatureMode(m)}
               className={cn('flex-1 rounded-lg py-2 text-sm font-medium capitalize transition-colors',
@@ -226,9 +226,9 @@ export default function SignPdfTool() {
         {/* Draw */}
         {signatureMode === 'draw' && (
           <div className="flex flex-col gap-3">
-            <div className="rounded-xl border-2 border-dashed border-[var(--color-border)] bg-white dark:bg-[var(--color-background)]">
+            <div className="rounded-lg border-2 border-dashed border-[var(--color-border)] bg-white dark:bg-[var(--color-background)]">
               <SignaturePad ref={padRef} width={560} height={180}
-                className="h-44 w-full rounded-xl" />
+                className="h-44 w-full rounded-lg" />
             </div>
             <div className="flex gap-2">
               <button onClick={() => padRef.current?.undo()}
@@ -248,11 +248,11 @@ export default function SignPdfTool() {
           <div className="flex flex-col gap-3">
             <input type="text" value={typedText} onChange={(e) => setTypedText(e.target.value)}
               placeholder="Type your name"
-              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-lg outline-none focus:border-[var(--color-primary)]" />
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-lg outline-none focus:border-[var(--color-primary)]" />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {SIGNATURE_FONTS.map((font, i) => (
                 <button key={font.name} onClick={() => setSelectedFont(i)}
-                  className={cn('rounded-xl border p-3 transition-colors',
+                  className={cn('rounded-lg border p-3 transition-colors',
                     selectedFont === i
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5'
                       : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50'
@@ -273,7 +273,7 @@ export default function SignPdfTool() {
               onFiles={handleUploadSignature}
               hint="PNG with transparent background works best" />
             {signatureDataUrl && (
-              <div className="flex justify-center rounded-xl border border-[var(--color-border)] bg-white p-4">
+              <div className="flex justify-center rounded-lg border border-[var(--color-border)] bg-white p-4">
                 <img src={signatureDataUrl} alt="Signature preview" className="max-h-32 object-contain" />
               </div>
             )}
@@ -284,7 +284,7 @@ export default function SignPdfTool() {
           handleCaptureSignature();
           setTimeout(() => document.getElementById('step-2')?.scrollIntoView({ behavior: 'smooth' }), 100);
         }}
-          className="mt-4 w-full rounded-xl bg-[var(--color-primary)] py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto sm:px-8">
+          className="mt-4 w-full rounded-lg bg-[var(--color-text-primary)] py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto sm:px-8">
           Use this signature →
         </button>
       </div>
@@ -355,7 +355,7 @@ export default function SignPdfTool() {
       )}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
           {errorMsg}
         </div>
       )}
@@ -363,8 +363,8 @@ export default function SignPdfTool() {
       {/* Actions */}
       {!isRunning && annotations.length > 0 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleApply}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto">
+          <button onClick={handleApply} data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto">
             Apply & Download
           </button>
           {status === 'done' && result && (
@@ -374,7 +374,7 @@ export default function SignPdfTool() {
       )}
 
       {status === 'done' && result && pdfFile && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">Signature applied!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">
             {formatBytes(result.byteLength)}

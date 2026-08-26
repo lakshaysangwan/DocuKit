@@ -316,12 +316,20 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvasProps>(
     renderObjects(ctx, objectsRef.current, imageCacheRef.current, selectedId);
   }, [width, height, selectedId]);
 
-  // Draw background
+  // Draw background. The source image is rendered at a higher pixel density than
+  // the coordinate space (width×height), so we size the canvas backing store to
+  // the image's natural resolution and let CSS scale it down to width×height —
+  // keeping the page crisp when the editor is CSS-scaled up to fill its column.
   useEffect(() => {
-    const bgCtx = bgRef.current?.getContext('2d');
-    if (!bgCtx) return;
+    const cv = bgRef.current;
+    if (!cv) return;
     const img = new Image();
-    img.onload = () => bgCtx.drawImage(img, 0, 0, width, height);
+    img.onload = () => {
+      cv.width = img.naturalWidth || width;
+      cv.height = img.naturalHeight || height;
+      const bgCtx = cv.getContext('2d');
+      if (bgCtx) bgCtx.drawImage(img, 0, 0, cv.width, cv.height);
+    };
     img.src = backgroundUrl;
   }, [backgroundUrl, width, height]);
 
@@ -550,7 +558,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvasProps>(
 
   return (
     <div style={{ position: 'relative', width, height }}>
-      <canvas ref={bgRef} width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, display: 'block' }} />
+      <canvas ref={bgRef} width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, display: 'block', width, height }} />
       <canvas
         ref={overlayRef}
         width={width}

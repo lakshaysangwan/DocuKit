@@ -64,7 +64,7 @@ export default function BeforeAfterSlider({
   return (
     <div
       ref={containerRef}
-      className={cn('relative select-none overflow-hidden rounded-xl', className)}
+      className={cn('relative select-none overflow-hidden rounded-lg', className)}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}

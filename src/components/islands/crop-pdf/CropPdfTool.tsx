@@ -4,6 +4,7 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import CropPreview from './CropPreview';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { triggerDownload } from '@/lib/download';
@@ -128,7 +129,7 @@ export default function CropPdfTool() {
                 <label className="mb-1 block text-xs capitalize text-[var(--color-text-secondary)]">{side}</label>
                 <input type="number" min={0} step={1} value={margins[side]}
                   onChange={(e) => setMargins((p) => ({ ...p, [side]: Math.max(0, Number(e.target.value)) }))}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
               </div>
             ))}
           </div>
@@ -151,7 +152,7 @@ export default function CropPdfTool() {
                   placeholder="e.g. 1-5, 8, 11-13"
                   value={pageRangeStr}
                   onChange={(e) => setPageRangeStr(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
                 />
               </div>
             )}
@@ -159,15 +160,32 @@ export default function CropPdfTool() {
         </div>
       )}
 
+      {file && (
+        <CropPreview
+          buffer={buffer}
+          marginsPt={{
+            top: margins.top * (unit === 'mm' ? MM_TO_PT : 1),
+            right: margins.right * (unit === 'mm' ? MM_TO_PT : 1),
+            bottom: margins.bottom * (unit === 'mm' ? MM_TO_PT : 1),
+            left: margins.left * (unit === 'mm' ? MM_TO_PT : 1),
+          }}
+          onChangePt={(pt) => {
+            const f = unit === 'mm' ? MM_TO_PT : 1;
+            const conv = (v: number) => (unit === 'mm' ? Math.round((v / f) * 10) / 10 : Math.round(v / f));
+            setMargins({ top: conv(pt.top), right: conv(pt.right), bottom: conv(pt.bottom), left: conv(pt.left) });
+          }}
+        />
+      )}
+
       {isRunning && <ProcessingOverlay progress={progress} label={progressLabel || 'Cropping PDF…'} />}
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}
 
       {!isRunning && file && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleCrop}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto">
+          <button onClick={handleCrop} data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto">
             Crop PDF
           </button>
           {status === 'done' && result && <DownloadButton onClick={handleDownload} label="Download Cropped PDF" />}
@@ -175,7 +193,7 @@ export default function CropPdfTool() {
       )}
 
       {status === 'done' && result && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">Crop applied!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatBytes(result.byteLength)}</p>
         </div>

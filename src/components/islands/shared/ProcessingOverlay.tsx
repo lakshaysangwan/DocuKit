@@ -76,6 +76,7 @@ export default function ProcessingOverlay({
       role="status"
       aria-live="polite"
       aria-label={label ?? 'Processing files'}
+      data-testid="processing-overlay"
     >
       {/* Animation */}
       {prefersReduced || !lottieAvailable ? (

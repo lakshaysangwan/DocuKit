@@ -110,7 +110,7 @@ export default function ViewOnceRecipient() {
         </div>
         <a
           href="/"
-          className="rounded-xl bg-[var(--color-primary)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-primary-dark)]"
+          className="rounded-lg bg-[var(--color-primary)] px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80"
         >
           Go to Docukit
         </a>
@@ -120,7 +120,7 @@ export default function ViewOnceRecipient() {
 
   return (
     <div className="flex flex-col items-center gap-6 py-8">
-      <div className="flex items-center gap-2 rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 px-4 py-2 text-sm text-[var(--color-success)]">
+      <div className="flex items-center gap-2 rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 px-4 py-2 text-sm text-[var(--color-success)]">
         <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
@@ -130,20 +130,20 @@ export default function ViewOnceRecipient() {
       <img
         src={imageUrl}
         alt="Decrypted view-once image"
-        className="max-h-[70vh] max-w-full rounded-xl object-contain shadow-lg"
+        className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-lg"
       />
 
       <div className="flex gap-3">
         <a
           href={imageUrl}
           download="image"
-          className="rounded-xl border border-[var(--color-border)] px-5 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+          className="rounded-lg border border-[var(--color-border)] px-5 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
           Save Image
         </a>
         <a
           href="/"
-          className="rounded-xl bg-[var(--color-primary)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-primary-dark)]"
+          className="rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80"
         >
           Go to Docukit
         </a>

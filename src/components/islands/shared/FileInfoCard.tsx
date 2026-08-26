@@ -8,7 +8,11 @@ interface FileInfoCardProps {
 
 export default function FileInfoCard({ file, extra, onRemove }: FileInfoCardProps) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+    <div
+      data-testid="file-info"
+      data-filename={file.name}
+      className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm"
+    >
       <svg className="h-6 w-6 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
       </svg>

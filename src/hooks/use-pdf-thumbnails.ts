@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getPdfjs } from '@/lib/pdfjs';
 
 export interface ThumbnailResult {
   pageIndex: number;
@@ -30,10 +31,7 @@ export function usePdfThumbnails(): UsePdfThumbnailsResult {
     setThumbnails([]);
 
     try {
-      // Dynamically import pdfjs-dist to avoid affecting initial bundle
-      const pdfjsLib = await import('pdfjs-dist');
-      // Set worker source — pdfjs-dist ships its own worker
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+      const pdfjsLib = await getPdfjs();
 
       const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
 

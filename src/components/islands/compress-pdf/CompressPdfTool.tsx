@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
+import BeforeAfterSlider from '@/components/islands/shared/BeforeAfterSlider';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
+import { renderPdfPageToDataUrl } from '@/lib/pdf-preview';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes, cn } from '@/lib/utils';
 import type { WorkerResponse, CompressPdfOptions } from '@/types/worker-messages';
@@ -31,8 +33,29 @@ export default function CompressPdfTool() {
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [beforePreview, setBeforePreview] = useState<string | null>(null);
+  const [afterPreview, setAfterPreview] = useState<string | null>(null);
 
   const { isRunning, progress, progressLabel, run, cancel } = useWorker();
+
+  // Render a page-1 before/after comparison once compression completes so the
+  // visual effect of compression is inspectable, not just a size number.
+  useEffect(() => {
+    let cancelled = false;
+    if (status !== 'done' || !result || !buffer) { setBeforePreview(null); setAfterPreview(null); return; }
+    (async () => {
+      try {
+        const [before, after] = await Promise.all([
+          renderPdfPageToDataUrl(buffer, 0),
+          renderPdfPageToDataUrl(result, 0),
+        ]);
+        if (!cancelled) { setBeforePreview(before); setAfterPreview(after); }
+      } catch {
+        if (!cancelled) { setBeforePreview(null); setAfterPreview(null); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [status, result, buffer]);
 
   const handleFiles = useCallback(async (newFiles: File[]) => {
     const f = newFiles[0];
@@ -82,25 +105,9 @@ export default function CompressPdfTool() {
 
       if (!response) { setStatus('idle'); return; }
       if (response.status === 'error') {
-        // Fallback: low-level compression via pdf-worker merge-with-self trick
-        // Since mupdf isn't implemented yet, just pass through for non-low levels
-        toast.warning('Full compression requires MUPDF (coming soon). Using lossless mode.');
-        const port12 = new MessageChannel();
-        const bufCopy2 = buffer.slice(0);
-        const resp2: WorkerResponse | null = await run(
-          'pdf',
-          { op: 'merge', buffers: [bufCopy2], options: {}, progressPort: port12.port2 },
-          [bufCopy2, port12.port2]
-        );
-        port12.port1.close();
-        if (resp2?.status === 'success') {
-          setResult(resp2.result);
-          setStatus('done');
-          toast.success('PDF processed (lossless mode)');
-        } else {
-          setStatus('error');
-          setErrorMsg('Compression failed');
-        }
+        setStatus('error');
+        setErrorMsg(response.message || 'Compression failed');
+        toast.error(response.message || 'Compression failed');
         return;
       }
 
@@ -152,7 +159,7 @@ export default function CompressPdfTool() {
                   key={l.value}
                   onClick={() => setLevel(l.value)}
                   className={cn(
-                    'rounded-xl border p-3 text-left transition-colors',
+                    'rounded-lg border p-3 text-left transition-colors',
                     level === l.value
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5'
                       : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50'
@@ -169,7 +176,7 @@ export default function CompressPdfTool() {
 
           {/* Custom options */}
           {level === 'custom' && (
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
               <p className="mb-4 text-sm font-medium text-[var(--color-text-primary)]">Custom settings</p>
               <div className="flex flex-col gap-4">
                 <div>
@@ -216,7 +223,7 @@ export default function CompressPdfTool() {
       )}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
           {errorMsg}
         </div>
       )}
@@ -227,7 +234,8 @@ export default function CompressPdfTool() {
           <button
             onClick={handleCompress}
             disabled={!file}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-50 sm:w-auto"
+            data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 disabled:opacity-50 sm:w-auto"
           >
             Compress PDF
           </button>
@@ -240,7 +248,7 @@ export default function CompressPdfTool() {
 
       {/* Result stats */}
       {status === 'done' && result && file && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">
             {savedPct > 0 ? `Reduced by ${savedPct}%` : 'Compression complete'}
           </p>
@@ -249,6 +257,21 @@ export default function CompressPdfTool() {
             <span>→</span>
             <span>After: {formatBytes(result.byteLength)}</span>
           </div>
+
+          {beforePreview && afterPreview && (
+            <div className="mt-4" data-testid="compress-preview">
+              <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                Drag to compare page 1 — original vs compressed
+              </p>
+              <BeforeAfterSlider
+                beforeSrc={beforePreview}
+                afterSrc={afterPreview}
+                beforeLabel="Original"
+                afterLabel="Compressed"
+                className="aspect-[3/4] w-full max-w-sm border border-[var(--color-border)]"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

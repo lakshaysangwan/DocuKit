@@ -194,7 +194,7 @@ export default function SplitPdfTool() {
                   key={m.value}
                   onClick={() => setMode(m.value)}
                   className={cn(
-                    'rounded-xl border p-3 text-left transition-colors',
+                    'rounded-lg border p-3 text-left transition-colors',
                     mode === m.value
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]'
                       : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50'
@@ -218,7 +218,7 @@ export default function SplitPdfTool() {
                 value={rangeInput}
                 onChange={(e) => setRangeInput(e.target.value)}
                 placeholder={mode === 'ranges' ? '1-5, 6-10, 11-last' : '1-5, 8, odd, last'}
-                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20"
               />
               {pageCount && selectedCount !== null && (
                 <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
@@ -246,7 +246,7 @@ export default function SplitPdfTool() {
                 max={pageCount ?? 9999}
                 value={everyN}
                 onChange={(e) => setEveryN(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                className="w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
+                className="w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
               />
               {pageCount && (
                 <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
@@ -275,7 +275,7 @@ export default function SplitPdfTool() {
 
       {/* Error */}
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
           {errorMsg}
         </div>
       )}
@@ -286,7 +286,8 @@ export default function SplitPdfTool() {
           <button
             onClick={handleSplit}
             disabled={!file || !pageCount}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white transition-colors hover:bg-[var(--color-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] transition-colors hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             Split PDF
           </button>
@@ -302,7 +303,7 @@ export default function SplitPdfTool() {
 
       {/* Result stats */}
       {status === 'done' && (singleResult || results.length > 0) && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">Split complete!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">
             {isMultiOutput ? `${results.length} files` : '1 file'} · {formatBytes(outputSize)}

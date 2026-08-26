@@ -8,6 +8,7 @@
  * Runs in a Web Worker for off-main-thread processing.
  */
 import type { WorkerRequest, WorkerResponse, CompressImageOptions } from '../types/worker-messages';
+import { encodeImageData, type ImageFormat } from '../lib/image-codec';
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { progressPort, ...msg } = e.data as WorkerRequest & { progressPort: MessagePort };
@@ -39,29 +40,27 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   }
 };
 
-/** Map format option to MIME type */
-function formatToMime(format: string): string {
+/** Map format option to a jSquash output format. */
+function normalizeFormat(format: string): ImageFormat {
   switch (format) {
-    case 'jpeg': return 'image/jpeg';
-    case 'png': return 'image/png';
+    case 'jpeg': return 'jpeg';
+    case 'png': return 'png';
+    case 'avif': return 'avif';
     case 'webp':
     case 'original':
-    default: return 'image/webp';
+    default: return 'webp';
   }
 }
 
-/** Encode an OffscreenCanvas to ArrayBuffer using browser-native encoding */
+/** Encode an OffscreenCanvas to ArrayBuffer via jSquash (mozjpeg/webp/png). */
 async function encodeCanvas(
   canvas: OffscreenCanvas,
-  mime: string,
+  format: ImageFormat,
   quality: number,
 ): Promise<ArrayBuffer> {
-  // PNG is lossless — quality parameter is ignored
-  const opts: ImageEncodeOptions = mime === 'image/png'
-    ? { type: mime }
-    : { type: mime, quality: quality / 100 };
-  const blob = await canvas.convertToBlob(opts);
-  return blob.arrayBuffer();
+  const ctx = canvas.getContext('2d')!;
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return encodeImageData(data, format, quality);
 }
 
 async function compressImage(
@@ -80,15 +79,15 @@ async function compressImage(
   bitmap.close();
 
   const quality = options.quality ?? 75;
-  const mime = formatToMime(options.format);
+  const format = normalizeFormat(options.format);
 
   if (options.mode === 'target-size' && options.targetBytes) {
-    return compressToTargetSize(canvas, buffer, mime, options.targetBytes, sendProgress);
+    return compressToTargetSize(canvas, buffer, format, options.targetBytes, sendProgress);
   }
 
   sendProgress(30, 'Compressing…');
 
-  const outputBytes = await encodeCanvas(canvas, mime, quality);
+  const outputBytes = await encodeCanvas(canvas, format, quality);
 
   sendProgress(90, 'Finalizing…');
 
@@ -103,12 +102,12 @@ async function compressImage(
 async function compressToTargetSize(
   canvas: OffscreenCanvas,
   originalBuffer: ArrayBuffer,
-  mime: string,
+  format: ImageFormat,
   targetBytes: number,
   sendProgress: (pct: number, label?: string) => void,
 ): Promise<ArrayBuffer> {
-  // Force lossy format for target-size (PNG can't target)
-  const actualMime = mime === 'image/png' ? 'image/webp' : mime;
+  // Force a lossy format for target-size (PNG can't target a size)
+  const actualFormat: ImageFormat = format === 'png' ? 'webp' : format;
 
   let lo = 5;
   let hi = 95;
@@ -119,7 +118,7 @@ async function compressToTargetSize(
     const mid = Math.round((lo + hi) / 2);
     sendProgress(20 + i * 7, `Trying quality ${mid}%…`);
 
-    const encoded = await encodeCanvas(canvas, actualMime, mid);
+    const encoded = await encodeCanvas(canvas, actualFormat, mid);
     if (encoded.byteLength <= targetBytes) {
       lo = mid;
       bestResult = encoded;
@@ -134,7 +133,7 @@ async function compressToTargetSize(
   }
 
   // Try lowest quality as last resort
-  const lastResort = await encodeCanvas(canvas, actualMime, lo);
+  const lastResort = await encodeCanvas(canvas, actualFormat, lo);
   if (lastResort.byteLength < originalBuffer.byteLength) {
     return lastResort;
   }

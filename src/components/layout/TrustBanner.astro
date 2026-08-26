@@ -1,18 +1,18 @@
 ---
-// Static trust banner — shown on every page above the header
+// Minimal trust banner
 ---
 <div
-  class="border-b border-[var(--color-border)] bg-[var(--color-primary)]/5 px-4 py-2 text-center text-sm"
+  class="border-b border-[var(--color-border)] px-4 py-1.5 text-center"
   role="banner"
   aria-label="Privacy notice"
 >
-  <span class="text-[var(--color-text-secondary)]">
-    🔒 Your files never leave your browser. All processing is 100% local.
+  <span class="text-xs text-[var(--color-text-muted)]">
+    All processing happens locally in your browser.
     <a
       href="/privacy"
-      class="ml-1 font-medium text-[var(--color-primary)] underline underline-offset-2 hover:no-underline"
+      class="ml-1 text-[var(--color-text-secondary)] underline underline-offset-2 hover:text-[var(--color-text-primary)]"
     >
-      How it works →
+      Learn more
     </a>
   </span>
 </div>

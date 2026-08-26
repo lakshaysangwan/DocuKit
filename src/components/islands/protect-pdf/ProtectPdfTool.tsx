@@ -138,7 +138,7 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
   return (
     <div className="flex flex-col gap-6">
       {/* Mode tabs */}
-      <div className="flex gap-1 rounded-xl bg-[var(--color-background)] p-1">
+      <div className="flex gap-1 rounded-lg bg-[var(--color-background)] p-1">
         {(['protect', 'unlock'] as Mode[]).map((m) => (
           <button key={m} onClick={() => { setMode(m); setStatus('idle'); setResult(null); }}
             className={cn('flex-1 rounded-lg py-2.5 text-sm font-medium capitalize transition-colors',
@@ -166,7 +166,8 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
             </div>
             <div className="relative">
               <input type={showUserPw ? 'text' : 'password'} value={userPassword} onChange={(e) => setUserPassword(e.target.value)}
-                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />
+                data-testid="password"
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />
               <EyeToggle show={showUserPw} onToggle={() => setShowUserPw((v) => !v)} />
             </div>
             {userPassword && (
@@ -183,7 +184,8 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
             <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
             <div className="relative">
               <input type={showConfirmPw ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                className={cn('w-full rounded-xl border px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]',
+                data-testid="confirm-password"
+                className={cn('w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]',
                   'bg-[var(--color-background)]',
                   confirmPassword && userPassword !== confirmPassword ? 'border-[var(--color-error)]' : 'border-[var(--color-border)]'
                 )} />
@@ -213,8 +215,9 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
           <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">PDF Password</label>
           <div className="relative">
             <input type={showUnlockPw ? 'text' : 'password'} value={unlockPassword} onChange={(e) => setUnlockPassword(e.target.value)}
+              data-testid="unlock-password"
               placeholder="Enter password to unlock"
-              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />
             <EyeToggle show={showUnlockPw} onToggle={() => setShowUnlockPw((v) => !v)} />
           </div>
         </div>
@@ -223,13 +226,13 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
       {isRunning && <ProcessingOverlay progress={progress} label={progressLabel || (mode === 'protect' ? 'Encrypting…' : 'Decrypting…')} />}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}
 
       {!isRunning && file && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={mode === 'protect' ? handleProtect : handleUnlock}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] sm:w-auto">
+          <button onClick={mode === 'protect' ? handleProtect : handleUnlock} data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto">
             {mode === 'protect' ? 'Protect PDF' : 'Unlock PDF'}
           </button>
           {status === 'done' && result && (
@@ -239,7 +242,7 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
       )}
 
       {status === 'done' && result && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">{mode === 'protect' ? 'Password set!' : 'PDF unlocked!'}</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatBytes(result.byteLength)}</p>
         </div>

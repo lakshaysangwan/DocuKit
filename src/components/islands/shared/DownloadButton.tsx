@@ -12,14 +12,14 @@ interface DownloadButtonProps {
 
 const sizeClasses = {
   sm: 'gap-1.5 px-4 py-2 text-sm',
-  md: 'gap-2 px-6 py-3 text-base',
-  lg: 'gap-2.5 px-8 py-4 text-lg',
+  md: 'gap-2 px-5 py-2.5 text-sm',
+  lg: 'gap-2.5 px-8 py-3 text-base',
 };
 
 const iconSizeClasses = {
-  sm: 'h-4 w-4',
-  md: 'h-5 w-5',
-  lg: 'h-6 w-6',
+  sm: 'h-3.5 w-3.5',
+  md: 'h-4 w-4',
+  lg: 'h-5 w-5',
 };
 
 export default function DownloadButton({
@@ -55,15 +55,16 @@ export default function DownloadButton({
     <button
       onClick={handleClick}
       disabled={disabled || state === 'downloading'}
+      data-testid="download-button"
+      data-state={state}
       className={cn(
-        'inline-flex items-center justify-center rounded-xl font-semibold transition-all duration-150',
+        'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]',
         sizeClasses[size],
         state === 'done'
-          ? 'bg-[var(--color-success)] text-white hover:bg-[var(--color-success)]/90'
-          : 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)]',
-        (disabled || state === 'downloading') && 'cursor-not-allowed opacity-60',
-        state === 'idle' && !disabled && 'animate-breathe',
+          ? 'bg-[var(--color-success)] text-white'
+          : 'bg-[var(--color-text-primary)] text-[var(--color-background)] hover:opacity-80',
+        (disabled || state === 'downloading') && 'cursor-not-allowed opacity-40',
         className
       )}
       aria-label={displayLabel}

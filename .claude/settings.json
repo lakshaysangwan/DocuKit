@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(du -sh dist/_astro/*.js)",
+      "Bash(ls -la dist/_astro/*.css)",
+      "Bash(md5sum dist/_astro/pdf-C_7zF4kU.js dist/_astro/pdf.C_7zF4kU.js)",
+      "Bash(md5sum.exe dist/_astro/pdf-C_7zF4kU.js dist/_astro/pdf.C_7zF4kU.js)",
+      "Bash(grep -l \"pdf-lib\\\\|PDFDocument\" dist/_astro/*.js)",
+      "Bash(grep -l \"motion\\\\|AnimatePresence\\\\|framer\" dist/_astro/*.js)",
+      "Bash(grep -c \"forge\\\\|node-forge\" dist/_astro/index-bZPEGnxB.js)",
+      "Bash(grep -c \"PDFDocument\\\\|pdf-lib\" dist/_astro/index-bZPEGnxB.js)",
+      "Bash(grep -c \"forge\\\\|node-forge\" dist/_astro/index.9_kNCig5.js)",
+      "Bash(grep -l \"index\\\\.9_kNCig5\\\\|index-bZPEGnxB\" dist/_astro/*.js)",
+      "Bash(wc -c dist/_astro/__TRACKED_VAR__)",
+      "Bash(grep -l \"index\\\\.D0doVHZG\" dist/_astro/*.js)",
+      "Bash(grep -l \"index\\\\.D0doVHZG\" dist/*.html)",
+      "Bash(ls -la node_modules/framer-motion/package.json)",
+      "Bash(node -e \"const p = require\\('./node_modules/framer-motion/package.json'\\); console.log\\(p.name, p.version\\)\")",
+      "Bash(node -e \"const p = require\\('./node_modules/motion/package.json'\\); console.log\\(p.name, p.version, 'deps:', JSON.stringify\\(p.dependencies || {}\\)\\)\")",
+      "Bash(ls dist/_astro/*.js)",
+      "Bash(awk '{s+=$1} END {print s \" bytes \\(\" s/1024 \" KB\\)\"}')"
+    ]
+  }
+}

@@ -167,7 +167,7 @@ export default function LockImageTool() {
   return (
     <div className="flex flex-col gap-6">
       {/* How it works note */}
-      <div className="flex gap-3 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-4">
+      <div className="flex gap-3 rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-4">
         <svg className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -190,7 +190,8 @@ export default function LockImageTool() {
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Password</label>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                  data-testid="password"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
                 {password && (
                   <div className="mt-2 flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-border)]">
@@ -205,7 +206,8 @@ export default function LockImageTool() {
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
                 <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={cn('w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]',
+                  data-testid="confirm-password"
+                  className={cn('w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]',
                     'bg-[var(--color-background)]',
                     confirmPassword && password !== confirmPassword ? 'border-[var(--color-error)]' : 'border-[var(--color-border)]'
                   )} />
@@ -226,13 +228,13 @@ export default function LockImageTool() {
       )}
 
       {status === 'error' && errorMsg && (
-        <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}
 
       {status !== 'encrypting' && file && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleEncrypt} disabled={!password || !confirmPassword}
-            className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-50 sm:w-auto">
+          <button onClick={handleEncrypt} disabled={!password || !confirmPassword} data-testid="tool-action"
+            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 disabled:opacity-50 sm:w-auto">
             🔒 Lock Image
           </button>
           {status === 'done' && resultHtml && (
@@ -242,7 +244,7 @@ export default function LockImageTool() {
       )}
 
       {status === 'done' && resultHtml && (
-        <div className="rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
           <p className="text-sm font-medium text-[var(--color-success)]">Image locked!</p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">
             Share the .html file with anyone who has the password. No server involved.

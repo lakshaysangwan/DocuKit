@@ -9,30 +9,41 @@ const { tools } = Astro.props;
 if (tools.length === 0) return;
 ---
 
-<section class="bg-[var(--color-surface)] px-4 py-12 sm:px-6" aria-labelledby="related-heading">
-  <div class="mx-auto max-w-4xl">
-    <h2 id="related-heading" class="text-xl font-semibold text-[var(--color-text-primary)]">
-      Related Tools
-    </h2>
-    <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {tools.map(tool => (
+<section class="mx-auto max-w-6xl px-4 py-10 sm:px-6" aria-labelledby="related-heading">
+  <h2 id="related-heading" class="mb-4 text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+    Related tools
+  </h2>
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    {tools.map(tool => {
+      const isPdf = tool.category === 'pdf';
+      const accentBg = isPdf ? 'var(--color-pdf-bg)' : 'var(--color-image-bg)';
+      const accentColor = isPdf ? 'var(--color-pdf)' : 'var(--color-image)';
+      return (
         <a
           href={`/${tool.slug}`}
-          class="group flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-4 transition-all hover:border-[var(--color-primary-light)] hover:shadow-sm"
+          class="group relative flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-all duration-150 hover:border-transparent hover:shadow-[var(--shadow-card-hover)]"
         >
-          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-primary)]/10 transition-transform group-hover:scale-110">
-            <img src={tool.icon} alt="" class="h-4 w-4" loading="lazy" />
+          <div
+            class="absolute left-0 top-3 bottom-3 w-0.5 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+            style={`background: ${accentColor};`}
+            aria-hidden="true"
+          />
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+            style={`background: ${accentBg};`}
+          >
+            <img src={tool.icon} alt="" class="h-4 w-4" width="16" height="16" loading="lazy" />
           </div>
           <div>
-            <div class="text-sm font-medium text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)]">
+            <div class="text-sm font-medium text-[var(--color-text-primary)]">
               {tool.name}
             </div>
-            <div class="mt-0.5 text-xs text-[var(--color-text-muted)]">
+            <div class="mt-0.5 text-xs text-[var(--color-text-muted)] leading-snug">
               {tool.shortDescription}
             </div>
           </div>
         </a>
-      ))}
-    </div>
+      );
+    })}
   </div>
 </section>

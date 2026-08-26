@@ -80,15 +80,17 @@ const howToSchema = JSON.stringify({
     />
 
     <!-- React Island — the interactive tool component -->
-    <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <slot />
     </div>
+
+    <!-- Related tools — shown immediately after the tool area -->
+    {relatedTools.length > 0 && <RelatedTools tools={relatedTools} />}
 
     <!-- Static SEO content sections (pure HTML, no JS) -->
     <HowToSteps steps={tool.howToSteps} toolName={tool.name} />
     <FeatureGrid features={tool.features} toolName={tool.name} />
     <FaqSection faqs={tool.faqs} toolName={tool.name} />
-    {relatedTools.length > 0 && <RelatedTools tools={relatedTools} />}
   </main>
 
   <Footer />
