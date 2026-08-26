@@ -106,35 +106,35 @@ export default function WatermarkPdfTool() {
             {watermarkType === 'text' ? (
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-text-primary)]">Watermark Text</label>
-                  <input type="text" value={text} onChange={(e) => setText(e.target.value)}
+                  <label htmlFor="wm-text" className="mb-1 block text-sm font-medium text-[var(--color-text-primary)]">Watermark Text</label>
+                  <input id="wm-text" type="text" value={text} onChange={(e) => setText(e.target.value)}
                     className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+                    <label htmlFor="wm-font-size" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
                       <span>Font Size</span><span>{fontSize}pt</span>
                     </label>
-                    <input type="range" min={12} max={120} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}
+                    <input id="wm-font-size" type="range" min={12} max={120} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}
                       className="w-full accent-[var(--color-primary)]" />
                   </div>
                   <div>
-                    <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+                    <label htmlFor="wm-opacity" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
                       <span>Opacity</span><span>{opacity}%</span>
                     </label>
-                    <input type="range" min={5} max={100} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))}
+                    <input id="wm-opacity" type="range" min={5} max={100} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))}
                       className="w-full accent-[var(--color-primary)]" />
                   </div>
                   <div>
-                    <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+                    <label htmlFor="wm-rotation" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
                       <span>Rotation</span><span>{rotation}°</span>
                     </label>
-                    <input type="range" min={-90} max={90} value={rotation} onChange={(e) => setRotation(Number(e.target.value))}
+                    <input id="wm-rotation" type="range" min={-90} max={90} value={rotation} onChange={(e) => setRotation(Number(e.target.value))}
                       className="w-full accent-[var(--color-primary)]" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Color</label>
-                    <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+                    <label htmlFor="wm-color" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Color</label>
+                    <input id="wm-color" type="color" value={color} onChange={(e) => setColor(e.target.value)}
                       className="h-9 w-full cursor-pointer rounded-lg border border-[var(--color-border)]" />
                   </div>
                 </div>

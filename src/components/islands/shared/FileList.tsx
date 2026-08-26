@@ -133,7 +133,7 @@ function SortableCardItem({
         <div className="absolute inset-0 flex items-start justify-between p-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
           <button
             className="flex h-6 w-6 cursor-grab touch-none items-center justify-center rounded-md bg-black/55 text-white backdrop-blur-sm active:cursor-grabbing"
-            aria-label="Drag to reorder"
+            aria-label={`Reorder ${item.file.name}`}
             {...attributes}
             {...listeners}
           >
@@ -232,7 +232,7 @@ function SortableRowItem({
       {/* Drag handle */}
       <button
         className="shrink-0 cursor-grab touch-none text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] active:cursor-grabbing"
-        aria-label="Drag to reorder"
+        aria-label={`Reorder ${item.file.name}`}
         {...attributes}
         {...listeners}
       >
@@ -330,12 +330,40 @@ export default function FileList({
   const activeItem = activeId ? files.find((f) => f.id === activeId) ?? null : null;
   const isRows = variant === 'rows';
 
+  // Screen-reader announcements referencing the real file name + 1-based
+  // position, so keyboard reordering (Space to pick up, arrows to move, Space to
+  // drop, Escape to cancel) is fully narrated — not just "item <opaque-id>".
+  const nameOf = (id: string | number) => files.find((f) => f.id === String(id))?.file.name ?? 'file';
+  const posOf = (id: string | number) => files.findIndex((f) => f.id === String(id)) + 1;
+  const announcements = {
+    onDragStart({ active }: { active: { id: string | number } }) {
+      return `Picked up ${nameOf(active.id)}. Position ${posOf(active.id)} of ${files.length}.`;
+    },
+    onDragOver({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) {
+      if (over) return `${nameOf(active.id)} moved to position ${posOf(over.id)} of ${files.length}.`;
+      return undefined;
+    },
+    onDragEnd({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) {
+      if (over) return `${nameOf(active.id)} dropped at position ${posOf(over.id)} of ${files.length}.`;
+      return `${nameOf(active.id)} dropped.`;
+    },
+    onDragCancel({ active }: { active: { id: string | number } }) {
+      return `Reordering cancelled. ${nameOf(active.id)} returned to its original position.`;
+    },
+  };
+  const screenReaderInstructions = {
+    draggable:
+      'To reorder this file, press Space or Enter to pick it up, use the arrow keys to move it, ' +
+      'and press Space or Enter again to drop it. Press Escape to cancel.',
+  };
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      accessibility={{ announcements, screenReaderInstructions }}
     >
       <SortableContext
         items={files.map((f) => f.id)}

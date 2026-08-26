@@ -119,25 +119,25 @@ export default function PageNumbersTool() {
             {/* Options */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Start number</label>
-                <input type="number" min={1} value={startNumber} onChange={(e) => setStartNumber(Math.max(1, Number(e.target.value)))}
+                <label htmlFor="pn-start" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Start number</label>
+                <input id="pn-start" type="number" min={1} value={startNumber} onChange={(e) => setStartNumber(Math.max(1, Number(e.target.value)))}
                   className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Skip first N pages</label>
-                <input type="number" min={0} value={skipFirstN} onChange={(e) => setSkipFirstN(Math.max(0, Number(e.target.value)))}
+                <label htmlFor="pn-skip" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Skip first N pages</label>
+                <input id="pn-skip" type="number" min={0} value={skipFirstN} onChange={(e) => setSkipFirstN(Math.max(0, Number(e.target.value)))}
                   className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
               </div>
               <div>
-                <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+                <label htmlFor="pn-font-size" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
                   <span>Font size</span><span>{fontSize}pt</span>
                 </label>
-                <input type="range" min={6} max={24} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}
+                <input id="pn-font-size" type="range" min={6} max={24} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}
                   className="w-full accent-[var(--color-primary)]" />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Color</label>
-                <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+                <label htmlFor="pn-color" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Color</label>
+                <input id="pn-color" type="color" value={color} onChange={(e) => setColor(e.target.value)}
                   className="h-9 w-full cursor-pointer rounded-lg border border-[var(--color-border)]" />
               </div>
             </div>

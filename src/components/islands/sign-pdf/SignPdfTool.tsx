@@ -205,9 +205,9 @@ export default function SignPdfTool() {
     <div className="flex flex-col gap-6">
       {/* Step 1: Create signature */}
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-        <h3 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
           Step 1: Create your signature
-        </h3>
+        </h2>
 
         {/* Mode tabs */}
         <div className="mb-4 flex gap-1 rounded-lg bg-[var(--color-background)] p-1">
@@ -248,6 +248,7 @@ export default function SignPdfTool() {
           <div className="flex flex-col gap-3">
             <input type="text" value={typedText} onChange={(e) => setTypedText(e.target.value)}
               placeholder="Type your name"
+              aria-label="Signature text"
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-lg outline-none focus:border-[var(--color-primary)]" />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {SIGNATURE_FONTS.map((font, i) => (
@@ -295,9 +296,9 @@ export default function SignPdfTool() {
       {/* Step 2: Upload PDF */}
       {signatureDataUrl && (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <h3 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
             Step 2: Upload your PDF
-          </h3>
+          </h2>
           <div className="flex flex-col gap-4">
             <DropZone accept={['application/pdf']} multiple={false} onFiles={handlePdfFiles} />
             {pdfFile && <FileInfoCard file={pdfFile} onRemove={handleRemovePdf} />}
@@ -308,9 +309,9 @@ export default function SignPdfTool() {
       {/* Step 3: Place & Apply */}
       {signatureDataUrl && pdfFile && pageCount > 0 && (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <h3 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
             Step 3: Place signature on page(s)
-          </h3>
+          </h2>
 
           {/* Signature preview */}
           <div className="mb-4 flex items-center gap-4">

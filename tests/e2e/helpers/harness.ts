@@ -254,6 +254,63 @@ export async function extractPdfText(bytes: Buffer, pageIndex?: number): Promise
   return text;
 }
 
+/**
+ * Return the outerHTML (truncated) of every *visible* form control
+ * (input/select/textarea, excluding file/hidden) that lacks an accessible name:
+ * no `aria-label`/`aria-labelledby`, no matching `<label for>`, and not wrapped
+ * in a `<label>`. An empty array means every control is labelled. Mirrors the
+ * `inputsMissingLabel` heuristic in the site sweep, but returns identifying
+ * markup so failures point at the offending field. Used by the P4.1 label audit
+ * to assert zero unlabelled controls once a tool's options are open.
+ */
+export async function unlabelledFormControls(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const controls = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'input:not([type=hidden]):not([type=file]), select, textarea'
+      )
+    );
+    const visible = (el: Element) => {
+      const s = getComputedStyle(el as HTMLElement);
+      if (s.display === 'none' || s.visibility === 'hidden') return false;
+      const r = (el as HTMLElement).getBoundingClientRect();
+      return r.width > 0 || r.height > 0;
+    };
+    return controls
+      .filter(visible)
+      .filter((el) => {
+        if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return false;
+        const id = el.getAttribute('id');
+        if (id && document.querySelector(`label[for="${CSS.escape(id)}"]`)) return false;
+        if (el.closest('label')) return false;
+        return true;
+      })
+      .map((el) => el.outerHTML.replace(/\s+/g, ' ').slice(0, 140));
+  });
+}
+
+/**
+ * Return a description of every heading-level *skip* in document order (e.g.
+ * `h1 -> h3` with no intervening `h2`). An empty array means the heading outline
+ * is well-formed (WCAG 1.3.1 / best-practice heading order). Mirrors the sweep's
+ * `headingSkips` logic. Used by the P4.2 heading-hierarchy assertion.
+ */
+export async function collectHeadingSkips(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const headings = Array.from(document.querySelectorAll<HTMLHeadingElement>('h1,h2,h3,h4,h5,h6'));
+    const skips: string[] = [];
+    let prev = 0;
+    for (const h of headings) {
+      const level = Number(h.tagName[1]);
+      if (prev && level > prev + 1) {
+        skips.push(`h${prev} -> h${level} ("${(h.textContent ?? '').trim().slice(0, 40)}")`);
+      }
+      prev = level;
+    }
+    return skips;
+  });
+}
+
 /** Assert a Buffer is a real ZIP archive (PK header). */
 export function assertZip(bytes: Buffer) {
   expect(bytes.subarray(0, 2).toString('latin1'), 'ZIP header').toBe('PK');

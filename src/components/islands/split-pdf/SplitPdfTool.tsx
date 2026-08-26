@@ -210,10 +210,11 @@ export default function SplitPdfTool() {
           {/* Range input */}
           {(mode === 'extract' || mode === 'remove' || mode === 'ranges') && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
+              <label htmlFor="split-range" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
                 {mode === 'ranges' ? 'Page ranges (comma-separated)' : 'Page selection'}
               </label>
               <input
+                id="split-range"
                 type="text"
                 value={rangeInput}
                 onChange={(e) => setRangeInput(e.target.value)}
@@ -237,10 +238,11 @@ export default function SplitPdfTool() {
           {/* Every N input */}
           {mode === 'every-n' && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
+              <label htmlFor="split-every-n" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
                 Pages per chunk
               </label>
               <input
+                id="split-every-n"
                 type="number"
                 min={1}
                 max={pageCount ?? 9999}

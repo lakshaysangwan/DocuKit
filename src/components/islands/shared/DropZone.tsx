@@ -51,7 +51,21 @@ export default function DropZone({
   const acceptString = accept.join(',');
 
   return (
-    <div
+    <>
+      {/* File input kept as a sibling (not a child) of the role="button" drop
+          zone: nesting a focusable control inside a button-role element trips
+          axe's nested-interactive rule. It's opened programmatically via ref. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={acceptString}
+        multiple={multiple}
+        className="sr-only"
+        onChange={onInputChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <div
       role="button"
       tabIndex={0}
       aria-label={`File upload area. ${hint ?? `Accepts ${accept.join(', ')}`}. Click or drag files here.`}
@@ -78,17 +92,6 @@ export default function DropZone({
         }
       }}
     >
-      <input
-        ref={inputRef}
-        type="file"
-        accept={acceptString}
-        multiple={multiple}
-        className="sr-only"
-        onChange={onInputChange}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-
       {dropState === 'idle' && !children && compact && (
         <div key="idle-compact" className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
           <svg className="h-4 w-4 text-[var(--color-text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -152,6 +155,7 @@ export default function DropZone({
           {children}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

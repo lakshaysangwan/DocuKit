@@ -194,16 +194,16 @@ export default function CompressImageTool() {
         </div>
         {mode === 'quality' ? (
           <div className="mt-3">
-            <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+            <label htmlFor="ci-quality" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
               <span>Quality</span><span className="tabular-nums">{quality}%</span>
             </label>
-            <input type="range" min={1} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))}
+            <input id="ci-quality" type="range" min={1} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))}
               className="w-full accent-[var(--color-primary)]" />
           </div>
         ) : (
           <div className="mt-3">
-            <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Target Size (KB)</label>
-            <input type="number" min={1} value={targetKb} onChange={(e) => setTargetKb(Math.max(1, Number(e.target.value)))}
+            <label htmlFor="ci-target-kb" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Target Size (KB)</label>
+            <input id="ci-target-kb" type="number" min={1} value={targetKb} onChange={(e) => setTargetKb(Math.max(1, Number(e.target.value)))}
               className="w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
           </div>
         )}

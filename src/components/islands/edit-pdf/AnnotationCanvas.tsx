@@ -572,6 +572,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvasProps>(
       {editingText && (
         <textarea
           autoFocus
+          aria-label="Edit annotation text"
           defaultValue={(objectsRef.current.find(o => o.id === editingText.id) as TextObj)?.text ?? ''}
           style={{
             position: 'absolute',

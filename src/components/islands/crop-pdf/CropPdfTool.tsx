@@ -112,7 +112,7 @@ export default function CropPdfTool() {
       {file && (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Crop Margins</h3>
+            <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Crop Margins</h2>
             <div className="flex gap-1 rounded-lg bg-[var(--color-background)] p-0.5">
               {(['mm', 'pt'] as const).map((u) => (
                 <button key={u} onClick={() => setUnit(u)}
@@ -126,8 +126,9 @@ export default function CropPdfTool() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
               <div key={side}>
-                <label className="mb-1 block text-xs capitalize text-[var(--color-text-secondary)]">{side}</label>
-                <input type="number" min={0} step={1} value={margins[side]}
+                <label htmlFor={`crop-margin-${side}`} className="mb-1 block text-xs capitalize text-[var(--color-text-secondary)]">{side}</label>
+                <input id={`crop-margin-${side}`} type="number" min={0} step={1} value={margins[side]}
+                  aria-label={`${side} margin`}
                   onChange={(e) => setMargins((p) => ({ ...p, [side]: Math.max(0, Number(e.target.value)) }))}
                   className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
               </div>
@@ -152,6 +153,7 @@ export default function CropPdfTool() {
                   placeholder="e.g. 1-5, 8, 11-13"
                   value={pageRangeStr}
                   onChange={(e) => setPageRangeStr(e.target.value)}
+                  aria-label="Page range to crop"
                   className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
                 />
               </div>

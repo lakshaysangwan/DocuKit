@@ -135,10 +135,10 @@ export default function ConvertImageTool() {
             </div>
             {targetFormat !== 'png' && (
               <div>
-                <label className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+                <label htmlFor="cv-quality" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
                   <span>Quality</span><span className="tabular-nums">{quality}%</span>
                 </label>
-                <input type="range" min={1} max={100} value={quality}
+                <input id="cv-quality" type="range" min={1} max={100} value={quality}
                   onChange={(e) => setQuality(Number(e.target.value))}
                   className="w-full accent-[var(--color-primary)]" />
               </div>

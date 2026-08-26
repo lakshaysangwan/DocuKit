@@ -151,8 +151,9 @@ export default function ImageToPdfTool() {
               <div className="grid grid-cols-4 gap-3">
                 {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
                   <div key={side}>
-                    <label className="mb-1 block text-xs capitalize text-[var(--color-text-muted)]">{side}</label>
-                    <input type="number" min={0} value={margins[side]}
+                    <label htmlFor={`i2p-margin-${side}`} className="mb-1 block text-xs capitalize text-[var(--color-text-muted)]">{side}</label>
+                    <input id={`i2p-margin-${side}`} type="number" min={0} value={margins[side]}
+                      aria-label={`${side} margin`}
                       onChange={(e) => setMargins((p) => ({ ...p, [side]: Math.max(0, Number(e.target.value)) }))}
                       className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
                   </div>

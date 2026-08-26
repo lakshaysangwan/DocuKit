@@ -146,6 +146,7 @@ export default function AnnotationToolbar({
             max={72}
             value={fontSize}
             onChange={(e) => onFontSizeChange(Number(e.target.value))}
+            aria-label="Font size"
             className="w-14 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-0.5 text-xs outline-none"
           />
         </div>
@@ -161,6 +162,7 @@ export default function AnnotationToolbar({
             max={20}
             value={strokeWidth}
             onChange={(e) => onStrokeWidthChange(Number(e.target.value))}
+            aria-label="Stroke width"
             className="w-16 accent-[var(--color-primary)]"
           />
           <span className="w-4 text-xs tabular-nums text-[var(--color-text-muted)]">{strokeWidth}</span>
@@ -177,6 +179,7 @@ export default function AnnotationToolbar({
           step={5}
           value={Math.round(opacity * 100)}
           onChange={(e) => onOpacityChange(Number(e.target.value) / 100)}
+          aria-label="Opacity"
           className="w-16 accent-[var(--color-primary)]"
         />
       </div>
@@ -186,6 +189,7 @@ export default function AnnotationToolbar({
         <select
           value={stampType}
           onChange={(e) => onStampTypeChange(e.target.value as StampType)}
+          aria-label="Stamp type"
           className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-0.5 text-xs outline-none"
         >
           {STAMP_OPTIONS.map((s) => (

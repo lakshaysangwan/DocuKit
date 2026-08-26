@@ -188,8 +188,8 @@ export default function LockImageTool() {
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
             <div className="flex flex-col gap-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                <label htmlFor="lock-password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Password</label>
+                <input id="lock-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                   data-testid="password"
                   className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
                 {password && (
@@ -204,8 +204,8 @@ export default function LockImageTool() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                <label htmlFor="lock-confirm-password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
+                <input id="lock-confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                   data-testid="confirm-password"
                   className={cn('w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]',
                     'bg-[var(--color-background)]',

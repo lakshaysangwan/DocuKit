@@ -180,20 +180,20 @@ export default function CompressPdfTool() {
               <p className="mb-4 text-sm font-medium text-[var(--color-text-primary)]">Custom settings</p>
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="mb-1 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
+                  <label htmlFor="cp-dpi" className="mb-1 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
                     <span>Image DPI</span>
                     <span className="font-medium tabular-nums">{dpi}</span>
                   </label>
-                  <input type="range" min={36} max={300} value={dpi}
+                  <input id="cp-dpi" type="range" min={36} max={300} value={dpi}
                     onChange={(e) => setDpi(Number(e.target.value))}
                     className="w-full accent-[var(--color-primary)]" />
                 </div>
                 <div>
-                  <label className="mb-1 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
+                  <label htmlFor="cp-jpeg-quality" className="mb-1 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
                     <span>JPEG Quality</span>
                     <span className="font-medium tabular-nums">{jpegQuality}%</span>
                   </label>
-                  <input type="range" min={1} max={100} value={jpegQuality}
+                  <input id="cp-jpeg-quality" type="range" min={1} max={100} value={jpegQuality}
                     onChange={(e) => setJpegQuality(Number(e.target.value))}
                     className="w-full accent-[var(--color-primary)]" />
                 </div>

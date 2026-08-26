@@ -161,11 +161,11 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
         <div className="flex flex-col gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--color-text-primary)]">Password</label>
+              <label htmlFor="protect-password" className="text-sm font-medium text-[var(--color-text-primary)]">Password</label>
               <button onClick={generatePassword} className="text-xs text-[var(--color-primary)] hover:underline">Generate random</button>
             </div>
             <div className="relative">
-              <input type={showUserPw ? 'text' : 'password'} value={userPassword} onChange={(e) => setUserPassword(e.target.value)}
+              <input id="protect-password" type={showUserPw ? 'text' : 'password'} value={userPassword} onChange={(e) => setUserPassword(e.target.value)}
                 data-testid="password"
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />
               <EyeToggle show={showUserPw} onToggle={() => setShowUserPw((v) => !v)} />
@@ -181,9 +181,9 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
+            <label htmlFor="protect-confirm-password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
             <div className="relative">
-              <input type={showConfirmPw ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+              <input id="protect-confirm-password" type={showConfirmPw ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                 data-testid="confirm-password"
                 className={cn('w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]',
                   'bg-[var(--color-background)]',
@@ -212,9 +212,9 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
       {/* Unlock form */}
       {mode === 'unlock' && file && (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">PDF Password</label>
+          <label htmlFor="unlock-password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">PDF Password</label>
           <div className="relative">
-            <input type={showUnlockPw ? 'text' : 'password'} value={unlockPassword} onChange={(e) => setUnlockPassword(e.target.value)}
+            <input id="unlock-password" type={showUnlockPw ? 'text' : 'password'} value={unlockPassword} onChange={(e) => setUnlockPassword(e.target.value)}
               data-testid="unlock-password"
               placeholder="Enter password to unlock"
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />

@@ -310,6 +310,11 @@ export default function RedactPdfTool() {
           <p className="text-sm text-[var(--color-text-secondary)]">
             Draw rectangles over the content you want to redact. Scroll to see all pages.
           </p>
+          <p className="sr-only">
+            Drawing redaction boxes requires a pointer. For keyboard access, use the
+            “Find text to redact” field above to mark every occurrence of a phrase, then
+            remove any unwanted mark with its focusable “Remove mark” button.
+          </p>
           <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto rounded-lg border border-[var(--color-border)] p-4">
             {thumbnails.map((thumb, i) => (
               <div key={i} className="flex flex-col gap-1">

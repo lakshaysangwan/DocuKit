@@ -111,15 +111,52 @@ Phase 0 → 1.
   per-buffer; null = all) honored in the worker; a "Choose pages per file" panel with a page-range
   input per file. Test: take page 1 of file A + all of file B → 6 pages.
 - **✅ Phase 3 COMPLETE.** Suite: **116 passed / 0 skipped**. Phases 0–3 all done.
-- **Phase 4 (a11y) — not yet started as a full pass.** Interim: the two form inputs added this
-  session (redact Find-&-Redact search, merge per-file page-range) carry `aria-label`s so they don't
-  regress the sweep's `inputsMissingLabel`. P4.1 proper is a cross-tool label audit (image-to-pdf
-  margins, digital-signature CN/Org, page-numbers, crop, split every-N, target-size, and the many
-  `<label>`-sibling range/number inputs that lack `htmlFor`/wrapping), plus extending the sweep to
-  assert `inputsMissingLabel === 0` after opening each tool's options. `@axe-core/playwright` is
-  **not installed** yet (needed for P4.4).
-- **Next up:** Phase 4 — P4.1 labels → P4.2 headings → P4.3 keyboard/SR for dnd + canvases →
-  P4.4 focus/contrast + axe. Then Phases 5 (UX), 6 (perf), 7 (release gates).
+- **✅ P4.1 done (fixes M-4)** — Cross-tool form-label audit. Every previously bare `<label>`-sibling
+  control now has an associated name: `htmlFor`/`id` pairs where a visible label exists (page-numbers
+  start/skip/font/color, watermark text/size/opacity/rotation/color, crop & image-to-pdf margins,
+  digital-signature CN/Org, compress-pdf DPI/quality, compress-image quality/target-KB, resize W/H,
+  convert quality, pdf-to-image quality, split range/every-N, protect & lock password/confirm, view-once
+  share-link), and `aria-label` where the control is placeholder-only or span-labelled (crop &
+  pdf-to-image page-range, pfx password, sign typed-signature, AnnotationToolbar font-size/stroke/opacity/
+  stamp-select, AnnotationCanvas edit textarea). New `unlabelledFormControls(page)` harness helper +
+  `tests/e2e/a11y/labels.spec.ts`: 16 tests that upload the right fixture, expand each tool's options
+  (custom mode, target-size, page-range, every-N, per-file page ranges, typed-signature tab), and assert
+  **zero** visible controls lack an accessible name. *(Implemented as a dedicated a11y spec rather than
+  bolting per-tool upload/expand logic onto the report-only serial site-sweep — same assertion intent,
+  cleaner and debuggable.)* Suite: **132 passed** (116 + 16).
+- **✅ P4.2 done (fixes L-1)** — Heading hierarchy. The interactive islands opened with an `<h3>`
+  directly under the page `<h1>` (skip); demoted digital-signature "Certificate", crop "Crop Margins",
+  and sign-pdf "Step 1/2/3" to `<h2>` so they're peers of the static How-to/Features/FAQ `<h2>` sections.
+  New `collectHeadingSkips(page)` helper + `tests/e2e/a11y/headings.spec.ts`: every route (home + all
+  tools + privacy) has exactly one `<h1>` and no level skips. **22 passed.**
+- **✅ P4.3 done** — Keyboard + screen-reader for the drag-and-drop file list. `FileList`'s
+  `KeyboardSensor` was already wired; added meaningful dnd-kit `announcements` (referencing the real
+  file name + 1-based position for pick-up / move / drop / cancel) and `screenReaderInstructions`, and
+  made each drag handle's `aria-label` name its file (`Reorder <name>`). `ProcessingOverlay` now has a
+  dedicated `sr-only` polite live region announcing progress at 10% deciles (throttled so it isn't
+  chatty; container downgraded from `role=status` to a labelled `role=group`). Redact's pointer-only
+  draw surface gained an `sr-only` note pointing keyboard users to the (already keyboard-operable)
+  Find-&-Redact search + focusable per-mark remove buttons; crop is already fully keyboard-operable via
+  its labelled numeric margin inputs. New `collectHeadingSkips`/keyboard test: `tests/e2e/a11y/keyboard.spec.ts`
+  drives a full keyboard reorder (Space → Arrow → Space), gating each keystroke on its live-region
+  announcement, and asserts the order changed. **1 test.**
+- **✅ P4.4 done** — Installed `@axe-core/playwright` (4.13). `tests/e2e/a11y/axe.spec.ts` runs axe
+  (`wcag2a/2aa/21a/21aa`) on every route **and** the mid-operation processing state, asserting **zero
+  serious/critical** violations. Fixes surfaced by axe: (a) **contrast** — `--color-text-muted`
+  darkened to `#666666` (light) / lightened to `#9E9EA8` (dark); `--color-success`/`--color-error`
+  darkened to green-700/red-700 in **light** mode so accent *text* on their `/5` tint panels clears
+  4.5:1, with **dark**-mode overrides preserving the brighter values (a darker accent would fail on
+  dark surfaces); (b) **definition-list/dlitem** — the FAQ `<dl>/<dt>/<dd>` wrapped around
+  `<details>` was invalid, converted to `<div>/<span>/<div>` (FAQ JSON-LD already provides the machine
+  semantics); (c) **nested-interactive** — the DropZone's focusable file `<input>` was nested inside
+  its `role="button"` element; moved it out to a sibling (still opened via ref). The mid-op scan waits
+  for the overlay's fade-in to reach `opacity:1` so contrast is graded on steady-state colours.
+  **23 tests.**
+- **✅ Phase 4 COMPLETE.** Full suite: **178 passed / 0 skipped** (116 prior + 62 a11y:
+  16 labels + 22 headings + 1 keyboard + 23 axe). New harness helpers: `unlabelledFormControls`,
+  `collectHeadingSkips`. New dep: `@axe-core/playwright` (dev).
+- **Next up:** Phase 5 (UX polish) — P5.1 feedback consistency → P5.2 robust error/empty states →
+  P5.3 large-file UX → P5.4 mobile & dark-mode pass → P5.5 cross-tool flow. Then Phases 6 (perf), 7 (gates).
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed

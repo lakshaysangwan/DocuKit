@@ -166,7 +166,7 @@ export default function DigitalSignatureTool() {
 
       {/* Certificate source */}
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-        <h3 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">Certificate</h3>
+        <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">Certificate</h2>
 
         <div className="mb-4 flex gap-1 rounded-lg bg-[var(--color-background)] p-1">
           {([['generate', 'Generate New'], ['upload', 'Upload Existing']] as const).map(([val, label]) => (
@@ -184,18 +184,18 @@ export default function DigitalSignatureTool() {
         {certSource === 'generate' && (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">
+              <label htmlFor="cert-cn" className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">
                 Common Name (Your Name) *
               </label>
-              <input type="text" value={certInfo.cn} onChange={(e) => setCertInfo((p) => ({ ...p, cn: e.target.value }))}
+              <input id="cert-cn" type="text" value={certInfo.cn} onChange={(e) => setCertInfo((p) => ({ ...p, cn: e.target.value }))}
                 placeholder="John Doe"
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">
+              <label htmlFor="cert-org" className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">
                 Organization (optional)
               </label>
-              <input type="text" value={certInfo.org} onChange={(e) => setCertInfo((p) => ({ ...p, org: e.target.value }))}
+              <input id="cert-org" type="text" value={certInfo.org} onChange={(e) => setCertInfo((p) => ({ ...p, org: e.target.value }))}
                 placeholder="Acme Corp"
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
             </div>
@@ -213,6 +213,7 @@ export default function DigitalSignatureTool() {
               <div className="flex gap-2">
                 <input type="password" value={pfxPassword} onChange={(e) => setPfxPassword(e.target.value)}
                   placeholder="Certificate password"
+                  aria-label="Certificate password"
                   className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
                 <button onClick={parsePfx}
                   className="rounded-lg border border-[var(--color-border)] px-4 py-2.5 text-sm hover:bg-[var(--color-background)]">

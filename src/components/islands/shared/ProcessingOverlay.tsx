@@ -67,17 +67,25 @@ export default function ProcessingOverlay({
   const prefersReduced = typeof window !== 'undefined'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Announce progress to screen readers at 10% deciles rather than every tick,
+  // so the live region isn't chatty. The DOM text only changes on a decile
+  // boundary, so assistive tech announces roughly every 10%.
+  const decile = Math.max(0, Math.min(100, Math.floor(progress / 10) * 10));
+
   return (
     <div
       className={cn(
         'flex flex-col items-center gap-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-10 animate-fade-in',
         className
       )}
-      role="status"
-      aria-live="polite"
+      role="group"
       aria-label={label ?? 'Processing files'}
       data-testid="processing-overlay"
     >
+      {/* Screen-reader progress announcer — the single polite live region. */}
+      <span className="sr-only" role="status" aria-live="polite" data-testid="progress-announce">
+        {label ?? 'Processing'}: {decile}% complete
+      </span>
       {/* Animation */}
       {prefersReduced || !lottieAvailable ? (
         <Spinner />

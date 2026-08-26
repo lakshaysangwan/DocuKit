@@ -171,10 +171,10 @@ export default function PdfToImageTool() {
           {/* Quality (for JPEG/WebP) */}
           {format !== 'png' && (
             <div>
-              <label className="mb-1 flex justify-between text-sm font-medium text-[var(--color-text-primary)]">
+              <label htmlFor="p2i-quality" className="mb-1 flex justify-between text-sm font-medium text-[var(--color-text-primary)]">
                 <span>Quality</span><span className="font-normal text-[var(--color-text-muted)] tabular-nums">{quality}%</span>
               </label>
-              <input type="range" min={1} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))}
+              <input id="p2i-quality" type="range" min={1} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))}
                 className="w-full accent-[var(--color-primary)]" />
             </div>
           )}
@@ -196,6 +196,7 @@ export default function PdfToImageTool() {
               {pageMode === 'range' && (
                 <input type="text" value={rangeInput} onChange={(e) => setRangeInput(e.target.value)}
                   placeholder="e.g. 1-5, 8, last"
+                  aria-label="Page range to convert"
                   className="mt-2 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
               )}
             </div>

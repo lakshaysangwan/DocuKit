@@ -252,8 +252,8 @@ export default function ResizeImageTool() {
             <div className="flex flex-col gap-4">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Width (px)</label>
-                  <input type="number" min={1} value={targetW} onChange={(e) => updateW(Number(e.target.value))}
+                  <label htmlFor="ri-width" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Width (px)</label>
+                  <input id="ri-width" type="number" min={1} value={targetW} onChange={(e) => updateW(Number(e.target.value))}
                     className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
                 </div>
                 <button onClick={() => setLockAspect((v) => !v)}
@@ -264,8 +264,8 @@ export default function ResizeImageTool() {
                   {lockAspect ? '🔒' : '🔓'}
                 </button>
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-[var(--color-text-secondary)]">Height (px)</label>
-                  <input type="number" min={1} value={targetH} onChange={(e) => updateH(Number(e.target.value))}
+                  <label htmlFor="ri-height" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Height (px)</label>
+                  <input id="ri-height" type="number" min={1} value={targetH} onChange={(e) => updateH(Number(e.target.value))}
                     className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
                 </div>
               </div>

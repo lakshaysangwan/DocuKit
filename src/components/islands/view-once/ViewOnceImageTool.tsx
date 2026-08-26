@@ -223,9 +223,10 @@ export default function ViewOnceImageTool() {
           </div>
 
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <label className="mb-2 block text-xs font-medium text-[var(--color-text-secondary)]">Share link</label>
+            <label htmlFor="view-once-link" className="mb-2 block text-xs font-medium text-[var(--color-text-secondary)]">Share link</label>
             <div className="flex gap-2">
               <input
+                id="view-once-link"
                 readOnly
                 value={shareUrl}
                 className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm font-mono outline-none"

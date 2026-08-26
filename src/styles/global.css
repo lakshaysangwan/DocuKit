@@ -17,10 +17,15 @@
   --color-border:         #E5E5E5;
   --color-text-primary:   #171717;
   --color-text-secondary: #525252;
-  --color-text-muted:     #A3A3A3;
-  --color-success:        #16A34A;
+  /* #666666 clears WCAG AA 4.5:1 on white and on the faint /5 accent tints
+     (e.g. primary/5 #F1F1F9 ≈ 5.0:1); the previous #A3A3A3 was ~2.5:1. */
+  --color-text-muted:     #666666;
+  /* success/error darkened so accent-coloured *text* on their /5 tint panels
+     clears 4.5:1 (green-700 / red-700). Dark mode keeps the brighter values
+     below (a darker accent would fail against dark surfaces). */
+  --color-success:        #15803D;
   --color-warning:        #EAB308;
-  --color-error:          #DC2626;
+  --color-error:          #B91C1C;
 
   /* ── Category accents ──────────────────── */
   --color-pdf:            #E11D48;
@@ -44,7 +49,13 @@
     --color-border:           #2C2C33;
     --color-text-primary:     #FAFAFA;
     --color-text-secondary:   #B4B4BD;
-    --color-text-muted:       #71717A;
+    /* #9E9EA8 clears 4.5:1 on the dark surfaces (#18181C / #202027);
+       the previous #71717A was ~3.6:1 (fails). */
+    --color-text-muted:       #9E9EA8;
+    /* Keep the brighter success/error on dark: the light-mode darkening
+       (green-700 / red-700) would fail against these dark surfaces. */
+    --color-success:          #16A34A;
+    --color-error:            #DC2626;
     /* Brighter accent washes so the category icons glow on dark cards. */
     --color-pdf-bg:           rgba(225, 29, 72, 0.16);
     --color-image-bg:         rgba(13, 148, 136, 0.16);
