@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 
 export interface ThumbnailResult {
   pageIndex: number;
@@ -33,7 +33,7 @@ export function usePdfThumbnails(): UsePdfThumbnailsResult {
     try {
       const pdfjsLib = await getPdfjs();
 
-      const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+      const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer.slice(0) }).promise;
 
       // Detect encrypted PDFs and reject with a clear message
       // pdfjs will set doc._transport._fullReader._isRangeSupported but the simplest

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 
 export interface MarginsPt {
   top: number;
@@ -42,7 +42,7 @@ export default function CropPreview({ buffer, marginsPt, onChangePt }: Props) {
     (async () => {
       try {
         const pdfjsLib = await getPdfjs();
-        const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+        const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer.slice(0) }).promise;
         const page = await doc.getPage(1);
         const base = page.getViewport({ scale: 1 });
         const scale = Math.min(2, 900 / Math.max(base.width, base.height));

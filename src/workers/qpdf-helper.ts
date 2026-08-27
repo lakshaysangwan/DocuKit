@@ -19,7 +19,10 @@ let modulePromise: Promise<QpdfExt> | null = null;
 function getModule(): Promise<QpdfExt> {
   if (!modulePromise) {
     modulePromise = createModule({
-      locateFile: () => '/wasm/qpdf.wasm',
+      // Absolute, not root-relative: this may run inside a blob: worker (see
+      // worker-pool.createWorker), where a leading-slash path has no valid base
+      // to resolve against and the fetch fails outright.
+      locateFile: () => new URL('/wasm/qpdf.wasm', self.location.origin).href,
     }) as Promise<QpdfExt>;
   }
   return modulePromise;

@@ -7,7 +7,8 @@ import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
+import { createCanvas2D, canvasToBlob } from '@/lib/canvas-2d';
 import { redactWithMupdf } from '@/lib/redact-with-mupdf';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes, generateId } from '@/lib/utils';
@@ -34,7 +35,7 @@ async function rasterizeRedact(
   const pdfjsLib = await getPdfjs();
   const { PDFDocument } = await import('pdf-lib');
 
-  const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const pdfDoc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: new Uint8Array(buffer) }).promise;
   const outDoc = await PDFDocument.create();
 
   const marksByPage = new Map<number, RedactMark[]>();
@@ -53,8 +54,7 @@ async function rasterizeRedact(
     const page = await pdfDoc.getPage(i + 1);
     const vp = page.getViewport({ scale: RENDER_SCALE });
 
-    const canvas = new OffscreenCanvas(vp.width, vp.height);
-    const ctx = canvas.getContext('2d')!;
+    const { canvas, ctx } = createCanvas2D(vp.width, vp.height);
 
     await page.render({ canvasContext: ctx as any, viewport: vp, canvas: canvas as any } as any).promise;
 
@@ -66,7 +66,7 @@ async function rasterizeRedact(
       }
     }
 
-    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+    const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
     const imgBytes = new Uint8Array(await blob.arrayBuffer());
     const img = await outDoc.embedJpg(imgBytes);
 
@@ -129,7 +129,7 @@ export default function RedactPdfTool() {
     setSearching(true);
     try {
       const pdfjsLib = await getPdfjs();
-      const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+      const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer.slice(0) }).promise;
       const found: RedactMark[] = [];
       for (let p = 0; p < doc.numPages; p++) {
         const page = await doc.getPage(p + 1);

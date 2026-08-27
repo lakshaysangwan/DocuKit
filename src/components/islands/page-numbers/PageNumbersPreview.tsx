@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 import type { PageNumberOptions } from '@/types/worker-messages';
 
 interface Props {
@@ -61,7 +61,7 @@ export default function PageNumbersPreview({ buffer, options }: Props) {
     (async () => {
       try {
         const pdfjsLib = await getPdfjs();
-        const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+        const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer.slice(0) }).promise;
         const page = await doc.getPage(1);
         const base = page.getViewport({ scale: 1 });
         const scale = Math.min(2, 900 / Math.max(base.width, base.height));

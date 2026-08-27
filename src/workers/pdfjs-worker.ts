@@ -7,6 +7,7 @@
  */
 
 import type { WorkerRequest, WorkerResponse, TextWord } from '../types/worker-messages';
+import { PDFJS_DOC_ASSETS } from '../lib/pdfjs';
 
 let pdfjsLib: typeof import('pdfjs-dist') | null = null;
 
@@ -28,7 +29,7 @@ async function renderThumbnails(
   const lib = await getPdfJs();
 
   sendProgress(5, 'Loading PDF…');
-  const doc = await lib.getDocument({ data: buffer }).promise;
+  const doc = await lib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer }).promise;
 
   const bitmaps: ImageBitmap[] = [];
   const total = pageIndices.length;
@@ -70,7 +71,7 @@ async function extractText(
   const lib = await getPdfJs();
 
   sendProgress(5, 'Loading PDF…');
-  const doc = await lib.getDocument({ data: buffer }).promise;
+  const doc = await lib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer }).promise;
   const total = doc.numPages;
   const pages: Array<{ pageIndex: number; text: string; words: TextWord[] }> = [];
 

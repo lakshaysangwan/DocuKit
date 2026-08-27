@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 /** Dev-server artifacts (Vite optimize-dep re-bundling, Astro dev toolbar). */
 function isDevNoise(url: string): boolean {
   return (
-    url.includes('/@id/astro') ||
+    url.includes('/@id/') ||
     url.includes('/@vite/') ||
     url.includes('dev-toolbar') ||
     url.includes('/@fs/') ||
@@ -28,7 +28,9 @@ export class PageDiagnostics {
     page.on('requestfailed', (req) => {
       // Ignore benign aborts (e.g. prefetch cancellations).
       const failure = req.failure()?.errorText ?? '';
-      if (failure.includes('ERR_ABORTED')) return;
+      // Abort/cancel wording is engine-specific: Chromium ERR_ABORTED, Gecko
+      // NS_BINDING_ABORTED, WebKit "cancelled". None of them is a real failure.
+      if (/abort|cancel/i.test(failure)) return;
       if (isDevNoise(req.url())) return;
       this.failedRequests.push(`${req.url()} — ${failure}`);
     });

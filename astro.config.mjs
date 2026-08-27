@@ -85,6 +85,10 @@ export default defineConfig({
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin',
+      // WebKit refuses to load same-origin *workers* under require-corp unless the
+      // response also carries an explicit CORP header, so pdf.js falls back to a
+      // broken "fake worker" without it. Harmless on Chromium/Gecko.
+      'Cross-Origin-Resource-Policy': 'same-origin',
     },
   },
 });

@@ -4,9 +4,12 @@
  * the browser's canvas encoders on quality-per-byte (especially JPEG via
  * mozjpeg) and give us one place to add AVIF/HEIC.
  *
- * Works in both a Web Worker and the main thread (uses OffscreenCanvas for
- * decode, which is available in both in modern browsers).
+ * Works in both a Web Worker and the main thread: the drawing surface comes from
+ * `createCanvas2D`, which prefers OffscreenCanvas and falls back to a DOM canvas
+ * where OffscreenCanvas is missing (older Safari, some WebKit builds).
  */
+import { createCanvas2D } from './canvas-2d';
+
 export type ImageFormat = 'jpeg' | 'png' | 'webp' | 'avif';
 
 /** Encode raw pixels to the target format. `quality` is 0–100 (ignored for PNG). */
@@ -54,8 +57,7 @@ export async function bufferToImageData(
     const { heicTo } = await import('heic-to');
     bitmap = await heicTo({ blob, type: 'bitmap' });
   }
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext('2d')!;
+  const { canvas, ctx } = createCanvas2D(bitmap.width, bitmap.height);
   if (background) {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);

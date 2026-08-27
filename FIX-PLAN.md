@@ -210,10 +210,56 @@ Phase 0 → 1.
   gitignored (`.lighthouseci/`, `filesystem` target — no external upload). Verified locally (build →
   autorun, exit 0): home + merge + compress-image + watermark all score **perf 100 / a11y 100 / TTI
   ~0.5–0.6 s**, comfortably inside budget.
-- **Next up:** Phase 6 — P6.2 big-document hardening (large 100–500pp / 50–200MB fixtures, memory
-  guards) → P6.3 cross-browser (WebKit/Firefox Playwright projects). Then Phase 7 (release gates).
-  *(P6.2/P6.3 are the heavy items — large-fixture generation and cross-browser feature gaps — flagged
-  for a checkpoint.)*
+- **✅ P6.3 done** — Added `firefox` (Gecko) and `webkit` Playwright projects running the **full**
+  desktop suite, not a smoke subset. Baseline was **32 failures**; the cross-browser pass turned up
+  four genuine defects that Chromium had been hiding:
+  - **pdf.js worker blocked by COEP on WebKit (the big one).** Under
+    `Cross-Origin-Embedder-Policy: require-corp`, WebKit refuses to load a worker from a same-origin
+    URL. pdf.js caught the failure, fell back to its main-thread "fake worker", then failed to import
+    the script too — so every PDF render **hung with nothing surfaced to the user**
+    (pdf-to-image, edit-pdf, redact, both `no-external-requests` guards). Dropping COEP fixes it but
+    costs cross-origin isolation, and `@jsquash/avif` only selects its multithreaded encoder when
+    SharedArrayBuffer is available — that would have silently downgraded AVIF for *everyone*.
+    Blob-URL workers are exempt from the check, so `src/lib/pdfjs.ts` now builds the worker itself and
+    passes it via `workerPort` (falling back to `workerSrc`). Isolation kept; 15/15 on all engines.
+  - **pdf.js runtime assets were never served.** pdf.js only fetches `standard_fonts` when the host
+    lacks a system font for one of the 14 PDF base fonts, so a desktop Chrome/Firefox never asked and
+    the gap stayed invisible; WebKit (and any machine without Helvetica) failed with "Ensure that the
+    `standardFontDataUrl` API parameter is provided". `scripts/sync-pdfjs-worker.mjs` now syncs
+    `standard_fonts`, `cmaps`, `wasm`, `iccs` (gitignored, ~3 MB, regenerated on postinstall) and all
+    12 `getDocument()` sites pass `PDFJS_DOC_ASSETS`. URLs are **absolute**, since a blob-backed worker
+    has no base to resolve a leading-slash path against. This also fixed Firefox's AVIF export.
+  - **compress-pdf silently did nothing on two of three engines.** Its image re-encode loop
+    `catch { continue }`s per image, so when the canvas call failed every image was skipped and the
+    tool reported success on a file it had barely touched. Extracted to `src/lib/pdf-compress.ts`
+    (same shape as `image-ops.ts`), added to `CANVAS_OPS`, and switched from the **canvas** JPEG
+    encoder to jSquash/mozjpeg — canvas output differs per engine, and Firefox's was inefficient
+    enough that "Medium" stopped shrinking at all. `ProcessingStats` now reports
+    `imagesTotal`/`imagesRecompressed` so a total no-op is distinguishable from "nothing to compress".
+  - **Dead workers were never evicted from the pool.** `onerror` rejected the job but left the entry
+    at `busy: false`, so one failed *load* poisoned that slot for the rest of the session.
+  - **OffscreenCanvas fallback.** Playwright's WebKit build has no `OffscreenCanvas` (real Safari has
+    had it since 16.4, so this is stricter than the browser it stands in for — but the fallback is
+    real portability work for Safari < 16.4). `src/lib/canvas-2d.ts` prefers OffscreenCanvas and falls
+    back to a DOM canvas; image ops moved to `src/lib/image-ops.ts` so **one** implementation runs in
+    both realms, dispatched inline by the worker pool when OffscreenCanvas is missing.
+  - **Harness portability**: `isDevNoise` matched `/@id/astro` but Vite's real virtual id is
+    `/@id/__x00__astro:toolbar:internal`; the benign-abort filter only knew Chromium's `ERR_ABORTED`
+    (Gecko says `NS_BINDING_ABORTED`, WebKit "cancelled").
+  - `Cross-Origin-Resource-Policy: same-origin` added to dev config **and** `public/_headers`, and
+    `tests/e2e/xbrowser/capabilities.spec.ts` now pins the platform floor per engine (COOP/COEP headers
+    *and* `crossOriginIsolated`, WASM instantiate, module workers, `createImageBitmap`, blob downloads,
+    and identical resize output on both canvas paths). **COOP/COEP confirmed for production** via
+    `public/_headers`.
+  - **Parallelism**: four projects of WASM-heavy tools saturate a laptop, so `workers` is now 2 with a
+    single local retry — failures were wandering between runs (a different set each time) rather than
+    reproducing.
+- **⚠️ Known gap:** `Unlock PDF` round-trip + wrong-password still fail on **WebKit only**. WebKit
+  refuses the pdf-worker under COEP on the unlock route, yet the same worker loads fine for *encrypt*
+  on `/protect-pdf` — unexplained. 2 tests of ~640; everything else is green.
+- **Next up:** P6.2 big-document hardening (deferred by decision), then Phase 7 (release gates).
+  *(When P6.2 is picked up: generate large fixtures at global-setup, ~100pp / ~50MB, never committed —
+  and stage them on disk, since Playwright caps in-memory upload buffers at 50MB.)*
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed

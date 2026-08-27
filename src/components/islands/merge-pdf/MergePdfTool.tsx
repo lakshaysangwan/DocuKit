@@ -8,7 +8,7 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import NextStep from '@/components/islands/shared/NextStep';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 import { parsePageRange } from '@/lib/pdf-page-range';
 import { triggerDownload } from '@/lib/download';
 import { generateId, formatBytes } from '@/lib/utils';
@@ -20,7 +20,7 @@ async function generateThumbnail(file: File): Promise<{ dataUrl: string; pageCou
   const pdfjsLib = await getPdfjs();
 
   const buffer = await file.arrayBuffer();
-  const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer }).promise;
   const page = await doc.getPage(1);
   const viewport = page.getViewport({ scale: 1 });
   const scale = 400 / Math.max(viewport.width, viewport.height);

@@ -11,7 +11,7 @@ import { notifyPdfLoadError } from '@/lib/notify';
 import { createZipAndDownload } from '@/lib/download';
 import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
 import { parsePageRange } from '@/lib/pdf-page-range';
-import { getPdfjs } from '@/lib/pdfjs';
+import { loadPdfDocument } from '@/lib/pdfjs';
 import { cn } from '@/lib/utils';
 
 type OutputFormat = ImageFormat;
@@ -73,9 +73,7 @@ export default function PdfToImageTool() {
     setResults([]);
 
     try {
-      const pdfjsLib = await getPdfjs();
-
-      const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+      const doc = await loadPdfDocument(buffer.slice(0));
       const scale = dpi / 72; // 72 is PDF base DPI
       const blobs: Blob[] = [];
 

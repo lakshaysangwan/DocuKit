@@ -184,6 +184,11 @@ export interface ProcessingStats {
   outputSize?: number;
   pageCount?: number;
   durationMs?: number;
+  /** compress-pdf: embedded images found, and how many were actually re-encoded.
+   *  imagesTotal > 0 with imagesRecompressed === 0 means the image pass did
+   *  nothing — the output is structurally optimised only. */
+  imagesTotal?: number;
+  imagesRecompressed?: number;
 }
 
 export type WorkerResponse =

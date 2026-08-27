@@ -16,9 +16,14 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // WASM-heavy tools across four projects saturate a laptop; a single local retry
+  // separates genuine failures from contention without hiding regressions (a test
+  // that fails twice in a row is reported).
+  retries: process.env.CI ? 2 : 1,
   // WASM tools are CPU-heavy; limit parallelism so runs stay stable on a laptop.
-  workers: process.env.CI ? 2 : 3,
+  // Running Chromium + Firefox + WebKit + mobile multiplies that load, so keep
+  // the local worker count conservative.
+  workers: 2,
   reporter: [
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['list'],
@@ -38,6 +43,20 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       // The full functional/a11y suite runs on desktop; mobile-only specs are
       // exercised by the `mobile` project below.
+      testIgnore: '**/mobile/**',
+    },
+    {
+      // P6.3 — cross-browser parity. Docukit leans on OffscreenCanvas, WASM
+      // workers, cross-origin isolation and blob downloads, all of which differ
+      // by engine, so the FULL desktop suite runs on Gecko and WebKit too
+      // rather than on a smoke subset.
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+      testIgnore: '**/mobile/**',
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
       testIgnore: '**/mobile/**',
     },
     {

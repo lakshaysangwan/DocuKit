@@ -290,8 +290,12 @@ export default function ResizeImageTool() {
           <div className="rounded-lg border border-[var(--color-border)] p-3" data-testid="custom-presets">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-[var(--color-text-primary)]">Your presets</span>
+              {/* Dimensions arrive asynchronously after decode. Without this guard the
+                  button is live but saveCurrentPreset early-returns, making an early
+                  click a silent no-op. */}
               <button onClick={saveCurrentPreset} data-testid="save-preset"
-                className="rounded-lg border border-[var(--color-border)] px-3 py-1 text-xs font-medium hover:border-[var(--color-primary)]">
+                disabled={!targetW || !targetH}
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1 text-xs font-medium hover:border-[var(--color-primary)] disabled:opacity-50">
                 Save {targetW}×{targetH}
               </button>
             </div>

@@ -6,7 +6,7 @@ import AnnotationToolbar, { type AnnotationTool, type StampType } from './Annota
 import AnnotationCanvas, { type AnnotationCanvasRef, type AnnotationObject, renderObjects, preloadImages } from './AnnotationCanvas';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { embedAnnotations } from '@/lib/pdf-annotations';
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 import { formatBytes } from '@/lib/utils';
 import { triggerDownload } from '@/lib/download';
 
@@ -88,7 +88,7 @@ export default function EditPdfTool() {
 
       const pdfjsLib = await getPdfjs();
 
-      const doc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+      const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buf.slice(0) }).promise;
 
       // Detect encrypted PDFs
       try { await doc.getPermissions(); } catch {

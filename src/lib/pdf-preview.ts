@@ -1,4 +1,4 @@
-import { getPdfjs } from '@/lib/pdfjs';
+import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 
 /**
  * Render a single PDF page to a JPEG data URL for preview/comparison surfaces.
@@ -10,7 +10,7 @@ export async function renderPdfPageToDataUrl(
   maxSize = 900,
 ): Promise<string> {
   const pdfjsLib = await getPdfjs();
-  const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+  const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer.slice(0) }).promise;
   try {
     const page = await doc.getPage(pageIndex + 1);
     const base = page.getViewport({ scale: 1 });

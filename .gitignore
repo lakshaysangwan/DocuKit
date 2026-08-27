@@ -27,3 +27,10 @@ pnpm-debug.log*
 test-results/
 playwright-report/
 .lighthouseci/
+
+# pdf.js runtime assets synced from node_modules by scripts/sync-pdfjs-worker.mjs
+# on postinstall (~3MB). The worker itself stays tracked; these bundles do not.
+public/pdfjs/standard_fonts/
+public/pdfjs/cmaps/
+public/pdfjs/wasm/
+public/pdfjs/iccs/
