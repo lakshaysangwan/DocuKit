@@ -38,7 +38,7 @@ const WORKER_URLS: Record<WorkerModule, string> = {
  * `OffscreenCanvas` cannot draw at all, so on those browsers these run inline on
  * the main thread via the same functions the worker would have called.
  */
-const CANVAS_OPS: ReadonlySet<string> = new Set(['compress-image', 'resize-image', 'compress-pdf']);
+const CANVAS_OPS: ReadonlySet<string> = new Set(['compress-image', 'resize-image', 'convert-image', 'compress-pdf']);
 
 class WorkerPool {
   private pools = new Map<WorkerModule, WorkerEntry[]>();
@@ -186,12 +186,14 @@ class WorkerPool {
     const sendProgress = (percent: number, label?: string) => options.onProgress?.({ percent, label });
 
     try {
-      const { compressImage, resizeImage } = await import('../lib/image-ops');
+      const { compressImage, convertImage, resizeImage } = await import('../lib/image-ops');
       let result: ArrayBuffer;
       if (message.op === 'compress-image') {
         result = await compressImage(message.buffer, message.options, sendProgress);
       } else if (message.op === 'resize-image') {
         result = await resizeImage(message.buffer, message.mimeType, message.options, sendProgress);
+      } else if (message.op === 'convert-image') {
+        result = await convertImage(message.buffer, message.options, sendProgress);
       } else if (message.op === 'compress-pdf') {
         const { compressPdf } = await import('../lib/pdf-compress');
         const out = await compressPdf(message.buffer, message.options, sendProgress);

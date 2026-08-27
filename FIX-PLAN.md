@@ -270,18 +270,25 @@ Phase 0 → 1.
   build the operation finishes before the 0.3 s animation does. It now emulates
   `prefers-reduced-motion`, which the app already honours by disabling the fade — deterministic, and it
   keeps the original intent of grading contrast at steady state.
+- **✅ P6.1 follow-up done** — `convert-image` now runs in the image worker too, closing the last
+  main-thread image op. Its HEIC fallback was the reason it lagged; libheif is WASM and the 'bitmap'
+  target uses `createImageBitmap`, both worker-safe. Shares `convertImage` in `src/lib/image-ops.ts`
+  with the same main-thread fallback as the other canvas ops.
 - **Next up:** P6.2 big-document hardening (deferred by decision), then Phase 7 (release gates).
   *(When P6.2 is picked up: generate large fixtures at global-setup, ~100pp / ~50MB, never committed —
   and stage them on disk, since Playwright caps in-memory upload buffers at 50MB.)*
 
-Grounding facts (verified against the repo, not assumed):
-- Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed
-  `@jsquash/jpeg|png|webp` premium codecs are **unused**. AVIF/HEIC codecs are **not installed**.
-- `compress-pdf` **has** a real image-recompression worker path (`compressPdf`,
-  `src/workers/pdf-worker.ts:589`) that currently errors → UI passes through. It is a **fix**, not a rewrite.
-- Encryption/decryption already use **qpdf-wasm** (premium AES-256) — good.
-- **MUPDF is not installed** despite the registry claiming it. True redaction needs a
-  content-stream engine → this is the one place a new heavy dependency is warranted (see Decision D1).
+Grounding facts — **as of the original audit**. Several were true then and have since been fixed by
+the phases above; kept for the record, with the current state noted so they aren't read as live:
+- Image ops (`src/workers/image-worker.ts`) used **OffscreenCanvas encoders**, so the installed
+  `@jsquash/jpeg|png|webp` codecs were **unused**. AVIF/HEIC codecs were **not installed**.
+  → *Now:* all image encoding goes through jSquash (`src/lib/image-codec.ts`); `@jsquash/avif` and
+  `heic-to` are installed and exercised by e2e tests.
+- `compress-pdf` **has** a real image-recompression worker path that errored → UI passed through.
+  → *Now:* fixed and moved to `src/lib/pdf-compress.ts`; it reports `imagesRecompressed` so a silent
+  no-op is detectable. (The old `src/workers/pdf-worker.ts:589` reference is stale.)
+- Encryption/decryption already use **qpdf-wasm** (AES-256) — still true.
+- **MUPDF was not installed** despite the registry claiming it. → *Now:* installed (see D1).
 - `@signpdf/signpdf` is installed but the digital-signature tool hand-rolls PKCS#7 with node-forge.
 
 ---
@@ -292,10 +299,10 @@ Grounding facts (verified against the repo, not assumed):
   (~8–11 MB WASM). It becomes a **shared Phase-1 enabler**: true redaction (P1.3), and optionally the
   cleanest path for real PDF compression (P1.2, image downsample + `mutool clean`) and crop-flatten
   (P2.3). A new `src/workers/mupdf-worker.ts` will own it so the main pdf-worker stays light.
-- **D2 — Advertised-but-missing features.** *Open.* Default is **implement** (per "premium parity");
-  each Phase-3 step notes the faster copy-trim fallback. Confirm per-tool when we reach Phase 3.
-- **D3 — AVIF/HEIC support.** *Open.* Add `@jsquash/avif` + a HEIC decoder (`libheif-wasm`) to honor
-  the image-format claims, or drop those formats from the copy. Confirm at P3.2.
+- **D2 — Advertised-but-missing features → RESOLVED: implemented.** Phase 3 built them rather than
+  trimming the copy; see the P3.1–P3.6 entries in the progress log.
+- **D3 — AVIF/HEIC support → RESOLVED: implemented at P3.2.** `@jsquash/avif` and `heic-to`
+  (libheif) are installed; AVIF export and HEIC decode are both covered by e2e tests.
 
 ---
 

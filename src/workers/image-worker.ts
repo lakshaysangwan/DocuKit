@@ -7,7 +7,7 @@
  * message plumbing.
  */
 import type { WorkerRequest, WorkerResponse } from '../types/worker-messages';
-import { compressImage, resizeImage } from '../lib/image-ops';
+import { compressImage, convertImage, resizeImage } from '../lib/image-ops';
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { progressPort, ...msg } = e.data as WorkerRequest & { progressPort: MessagePort };
@@ -23,6 +23,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
     } else if (msg.op === 'resize-image') {
       const result = await resizeImage(msg.buffer, msg.mimeType, msg.options, sendProgress);
+      const response: WorkerResponse = { status: 'success', result };
+      (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
+    } else if (msg.op === 'convert-image') {
+      const result = await convertImage(msg.buffer, msg.options, sendProgress);
       const response: WorkerResponse = { status: 'success', result };
       (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
     } else {

@@ -13,8 +13,8 @@
  * without OffscreenCanvas.
  */
 import { createCanvas2D, type AnyCanvas, type AnyCanvas2D } from './canvas-2d';
-import { encodeImageData, type ImageFormat } from './image-codec';
-import type { CompressImageOptions, ResizeImageOptions } from '../types/worker-messages';
+import { bufferToImageData, encodeImageData, type ImageFormat } from './image-codec';
+import type { CompressImageOptions, ConvertImageOptions, ResizeImageOptions } from '../types/worker-messages';
 
 export type ProgressFn = (pct: number, label?: string) => void;
 
@@ -145,4 +145,29 @@ async function compressToTargetSize(
   // Try the lowest quality as a last resort.
   const lastResort = await encodeCanvas(canvas, ctx, actualFormat, lo);
   return lastResort.byteLength < originalBuffer.byteLength ? lastResort : originalBuffer;
+}
+
+/**
+ * Convert an image to another format. Transparency is flattened onto white when
+ * the target cannot store alpha.
+ *
+ * Decoding goes through `bufferToImageData`, which falls back to libheif for
+ * HEIC/HEIF — that fallback is why this stayed on the main thread longer than
+ * the other image ops, but it is worker-safe (libheif is WASM and the 'bitmap'
+ * target uses createImageBitmap, which workers have).
+ */
+export async function convertImage(
+  buffer: ArrayBuffer,
+  options: ConvertImageOptions,
+  sendProgress: ProgressFn,
+): Promise<ArrayBuffer> {
+  sendProgress(10, 'Decoding image…');
+  const format = normalizeFormat(options.format);
+  const background = format !== 'png' ? '#FFFFFF' : undefined;
+  const data = await bufferToImageData(buffer, background);
+
+  sendProgress(60, 'Encoding…');
+  const out = await encodeImageData(data, format, options.quality ?? 85);
+  sendProgress(95, 'Finalizing…');
+  return out;
 }

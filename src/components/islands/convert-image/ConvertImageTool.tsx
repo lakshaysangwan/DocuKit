@@ -7,7 +7,8 @@ import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import NextStep from '@/components/islands/shared/NextStep';
 import { createZipAndDownload } from '@/lib/download';
-import { bufferToImageData, encodeImageData, formatMime } from '@/lib/image-codec';
+import { formatMime } from '@/lib/image-codec';
+import { useWorker } from '@/hooks/use-worker';
 import { formatBytes, generateId, cn } from '@/lib/utils';
 
 type TargetFormat = 'jpeg' | 'png' | 'webp' | 'avif';
@@ -15,18 +16,36 @@ type Status = 'idle' | 'processing' | 'done' | 'error';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/avif', 'image/heic', 'image/heif'];
 
-async function convertSingleImage(file: File, targetFormat: TargetFormat, quality: number): Promise<Blob> {
+/**
+ * Convert one image through the image worker, so decode + encode stay off the
+ * main thread (jSquash/libheif are heavy enough to jank the UI on a big file).
+ * Falls back to running inline automatically on browsers without OffscreenCanvas
+ * — see worker-pool's CANVAS_OPS.
+ */
+async function convertSingleImage(
+  run: ReturnType<typeof useWorker>['run'],
+  file: File,
+  targetFormat: TargetFormat,
+  quality: number,
+): Promise<Blob> {
   const buf = await file.arrayBuffer();
-  // Flatten transparency onto white when the target can't store alpha.
-  const background = targetFormat !== 'png' ? '#FFFFFF' : undefined;
-  const data = await bufferToImageData(buf, background);
-  const out = await encodeImageData(data, targetFormat, quality);
-  return new Blob([out], { type: formatMime(targetFormat) });
+  const { port1, port2 } = new MessageChannel();
+  const response = await run(
+    'image',
+    { op: 'convert-image', buffer: buf, mimeType: file.type, options: { format: targetFormat, quality }, progressPort: port2 },
+    [buf, port2],
+  );
+  port1.close();
+  if (!response || response.status !== 'success' || !response.result) {
+    throw new Error(response?.status === 'error' ? response.message : 'Conversion failed');
+  }
+  return new Blob([response.result], { type: formatMime(targetFormat) });
 }
 
 export default function ConvertImageTool() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [targetFormat, setTargetFormat] = useState<TargetFormat>('webp');
+  const { run } = useWorker();
   const [quality, setQuality] = useState(85);
   const [convProgress, setConvProgress] = useState(0);
   const [status, setStatus] = useState<Status>('idle');
@@ -65,14 +84,14 @@ export default function ConvertImageTool() {
     for (let i = 0; i < files.length; i++) {
       setConvProgress(Math.round(((i + 1) / files.length) * 100));
       try {
-        const blob = await convertSingleImage(files[i].file, targetFormat, quality);
+        const blob = await convertSingleImage(run, files[i].file, targetFormat, quality);
         const base = files[i].file.name.replace(/\.[^.]+$/, '');
         out.push({ name: `${base}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`, blob });
       } catch { toast.error(`Failed to convert ${files[i].file.name}`); }
     }
     setResults(out); setStatus('done');
     toast.success(`Converted ${out.length} image${out.length !== 1 ? 's' : ''}`);
-  }, [files, targetFormat, quality]);
+  }, [run, files, targetFormat, quality]);
 
   const handleDownload = useCallback(async () => {
     if (results.length === 0) return;
