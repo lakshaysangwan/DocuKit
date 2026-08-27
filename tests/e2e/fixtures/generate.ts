@@ -5,9 +5,10 @@
  * Raster images (JPEG/PNG/WebP) are produced by a real browser via canvas
  * during global setup, so we get valid, codec-correct files with no extra deps.
  */
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, cmyk } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { chromium } from '@playwright/test';
-import { mkdir, writeFile, access } from 'node:fs/promises';
+import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,6 +25,10 @@ export const FIXTURE = {
   // AcroForm PDF (text field, checkbox, dropdown) — P7 corpus: tools must not
   // silently destroy interactive form fields.
   pdfForm: path.join(FIXTURES_DIR, 'doc-form.pdf'),
+  // P7 corpus: documents that are not clean Latin text-only PDFs.
+  pdfCjk: path.join(FIXTURES_DIR, 'doc-cjk.pdf'),
+  pdfRtl: path.join(FIXTURES_DIR, 'doc-rtl.pdf'),
+  pdfCmyk: path.join(FIXTURES_DIR, 'doc-cmyk.pdf'),
   jpg: path.join(FIXTURES_DIR, 'photo.jpg'),
   jpg2: path.join(FIXTURES_DIR, 'photo-2.jpg'),
   png: path.join(FIXTURES_DIR, 'graphic.png'),
@@ -118,6 +123,78 @@ export async function generateFixtures(): Promise<void> {
 
   // ── AcroForm PDF ───────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfForm, await makeFormPdf());
+
+  // ── P7 corpus ──────────────────────────────────────────────────────────────
+  await writeFile(FIXTURE.pdfCmyk, await makeCmykPdf());
+  // CJK/RTL need a font with those glyphs. Generated when one is present on the
+  // host; the corpus tests skip themselves when the fixture is absent rather
+  // than pretending to cover a script they never rendered.
+  const cjkFont = await findFont(CJK_FONTS);
+  if (cjkFont) await writeFile(FIXTURE.pdfCjk, await makeScriptPdf(cjkFont, CJK_TEXT));
+  const rtlFont = await findFont(RTL_FONTS);
+  if (rtlFont) await writeFile(FIXTURE.pdfRtl, await makeScriptPdf(rtlFont, RTL_TEXT));
+}
+
+/** Korean + Han sample. */
+export const CJK_TEXT = '한국어 문서 漢字';
+/** Hebrew sample (RTL script; pdf-lib applies no bidi reordering or shaping). */
+export const RTL_TEXT = 'שלום עולם';
+
+const CJK_FONTS = [
+  'C:/Windows/Fonts/malgun.ttf',
+  'C:/Windows/Fonts/SimsunExtG.ttf',
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+  '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
+];
+
+const RTL_FONTS = [
+  'C:/Windows/Fonts/arial.ttf',
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+  '/System/Library/Fonts/Supplemental/Arial.ttf',
+];
+
+async function findFont(candidates: string[]): Promise<string | null> {
+  for (const c of candidates) if (await exists(c)) return c;
+  return null;
+}
+
+/**
+ * A PDF whose text is drawn in a real embedded font covering the given script.
+ * Subsetted, so the fixture stays small. No bidi reordering or contextual
+ * shaping is applied — the point is that the *script and its codepoints* survive
+ * our tools, not that the fixture is typographically perfect.
+ */
+async function makeScriptPdf(fontPath: string, text: string): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const font = await doc.embedFont(await readFile(fontPath), { subset: true });
+  const latin = await doc.embedFont(StandardFonts.Helvetica);
+  for (let i = 0; i < 2; i++) {
+    const page = doc.addPage([595, 842]);
+    page.drawText(`Page ${i + 1}`, { x: 50, y: 800, size: 12, font: latin, color: rgb(0, 0, 0) });
+    page.drawText(text, { x: 50, y: 720, size: 24, font, color: rgb(0, 0, 0) });
+    page.drawText(text, { x: 50, y: 660, size: 14, font, color: rgb(0.2, 0.2, 0.2) });
+  }
+  return doc.save();
+}
+
+/**
+ * A PDF drawn entirely in DeviceCMYK. Print-origin documents use CMYK, and a
+ * renderer that assumes RGB either shifts the colours or fails outright.
+ */
+async function makeCmykPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([595, 842]);
+  page.drawText('CMYK colour test', { x: 50, y: 780, size: 20, font, color: cmyk(0, 0, 0, 1) });
+  const swatches = [cmyk(1, 0, 0, 0), cmyk(0, 1, 0, 0), cmyk(0, 0, 1, 0), cmyk(0, 0, 0, 0.5)];
+  swatches.forEach((c, i) => {
+    page.drawRectangle({ x: 50 + i * 120, y: 600, width: 100, height: 100, color: c });
+  });
+  page.drawText('Rich black', { x: 50, y: 540, size: 14, font, color: cmyk(0.6, 0.4, 0.4, 1) });
+  return doc.save();
 }
 
 /**

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { FIXTURE } from '../fixtures/generate';
+import { existsSync } from 'node:fs';
+import { FIXTURE, CJK_TEXT, RTL_TEXT } from '../fixtures/generate';
 import {
   addSingleFileAndWait,
   addFilesAndWait,
@@ -8,6 +9,8 @@ import {
   assertPdf,
   countPdfPagesStrict,
   pdfFormFieldNames,
+  extractPdfText,
+  expectImageRendered,
 } from '../helpers/harness';
 
 /**
@@ -21,13 +24,11 @@ import {
  * WHAT THIS COVERS: the two categories that can be generated faithfully —
  * image-only ("scanned") pages and real AcroForm fields.
  *
- * WHAT IT DOES NOT COVER, and why: CJK/RTL text needs an embedded CJK or Arabic
- * font (a multi-MB binary this repo does not carry), and CMYK needs a document
- * authored in a CMYK colour space, which pdf-lib cannot produce. Synthesising
- * fakes for those would test the fake, not the capability. They need real sample
- * documents dropped into tests/e2e/fixtures/files — see FIX-PLAN. Note that
- * pdf.js can only render CJK correctly now that the cmaps bundle is served
- * (P6.3), so that path is newly plausible but still unverified.
+ * CJK/RTL fixtures embed a real subsetted system font, so they are genuine
+ * documents rather than synthetic stand-ins. They are generated only when a font
+ * covering the script exists on the host; when it does not, those tests skip
+ * loudly instead of quietly claiming coverage they never had. CMYK is drawn with
+ * real DeviceCMYK operators via pdf-lib's cmyk().
  */
 test.describe('P7 — corpus: scanned pages and interactive forms', () => {
   test('scanned (image-only) PDF survives a merge with its pages intact', async ({ page }) => {
@@ -108,5 +109,71 @@ test.describe('P7 — corpus: scanned pages and interactive forms', () => {
       await pdfFormFieldNames(bytes),
       'an encrypt/decrypt round-trip should preserve the interactive form'
     ).toEqual(await pdfFormFieldNames(await readFile(FIXTURE.pdfForm)));
+  });
+
+  test.describe('scripts and colour spaces', () => {
+    const cjk = () => existsSync(FIXTURE.pdfCjk);
+    const rtl = () => existsSync(FIXTURE.pdfRtl);
+
+    test('CJK text survives a watermark with its text layer intact', async ({ page }) => {
+      test.skip(!cjk(), 'no CJK-capable font on this host; fixture not generated');
+      await page.goto('/watermark-pdf');
+      await addSingleFileAndWait(page, FIXTURE.pdfCjk);
+      await page.getByTestId('tool-action').click();
+      await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+      const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+      assertPdf(bytes);
+      // The embedded CID font and its ToUnicode map must come through, or the
+      // document is visually fine but no longer searchable/copyable.
+      expect(await extractPdfText(bytes)).toContain(CJK_TEXT);
+    });
+
+    test('CJK page renders a real thumbnail (pdf.js cmaps + embedded font)', async ({ page }) => {
+      test.skip(!cjk(), 'no CJK-capable font on this host; fixture not generated');
+      await page.goto('/rearrange-pdf-pages');
+      await addSingleFileAndWait(page, FIXTURE.pdfCjk);
+      const thumb = page.getByTestId('page-thumb').first().locator('img').first();
+      await expectImageRendered(thumb, 30_000);
+    });
+
+    test('RTL text survives a watermark with its text layer intact', async ({ page }) => {
+      test.skip(!rtl(), 'no Hebrew-capable font on this host; fixture not generated');
+      await page.goto('/watermark-pdf');
+      await addSingleFileAndWait(page, FIXTURE.pdfRtl);
+      await page.getByTestId('tool-action').click();
+      await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+      const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+      assertPdf(bytes);
+      expect(await extractPdfText(bytes)).toContain(RTL_TEXT);
+    });
+
+    test('RTL page renders a real thumbnail', async ({ page }) => {
+      test.skip(!rtl(), 'no Hebrew-capable font on this host; fixture not generated');
+      await page.goto('/rearrange-pdf-pages');
+      await addSingleFileAndWait(page, FIXTURE.pdfRtl);
+      await expectImageRendered(page.getByTestId('page-thumb').first().locator('img').first(), 30_000);
+    });
+
+    test('a DeviceCMYK document renders and compresses without loss of pages', async ({ page }) => {
+      // Print-origin PDFs are CMYK; a renderer that assumes RGB either shifts
+      // the colours or throws. pdf.js needs its ICC bundle for the conversion,
+      // which is only served since P6.3.
+      await page.goto('/compress-pdf');
+      await addSingleFileAndWait(page, FIXTURE.pdfCmyk);
+      await page.getByRole('button', { name: 'Medium' }).click();
+      await page.getByTestId('tool-action').click();
+      await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+      const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+      assertPdf(bytes);
+      expect(await countPdfPagesStrict(bytes)).toBe(
+        await countPdfPagesStrict(await readFile(FIXTURE.pdfCmyk))
+      );
+    });
+
+    test('a DeviceCMYK page renders a real thumbnail, not a blank one', async ({ page }) => {
+      await page.goto('/rearrange-pdf-pages');
+      await addSingleFileAndWait(page, FIXTURE.pdfCmyk);
+      await expectImageRendered(page.getByTestId('page-thumb').first().locator('img').first(), 30_000);
+    });
   });
 });

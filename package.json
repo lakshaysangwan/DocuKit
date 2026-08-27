@@ -59,6 +59,7 @@
     "@cloudflare/workers-types": "^4.20260317.1",
     "@eslint/js": "^10.0.1",
     "@lhci/cli": "^0.15.1",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "^25.5.0",
     "@types/node-forge": "^1.3.14",
