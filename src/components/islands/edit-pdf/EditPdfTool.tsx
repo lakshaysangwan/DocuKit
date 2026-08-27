@@ -166,10 +166,11 @@ export default function EditPdfTool() {
     const newIdx = historyIndex - 1;
     const snapshot = history[newIdx];
     pageStateRef.current = { ...snapshot };
-    const pageJson = snapshot[currentPage];
-    if (pageJson && fabricCanvasRef.current) {
-      fabricCanvasRef.current.loadCanvasJSON(pageJson);
-    }
+    // A snapshot with no entry for this page means the page had NO annotations
+    // at that point in history, so the canvas must be cleared. Skipping the load
+    // instead left the annotation on screen, which made the first undo (back to
+    // the initial empty history entry) look like it did nothing.
+    fabricCanvasRef.current?.loadCanvasJSON(snapshot[currentPage] ?? '[]');
     setHistoryIndex(newIdx);
   }, [canUndo, historyIndex, history, currentPage]);
 
@@ -178,10 +179,11 @@ export default function EditPdfTool() {
     const newIdx = historyIndex + 1;
     const snapshot = history[newIdx];
     pageStateRef.current = { ...snapshot };
-    const pageJson = snapshot[currentPage];
-    if (pageJson && fabricCanvasRef.current) {
-      fabricCanvasRef.current.loadCanvasJSON(pageJson);
-    }
+    // A snapshot with no entry for this page means the page had NO annotations
+    // at that point in history, so the canvas must be cleared. Skipping the load
+    // instead left the annotation on screen, which made the first undo (back to
+    // the initial empty history entry) look like it did nothing.
+    fabricCanvasRef.current?.loadCanvasJSON(snapshot[currentPage] ?? '[]');
     setHistoryIndex(newIdx);
   }, [canRedo, historyIndex, history, currentPage]);
 

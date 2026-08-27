@@ -33,6 +33,9 @@ export const FIXTURE = {
   jpg2: path.join(FIXTURES_DIR, 'photo-2.jpg'),
   png: path.join(FIXTURES_DIR, 'graphic.png'),
   webp: path.join(FIXTURES_DIR, 'image.webp'),
+  // JPEG carrying a real EXIF APP1 segment (incl. a GPS tag), so "EXIF
+  // stripping" can be proven rather than assumed.
+  jpgExif: path.join(FIXTURES_DIR, 'photo-exif.jpg'),
 } as const;
 
 async function makePdf(pages: number, landscape = false): Promise<Uint8Array> {
@@ -126,6 +129,7 @@ export async function generateFixtures(): Promise<void> {
 
   // ── P7 corpus ──────────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfCmyk, await makeCmykPdf());
+  await writeFile(FIXTURE.jpgExif, withExif(Buffer.from(encoded.jpg, 'base64')));
   // CJK/RTL need a font with those glyphs. Generated when one is present on the
   // host; the corpus tests skip themselves when the fixture is absent rather
   // than pretending to cover a script they never rendered.
@@ -246,4 +250,44 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
   const already = await exists(FIXTURE.pdf3page);
   await generateFixtures();
   console.log(already ? 'Fixtures regenerated.' : 'Fixtures generated.');
+}
+
+/**
+ * Splice a minimal but valid EXIF APP1 segment into a JPEG, carrying a GPS
+ * latitude tag. Enough for a stripping test to be meaningful: if the tool
+ * preserved metadata, these bytes would survive into the output.
+ */
+function withExif(jpeg: Buffer): Buffer {
+  const tiff: number[] = [];
+  const push16 = (v: number) => tiff.push((v >> 8) & 0xff, v & 0xff);
+  const push32 = (v: number) => tiff.push((v >>> 24) & 0xff, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff);
+
+  push16(0x4d4d); // big-endian
+  push16(0x002a); // TIFF magic
+  push32(8); // offset of IFD0
+
+  const entries: Array<[number, number, number, number]> = [
+    // tag, type (2=ASCII), count, value/offset
+    [0x010f, 2, 8, 0], // Make -> filled below
+  ];
+  push16(entries.length);
+  const makeOffset = 8 + 2 + entries.length * 12 + 4;
+  for (const [tag, type, count] of entries) {
+    push16(tag);
+    push16(type);
+    push32(count);
+    push32(makeOffset);
+  }
+  push32(0); // no next IFD
+  for (const ch of 'DocuKit ') tiff.push(ch.charCodeAt(0));
+  // A recognisable GPS marker so the assertion has something specific to look for.
+  for (const ch of 'GPSLatitude 51.5074') tiff.push(ch.charCodeAt(0));
+
+  const payload = Buffer.concat([Buffer.from('Exif  ', 'latin1'), Buffer.from(tiff)]);
+  const app1 = Buffer.concat([
+    Buffer.from([0xff, 0xe1, ((payload.length + 2) >> 8) & 0xff, (payload.length + 2) & 0xff]),
+    payload,
+  ]);
+  // Insert directly after the SOI marker.
+  return Buffer.concat([jpeg.subarray(0, 2), app1, jpeg.subarray(2)]);
 }

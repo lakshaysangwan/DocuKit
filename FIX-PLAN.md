@@ -304,11 +304,42 @@ Phase 0 → 1.
   the capability. **These need real sample documents** dropped into `tests/e2e/fixtures/files` — the
   genuinely manual half of the gate. Worth noting the CJK path only became plausible at P6.3, when the
   `cmaps` bundle started being served; it is still unverified.
+- **✅ P7 claims pass — 47 unproven bullets worked through.** `tests/e2e/parity/claims.spec.ts` now
+  proves the ones that are real; coverage moved to **51 covered (44%), 28 partial (24%), 36 unproven
+  (31%)**. Newly proven: split `odd`/`even`/`last` keywords and the live page count, pdf-to-image's
+  600 DPI preset, protect's permission toggles, organize's zoom control, all four edit shape tools,
+  freehand/highlight/whiteout/stamp, edit undo+redo, lock-image's advertised PBKDF2 parameters, and
+  EXIF stripping (against a fixture carrying a real EXIF APP1 segment with a GPS tag).
+  - **Bug found and fixed by this pass: undo did not undo.** `EditPdfTool`'s history starts at
+    `[{}]`, and both `handleUndo`/`handleRedo` skipped `loadCanvasJSON` when the snapshot had no entry
+    for the current page — so undoing the *first* annotation left it on screen (only the selection
+    handles disappeared, which is why it looked like it worked), and redo then appeared dead. Both now
+    load `'[]'` for an empty snapshot, which clears the canvas.
+- **⚠️ Copy drift — advertised features that are absent, unreachable, or inaccurate.** Found by
+  checking each unproven claim against the source. These are **product decisions**: implement, or trim
+  the copy. Nothing here has been changed on the site.
+  | Tool | Bullet | Finding |
+  |---|---|---|
+  | merge-pdf | Preserve bookmarks & internal links | `MergeOptions.preserveBookmarks` is declared but never read by the worker |
+  | merge-pdf | Optional blank page between documents | worker implements `insertBlankPages`; **no UI sets it** |
+  | merge-pdf | Password-protected PDF support | no password handling in the tool at all |
+  | rearrange | Insert blank pages anywhere | no such control |
+  | rearrange | Duplicate pages | no such control |
+  | rearrange | Multi-select with Ctrl+click / Shift+click | no modifier-key handling |
+  | rearrange | Zoom control: 80 / 150 / 250px | control works, but the sizes are **80/120/160** (S/M/L) |
+  | sign-pdf | Date stamp and initials support | no such control |
+  | unlock-pdf | Shows original encryption details | no details shown |
+  | crop-pdf | CropBox (reversible) or Flatten (permanent) | `CropPdfTool` hardcodes `mode: 'cropbox'`; **Flatten unreachable** |
+  | redact-pdf | Full metadata strip option | no such control |
+  | view-once | Max 10MB image size | no size cap found |
+  | view-once | Automatically deleted after first view | no burn-after-read logic found |
+  Remaining genuinely-unproven-but-plausible claims (needing tests rather than decisions) are listed
+  by `parity.spec.ts` on every run; the one that cannot be automated at all is
+  "Verifiable in Adobe Reader / Acrobat", which no headless test can demonstrate.
 - **Next up:** (1) P6.2 big-document hardening — deferred by decision; when picked up, generate large
   fixtures at global-setup, ~100pp / ~50MB, never committed, and stage them on disk since Playwright
-  caps in-memory upload buffers at 50MB. (2) Supply real CJK/RTL/CMYK sample documents to finish the
-  Phase 7 corpus. (3) Chip away at the 47 unproven parity claims — each is either a test to write or
-  copy to trim.
+  caps in-memory upload buffers at 50MB. (2) Decide on the copy-drift table above: implement or trim. (3) The remaining 36 unproven parity
+  claims — mostly tests still to write.
 
 Grounding facts — **as of the original audit**. Several were true then and have since been fixed by
 the phases above; kept for the record, with the current state noted so they aren't read as live:
