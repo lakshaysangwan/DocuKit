@@ -25,15 +25,36 @@ const SIGNATURE_FONTS = [
   { name: 'Sacramento', css: "'Sacramento', cursive", canvas: '"Sacramento"' },
 ];
 
+/** What a click on a page thumbnail drops onto that page. */
+type StampType = 'signature' | 'date' | 'initials';
+
+const STAMP_LABELS: Record<StampType, string> = {
+  signature: 'Signature',
+  date: 'Date',
+  initials: 'Initials',
+};
+
 interface PlacedAnnotation {
   id: string;
-  type: 'signature';
+  type: StampType;
   pageIndex: number;
   x: number; y: number;
   width: number; height: number;
   rotation: number;
   opacity: number;
-  imageDataUrl: string;
+  /** Signatures and initials are drawn as images. */
+  imageDataUrl?: string;
+  /** Date stamps are drawn as text. */
+  text?: string;
+  fontSize?: number;
+}
+
+/** "Ada Lovelace" → "AL". Falls back to the first two characters. */
+function deriveInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.slice(0, 3).map((w) => w[0].toUpperCase()).join('');
 }
 
 export default function SignPdfTool() {
@@ -49,6 +70,8 @@ export default function SignPdfTool() {
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [_activePage] = useState(0);
+  const [stampType, setStampType] = useState<StampType>('signature');
+  const [initialsText, setInitialsText] = useState('');
 
   const padRef = useRef<SignaturePadHandle>(null);
 
@@ -85,14 +108,15 @@ export default function SignPdfTool() {
     setPdfFile(null); setPdfBuffer(null); setAnnotations([]); setResult(null); setStatus('idle'); setErrorMsg(null);
   }, []);
 
-  // Render typed signature to canvas → dataURL
-  const renderTypedSignature = useCallback(async (): Promise<string> => {
+  // Render text in the chosen handwriting font to a canvas → dataURL.
+  // Used for both the typed signature and the initials stamp.
+  const renderHandwritten = useCallback(async (text: string, width = 400): Promise<string> => {
     // Ensure fonts are loaded before rendering to canvas
     const fontName = SIGNATURE_FONTS[selectedFont].name;
     await document.fonts.load(`60px "${fontName}"`);
     await document.fonts.ready;
     const canvas = document.createElement('canvas');
-    canvas.width = 400;
+    canvas.width = width;
     canvas.height = 120;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -100,9 +124,14 @@ export default function SignPdfTool() {
     ctx.font = `60px ${SIGNATURE_FONTS[selectedFont].canvas}`;
     ctx.fillStyle = '#000000';
     ctx.textBaseline = 'middle';
-    ctx.fillText(typedText, 20, 60);
+    ctx.fillText(text, 20, 60);
     return canvas.toDataURL('image/png');
-  }, [typedText, selectedFont]);
+  }, [selectedFont]);
+
+  const renderTypedSignature = useCallback(
+    () => renderHandwritten(typedText),
+    [renderHandwritten, typedText]
+  );
 
   const handleCaptureSignature = useCallback(async () => {
     let dataUrl = '';
@@ -134,24 +163,59 @@ export default function SignPdfTool() {
     reader.readAsDataURL(f);
   }, []);
 
-  const handlePlaceOnPage = useCallback((pageIdx: number) => {
+  const handlePlaceOnPage = useCallback(async (pageIdx: number) => {
     if (!signatureDataUrl) return;
-    const newAnn: PlacedAnnotation = {
-      id: generateId(),
-      type: 'signature',
-      pageIndex: pageIdx,
-      x: 100, y: 100,  // points from bottom-left in PDF coords — 100pt is ~35mm from bottom
-      width: 200, height: 60,
-      rotation: 0, opacity: 1,
-      imageDataUrl: signatureDataUrl,
-    };
-    // Replace existing annotation on the same page instead of stacking duplicates
-    setAnnotations((prev) => {
-      const existing = prev.filter((a) => a.pageIndex !== pageIdx);
-      return [...existing, newAnn];
-    });
-    toast.success(`Signature placed on page ${pageIdx + 1}`);
-  }, [signatureDataUrl]);
+
+    // Each stamp gets its own spot on the page so a signature, its date and the
+    // initials can sit side by side rather than on top of one another.
+    let newAnn: PlacedAnnotation;
+
+    if (stampType === 'date') {
+      newAnn = {
+        id: generateId(),
+        type: 'date',
+        pageIndex: pageIdx,
+        x: 100, y: 80,
+        width: 120, height: 14,
+        rotation: 0, opacity: 1,
+        text: new Date().toLocaleDateString(),
+        fontSize: 12,
+      };
+    } else if (stampType === 'initials') {
+      const text = (initialsText.trim() || deriveInitials(typedText)).slice(0, 4);
+      if (!text) {
+        toast.error('Enter your initials first');
+        return;
+      }
+      newAnn = {
+        id: generateId(),
+        type: 'initials',
+        pageIndex: pageIdx,
+        x: 320, y: 100,
+        width: 60, height: 40,
+        rotation: 0, opacity: 1,
+        imageDataUrl: await renderHandwritten(text, 160),
+      };
+    } else {
+      newAnn = {
+        id: generateId(),
+        type: 'signature',
+        pageIndex: pageIdx,
+        x: 100, y: 100,  // points from bottom-left in PDF coords — 100pt is ~35mm from bottom
+        width: 200, height: 60,
+        rotation: 0, opacity: 1,
+        imageDataUrl: signatureDataUrl,
+      };
+    }
+
+    // Replace only the same kind of stamp on this page, so repeated clicks don't
+    // stack duplicates but different stamp types can coexist.
+    setAnnotations((prev) => [
+      ...prev.filter((a) => !(a.pageIndex === pageIdx && a.type === newAnn.type)),
+      newAnn,
+    ]);
+    toast.success(`${STAMP_LABELS[stampType]} placed on page ${pageIdx + 1}`);
+  }, [signatureDataUrl, stampType, initialsText, typedText, renderHandwritten]);
 
   const handleApply = useCallback(async () => {
     if (!pdfBuffer || !pdfFile || annotations.length === 0) {
@@ -172,6 +236,8 @@ export default function SignPdfTool() {
         width: a.width, height: a.height,
         rotation: a.rotation, opacity: a.opacity,
         imageDataUrl: a.imageDataUrl,
+        text: a.text,
+        fontSize: a.fontSize,
       }));
 
       const response: WorkerResponse | null = await run(
@@ -321,6 +387,45 @@ export default function SignPdfTool() {
             <span className="text-sm text-[var(--color-text-muted)]">Your signature</span>
           </div>
 
+          {/* What to place on the next page you click */}
+          <div className="mb-4 flex flex-wrap items-center gap-2" data-testid="stamp-type">
+            <span className="text-xs text-[var(--color-text-muted)]">Place</span>
+            {(Object.keys(STAMP_LABELS) as StampType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setStampType(t)}
+                data-testid={`stamp-${t}`}
+                aria-pressed={stampType === t}
+                className={cn(
+                  'rounded-lg px-3 py-1.5 text-xs transition-colors',
+                  stampType === t
+                    ? 'bg-[var(--color-primary)] text-white'
+                    : 'border border-[var(--color-border)] hover:bg-[var(--color-background)]'
+                )}
+              >
+                {STAMP_LABELS[t]}
+              </button>
+            ))}
+            {stampType === 'date' && (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                Stamps today&rsquo;s date ({new Date().toLocaleDateString()})
+              </span>
+            )}
+            {stampType === 'initials' && (
+              <input
+                type="text"
+                value={initialsText}
+                onChange={(e) => setInitialsText(e.target.value)}
+                placeholder={deriveInitials(typedText) || 'AB'}
+                maxLength={4}
+                aria-label="Initials"
+                data-testid="initials-input"
+                className="w-20 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+              />
+            )}
+          </div>
+
           {/* Page thumbnails for placement */}
           <div className="flex flex-wrap gap-3">
             {thumbnails.map((thumb, i) => (
@@ -331,7 +436,7 @@ export default function SignPdfTool() {
                   className="block h-24 w-16 object-cover" />
                 <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-primary)]/0 transition-colors group-hover:bg-[var(--color-primary)]/20">
                   <span className="rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-xs font-bold text-white opacity-0 group-hover:opacity-100">
-                    + Sign
+                    + {STAMP_LABELS[stampType]}
                   </span>
                 </div>
                 <span className="absolute bottom-1 left-0 right-0 text-center text-xs text-white drop-shadow">{i + 1}</span>
@@ -343,8 +448,8 @@ export default function SignPdfTool() {
           </div>
 
           {annotations.length > 0 && (
-            <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
-              {annotations.length} signature{annotations.length !== 1 ? 's' : ''} placed
+            <p className="mt-3 text-sm text-[var(--color-text-secondary)]" data-testid="placed-count">
+              {annotations.length} stamp{annotations.length !== 1 ? 's' : ''} placed
             </p>
           )}
         </div>

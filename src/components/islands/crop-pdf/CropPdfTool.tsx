@@ -10,12 +10,19 @@ import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
+import { flattenCrop } from '@/lib/pdf-flatten-crop';
 import type { WorkerResponse, CropOptions } from '@/types/worker-messages';
 
-type ApplyTo = 'all' | 'range';
+type ApplyTo = 'current' | 'all' | 'range';
 type Status = 'idle' | 'processing' | 'done' | 'error';
 
 const MM_TO_PT = 2.8346;
+
+/**
+ * CropPreview renders page 1 and is labelled "(page 1)", so "current page" in
+ * this tool means the page on screen. There is no page navigation to track.
+ */
+const PREVIEW_PAGE_INDEX = 0;
 
 export default function CropPdfTool() {
   const [file, setFile] = useState<File | null>(null);
@@ -28,6 +35,8 @@ export default function CropPdfTool() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [pageRangeStr, setPageRangeStr] = useState('');
+  const [mode, setMode] = useState<CropOptions['mode']>('cropbox');
+  const [flattenProgress, setFlattenProgress] = useState(0);
 
   const { isRunning, progress, progressLabel, run } = useWorker();
 
@@ -77,15 +86,45 @@ export default function CropPdfTool() {
       return;
     }
 
+    const scaledMargins = {
+      top: margins.top * factor,
+      right: margins.right * factor,
+      bottom: margins.bottom * factor,
+      left: margins.left * factor,
+    };
+
+    if (mode === 'flatten') {
+      // Flatten rasterises, which needs pdf.js and a 2D surface — both main-thread
+      // only here, so it does not go through the worker.
+      try {
+        const pageCount = tempDoc.getPageCount();
+        const targets =
+          applyTo === 'all'
+            ? Array.from({ length: pageCount }, (_, i) => i)
+            : applyTo === 'current'
+              ? [PREVIEW_PAGE_INDEX]
+              : parsedRange;
+
+        const bytes = await flattenCrop(buffer.slice(0), scaledMargins, targets, setFlattenProgress);
+        setResult(bytes);
+        setStatus('done');
+        toast.success('PDF cropped — trimmed content permanently removed');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Flatten crop failed';
+        setStatus('error');
+        setErrorMsg(msg);
+        toast.error(msg);
+      }
+      return;
+    }
+
     const opts: CropOptions = {
       mode: 'cropbox',
-      margins: {
-        top: margins.top * factor,
-        right: margins.right * factor,
-        bottom: margins.bottom * factor,
-        left: margins.left * factor,
-      },
+      margins: scaledMargins,
       applyTo,
+      // The worker falls back to pageRange unless pageIndex is set, so 'current'
+      // silently cropped nothing until this was passed.
+      pageIndex: PREVIEW_PAGE_INDEX,
       pageRange: parsedRange,
     };
     const { port1, port2 } = new MessageChannel();
@@ -97,7 +136,7 @@ export default function CropPdfTool() {
     if (!response) { setStatus('idle'); return; }
     if (response.status === 'error') { setStatus('error'); setErrorMsg(response.message); toast.error(response.message); return; }
     if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('PDF cropped!'); }
-  }, [buffer, file, margins, unit, applyTo, pageRangeStr, run]);
+  }, [buffer, file, margins, unit, applyTo, pageRangeStr, mode, run]);
 
   const handleDownload = useCallback(async () => {
     if (!result || !file) return;
@@ -139,10 +178,12 @@ export default function CropPdfTool() {
           <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-[var(--color-text-secondary)]">Apply to</p>
             <div className="flex gap-2">
-              {(['all', 'range'] as ApplyTo[]).map((a) => (
+              {(['current', 'all', 'range'] as ApplyTo[]).map((a) => (
                 <button key={a} onClick={() => setApplyTo(a)}
+                  data-testid={`apply-to-${a}`}
+                  aria-pressed={applyTo === a}
                   className={`rounded-lg border px-3 py-1.5 text-xs capitalize transition-colors ${applyTo === a ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'}`}>
-                  {a === 'all' ? 'All pages' : 'Page range'}
+                  {a === 'current' ? 'Current page' : a === 'all' ? 'All pages' : 'Page range'}
                 </button>
               ))}
             </div>
@@ -159,6 +200,27 @@ export default function CropPdfTool() {
                 />
               </div>
             )}
+          </div>
+
+          <div className="mt-4" data-testid="crop-mode">
+            <p className="mb-2 text-xs font-medium text-[var(--color-text-secondary)]">Crop mode</p>
+            <div className="flex gap-2">
+              <button onClick={() => setMode('cropbox')} data-testid="crop-mode-cropbox"
+                aria-pressed={mode === 'cropbox'}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${mode === 'cropbox' ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'}`}>
+                CropBox (reversible)
+              </button>
+              <button onClick={() => setMode('flatten')} data-testid="crop-mode-flatten"
+                aria-pressed={mode === 'flatten'}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${mode === 'flatten' ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'}`}>
+                Flatten (permanent)
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              {mode === 'cropbox'
+                ? 'Hides content outside the crop area. The data stays in the file and the crop can be undone.'
+                : 'Rasterises cropped pages so the trimmed-away content is removed for good. Text on those pages stops being selectable.'}
+            </p>
           </div>
         </div>
       )}
@@ -180,7 +242,14 @@ export default function CropPdfTool() {
         />
       )}
 
-      {isRunning && <ProcessingOverlay progress={progress} label={progressLabel || 'Cropping PDF…'} />}
+      {/* Flatten runs on the main thread, so it reports its own progress rather
+          than the worker hook's. */}
+      {(isRunning || status === 'processing') && (
+        <ProcessingOverlay
+          progress={isRunning ? progress : flattenProgress}
+          label={isRunning ? (progressLabel || 'Cropping PDF…') : 'Rasterising cropped pages…'}
+        />
+      )}
       {status === 'error' && errorMsg && (
         <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}

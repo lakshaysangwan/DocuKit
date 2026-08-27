@@ -2,12 +2,24 @@
 
 export type MergeOptions = {
   insertBlankPages?: boolean;
+  /**
+   * Route the merge through MuPDF, which grafts pages with their outline
+   * entries and internal link targets intact. Costs a much heavier WASM load
+   * than the default pdf-lib path, so it is opt-in.
+   */
   preserveBookmarks?: boolean;
   /**
    * Optional per-file page selection (0-indexed), aligned to the `buffers`
    * array. `undefined`/`null` for a file means include all of its pages.
    */
   pageSelections?: (number[] | null)[];
+  /**
+   * Per-file password for encrypted inputs, aligned to `buffers`. A `null`
+   * entry for an encrypted file makes the merge fail with a message naming it.
+   */
+  passwords?: (string | null)[];
+  /** Per-file display names, aligned to `buffers`, used only in error text. */
+  fileNames?: string[];
 };
 
 export type SplitOptions = {
@@ -26,8 +38,12 @@ export type CompressPdfOptions = {
 };
 
 export type ReorderOptions = {
-  order: number[];        // new 0-indexed order of pages
-  rotations: Record<number, 0 | 90 | 180 | 270>; // pageIndex → rotation degrees
+  // Source page index for each output position. -1 inserts a blank page.
+  // A source index may repeat — that duplicates the page.
+  order: number[];
+  // Rotation per *output position*, parallel to `order`. Positional rather than
+  // keyed by source index so two copies of one page can rotate independently.
+  rotations: (0 | 90 | 180 | 270)[];
 };
 
 export type SignVisualOptions = {

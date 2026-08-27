@@ -1,11 +1,11 @@
-import { useState, useCallback, useReducer } from 'react';
+import { useState, useCallback, useEffect, useReducer } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
-import PageThumbnailGrid, { type PageItem } from '@/components/islands/shared/PageThumbnailGrid';
+import PageThumbnailGrid, { BLANK_PAGE, type PageItem } from '@/components/islands/shared/PageThumbnailGrid';
 import { useWorker } from '@/hooks/use-worker';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import { fileToArrayBuffer } from '@/lib/file-utils';
@@ -81,6 +81,21 @@ export default function OrganizePagesTool() {
     dispatch({ type: 'push', pages: next });
   }, []);
 
+  // The FAQ advertises Ctrl+Z / Ctrl+Shift+Z, so bind them rather than leaving
+  // undo reachable only through the toolbar buttons.
+  useEffect(() => {
+    if (pages.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      e.preventDefault();
+      dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [pages.length]);
+
   const handleRemoveFile = useCallback(() => {
     setFile(null); setBuffer(null); dispatch({ type: 'push', pages: [] }); setSelectedIds(new Set());
     setStatus('idle'); setResult(null); setErrorMsg(null);
@@ -139,6 +154,20 @@ export default function OrganizePagesTool() {
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
   }, [pages, updatePages]);
 
+  const handleDuplicate = useCallback((id: string) => {
+    const idx = pages.findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    // The copy keeps the source index and rotation but needs its own id, so the
+    // grid can tell the two apart and each can be rotated independently.
+    const copy: PageItem = { ...pages[idx], id: generateId() };
+    updatePages([...pages.slice(0, idx + 1), copy, ...pages.slice(idx + 1)]);
+  }, [pages, updatePages]);
+
+  const handleInsertBlank = useCallback((position: number) => {
+    const blank: PageItem = { id: generateId(), originalIndex: BLANK_PAGE, rotation: 0 };
+    updatePages([...pages.slice(0, position), blank, ...pages.slice(position)]);
+  }, [pages, updatePages]);
+
   const handleApply = useCallback(async () => {
     if (!buffer || !file || pages.length === 0) {
       toast.error('Load a PDF first');
@@ -149,9 +178,10 @@ export default function OrganizePagesTool() {
     setErrorMsg(null);
 
     try {
+      // Both arrays are positional: index i describes output page i. Blank pages
+      // carry BLANK_PAGE as their source index.
       const order = pages.map((p) => p.originalIndex);
-      const rotations: Record<number, 0 | 90 | 180 | 270> = {};
-      pages.forEach((p) => { if (p.rotation) rotations[p.originalIndex] = p.rotation as 0 | 90 | 180 | 270; });
+      const rotations = pages.map((p) => p.rotation as 0 | 90 | 180 | 270);
 
       const { port1, port2 } = new MessageChannel();
       const bufCopy = buffer.slice(0);
@@ -252,6 +282,8 @@ export default function OrganizePagesTool() {
           onReorder={handleReorder}
           onRotate={handleRotate}
           onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
+          onInsertBlank={handleInsertBlank}
           thumbnailSize={thumbnailSize}
         />
       )}

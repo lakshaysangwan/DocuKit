@@ -395,3 +395,183 @@ export async function pdfFormFieldNames(bytes: Buffer): Promise<string[]> {
     return []; // no AcroForm at all
   }
 }
+
+/**
+ * Flatten a PDF's bookmark tree to `{ title, depth, page }`, resolved with a
+ * real parser so it works regardless of object streams.
+ *
+ * `page` is the 0-based index the bookmark jumps to, resolved by matching the
+ * /Dest page reference against the document's page refs — which is what makes
+ * this useful for merge: a preserved bookmark must point at the page's *new*
+ * position, not its original one.
+ */
+export async function readPdfOutline(
+  bytes: Buffer
+): Promise<{ title: string; depth: number; page: number | null }[]> {
+  const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFString, PDFHexString } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+
+  // `lookup(key, type)` throws when the key is absent, and "no outline at all"
+  // is a perfectly normal answer here — check for the entry first.
+  if (doc.catalog.get(PDFName.of('Outlines')) === undefined) return [];
+  const outlinesDict = doc.catalog.lookup(PDFName.of('Outlines'), PDFDict);
+  if (!outlinesDict) return [];
+
+  const pageRefs = doc.getPages().map((p) => p.ref.toString());
+  const out: { title: string; depth: number; page: number | null }[] = [];
+
+  const destPage = (item: import('pdf-lib').PDFDict): number | null => {
+    const dest = item.lookup(PDFName.of('Dest'));
+    if (!(dest instanceof PDFArray) || dest.size() === 0) return null;
+    const target = dest.get(0);
+    if (!(target instanceof PDFRef)) return null;
+    const idx = pageRefs.indexOf(target.toString());
+    return idx === -1 ? null : idx;
+  };
+
+  const walk = (firstRef: unknown, depth: number): void => {
+    let current = firstRef instanceof PDFRef ? doc.context.lookup(firstRef, PDFDict) : undefined;
+    // Guard against a malformed /Next cycle rather than hanging the suite.
+    let guard = 0;
+    while (current && guard++ < 500) {
+      const rawTitle = current.lookup(PDFName.of('Title'));
+      const title =
+        rawTitle instanceof PDFString || rawTitle instanceof PDFHexString
+          ? rawTitle.decodeText()
+          : '';
+      out.push({ title, depth, page: destPage(current) });
+
+      const first = current.get(PDFName.of('First'));
+      if (first) walk(first, depth + 1);
+
+      const next = current.get(PDFName.of('Next'));
+      current = next instanceof PDFRef ? doc.context.lookup(next, PDFDict) : undefined;
+    }
+  };
+
+  walk(outlinesDict.get(PDFName.of('First')), 0);
+  return out;
+}
+
+/**
+ * 0-based page indices targeted by every internal Link annotation in the file.
+ * Used to show a merge rewrote link destinations to the merged page numbering
+ * instead of leaving them pointing at the wrong page.
+ */
+export async function readPdfInternalLinkTargets(bytes: Buffer): Promise<number[]> {
+  const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  const pageRefs = doc.getPages().map((p) => p.ref.toString());
+  const targets: number[] = [];
+
+  for (const page of doc.getPages()) {
+    const annots = page.node.Annots();
+    if (!annots) continue;
+    for (let i = 0; i < annots.size(); i++) {
+      const annot = annots.lookup(i, PDFDict);
+      if (!annot) continue;
+      if (annot.get(PDFName.of('Subtype'))?.toString() !== '/Link') continue;
+
+      // A link's target is either a direct /Dest or a /GoTo action's /D. MuPDF
+      // normalises to one form and pdf-lib to the other, so accept both.
+      let dest = annot.lookup(PDFName.of('Dest'));
+      if (!(dest instanceof PDFArray)) {
+        const action = annot.lookup(PDFName.of('A'), PDFDict);
+        dest = action?.lookup(PDFName.of('D'));
+      }
+      if (!(dest instanceof PDFArray) || dest.size() === 0) continue;
+
+      const target = dest.get(0);
+      if (!(target instanceof PDFRef)) continue;
+      const idx = pageRefs.indexOf(target.toString());
+      if (idx !== -1) targets.push(idx);
+    }
+  }
+  return targets;
+}
+
+/**
+ * The identifying metadata a PDF carries, across all the places it hides.
+ *
+ * "Full metadata strip" has to clear more than the Info dictionary: the XMP
+ * packet holds a second copy of title/author, and an embedded attachment can
+ * carry anything. Reporting all three lets a test show each one is gone.
+ */
+export async function readPdfMetadataArtifacts(bytes: Buffer): Promise<{
+  title: string;
+  author: string;
+  hasXmp: boolean;
+  attachments: string[];
+}> {
+  const { PDFDocument, PDFName, PDFDict, PDFArray, PDFString, PDFHexString } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+
+  const names = doc.catalog.lookup(PDFName.of('Names'), PDFDict);
+  const embedded = names?.lookup(PDFName.of('EmbeddedFiles'), PDFDict);
+  const namesArray = embedded?.lookup(PDFName.of('Names'), PDFArray);
+  const attachments: string[] = [];
+  if (namesArray) {
+    // The name tree alternates [name, fileSpec, name, fileSpec, …]. Names are
+    // written as hex strings by pdf-lib, so decode rather than stringify.
+    for (let i = 0; i < namesArray.size(); i += 2) {
+      const entry = namesArray.get(i);
+      if (entry instanceof PDFString || entry instanceof PDFHexString) {
+        attachments.push(entry.decodeText());
+      }
+    }
+  }
+
+  return {
+    title: doc.getTitle() ?? '',
+    author: doc.getAuthor() ?? '',
+    hasXmp: doc.catalog.get(PDFName.of('Metadata')) !== undefined,
+    attachments,
+  };
+}
+
+/**
+ * Drag a redaction rectangle near the top of a redact-page element.
+ *
+ * The rendered page is taller than the viewport, so the drag is kept in a narrow
+ * band near the top to stay on-screen — Firefox in particular registers nothing
+ * when the coordinates fall outside. The pauses let React commit `drawStart` and
+ * re-bind the mouseup handler between events. Shared rather than copied: a
+ * near-identical local version with slightly different percentages silently
+ * failed on Firefox only.
+ */
+export async function drawRedactionMark(page: Page, pageEl = 0) {
+  const el = page.getByTestId('redact-page').nth(pageEl);
+  await expect(el.locator('img')).toBeVisible();
+  await expect.poll(async () => (await el.boundingBox())?.height ?? 0).toBeGreaterThan(100);
+  await el.scrollIntoViewIfNeeded();
+  const box = await el.boundingBox();
+  if (!box) throw new Error('redact page has no bounding box');
+  const x1 = box.x + box.width * 0.2;
+  const y1 = box.y + box.height * 0.06;
+  const x2 = box.x + box.width * 0.6;
+  const y2 = box.y + box.height * 0.18;
+  await page.mouse.move(x1, y1);
+  await page.mouse.down();
+  await page.waitForTimeout(120);
+  await page.mouse.move((x1 + x2) / 2, (y1 + y2) / 2, { steps: 5 });
+  await page.waitForTimeout(60);
+  await page.mouse.move(x2, y2, { steps: 5 });
+  await page.waitForTimeout(120);
+  await page.mouse.up();
+}
+
+/**
+ * Each page's CropBox as [width, height] in points.
+ *
+ * Cropping in CropBox mode changes only this box, leaving the MediaBox and the
+ * content untouched — so comparing boxes per page is how "applied to the current
+ * page only" is distinguished from "applied to all pages".
+ */
+export async function readPdfCropBoxes(bytes: Buffer): Promise<[number, number][]> {
+  const { PDFDocument } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  return doc.getPages().map((p) => {
+    const box = p.getCropBox();
+    return [Math.round(box.width), Math.round(box.height)] as [number, number];
+  });
+}

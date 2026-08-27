@@ -95,6 +95,7 @@ export default function RedactPdfTool() {
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [stripMetadata, setStripMetadata] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -232,7 +233,7 @@ export default function RedactPdfTool() {
       // Primary path: true per-region redaction via MuPDF. Content under each
       // mark is physically removed; the rest of the text layer stays selectable.
       setProgress(30);
-      const bytes = await redactWithMupdf(buffer, marks);
+      const bytes = await redactWithMupdf(buffer, marks, stripMetadata);
       setProgress(100);
       setResult(bytes);
       setStatus('done');
@@ -251,7 +252,7 @@ export default function RedactPdfTool() {
         setStatus('error'); setErrorMsg(msg); toast.error(msg);
       }
     }
-  }, [buffer, file, marks, confirmed]);
+  }, [buffer, file, marks, confirmed, stripMetadata]);
 
   const handleDownload = useCallback(async () => {
     if (!result || !file) return;
@@ -364,10 +365,26 @@ export default function RedactPdfTool() {
         </div>
       )}
 
+      {/* Metadata strip option */}
+      {marks.length > 0 && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--color-border)] p-4">
+          <input type="checkbox" checked={stripMetadata} onChange={(e) => setStripMetadata(e.target.checked)}
+            data-testid="strip-metadata" className="mt-0.5" />
+          <span className="text-sm text-[var(--color-text-secondary)]">
+            Full metadata strip
+            <span className="block text-xs text-[var(--color-text-muted)]">
+              Also removes the XMP metadata packet and any embedded file attachments. Author,
+              title and the other document-info fields are always cleared.
+            </span>
+          </span>
+        </label>
+      )}
+
       {/* Confirmation */}
       {marks.length > 0 && (
         <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4">
           <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)}
+            data-testid="confirm-redaction"
             className="mt-0.5 accent-[var(--color-error)]" />
           <span className="text-sm text-[var(--color-text-secondary)]">
             I understand that redaction is permanent and cannot be undone. The marked content will be removed.

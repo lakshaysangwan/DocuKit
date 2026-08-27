@@ -45,6 +45,11 @@ export default function MergePdfTool() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Optional per-file page-range strings (empty = all pages), keyed by file id.
   const [pageRanges, setPageRanges] = useState<Record<string, string>>({});
+  const [insertBlankPages, setInsertBlankPages] = useState(false);
+  const [preserveBookmarks, setPreserveBookmarks] = useState(false);
+  // Files pdf.js refused to open without a password, and what the user typed.
+  const [encryptedIds, setEncryptedIds] = useState<Set<string>>(new Set());
+  const [passwords, setPasswords] = useState<Record<string, string>>({});
 
   const { isRunning, progress, progressLabel, run, cancel } = useWorker();
 
@@ -59,7 +64,14 @@ export default function MergePdfTool() {
             prev.map((f) => (f.id === item.id ? { ...f, thumbnailUrl: dataUrl, pageCount } : f))
           );
         })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          // pdf.js refuses encrypted files without a password. That's the only
+          // signal we get that this file will need one at merge time.
+          const name = err instanceof Error ? err.name : '';
+          if (name === 'PasswordException') {
+            setEncryptedIds((prev) => new Set(prev).add(item.id));
+          }
+        });
     }
   }, []);
 
@@ -89,7 +101,13 @@ export default function MergePdfTool() {
         const idx = parsePageRange(raw, f.pageCount);
         return idx.length > 0 ? idx : null;
       });
-      const options: MergeOptions = pageSelections.some((s) => s !== null) ? { pageSelections } : {};
+      const options: MergeOptions = {
+        ...(pageSelections.some((s) => s !== null) ? { pageSelections } : {}),
+        insertBlankPages,
+        preserveBookmarks,
+        passwords: files.map((f) => passwords[f.id]?.trim() || null),
+        fileNames: files.map((f) => f.file.name),
+      };
 
       const { port1, port2 } = new MessageChannel();
       const response: WorkerResponse | null = await run(
@@ -105,7 +123,7 @@ export default function MergePdfTool() {
       const msg = err instanceof Error ? err.message : 'Merge failed';
       setStatus('error'); setErrorMsg(msg); toast.error(msg);
     }
-  }, [files, run, pageRanges]);
+  }, [files, run, pageRanges, insertBlankPages, preserveBookmarks, passwords]);
 
   const handleDownload = useCallback(async () => {
     if (!result) return;
@@ -166,6 +184,74 @@ export default function MergePdfTool() {
                   />
                 </div>
               ))}
+            </div>
+          </details>
+
+          {/* Password prompts — only for files pdf.js reported as encrypted */}
+          {files.some((f) => encryptedIds.has(f.id)) && (
+            <div
+              data-testid="merge-passwords"
+              className="flex flex-col gap-2 rounded-lg border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5 p-3"
+            >
+              <p className="text-xs font-medium text-[var(--color-text-primary)]">
+                Password-protected files — enter each password to include them
+              </p>
+              {files.filter((f) => encryptedIds.has(f.id)).map((f) => (
+                <div key={f.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                  <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-secondary)]">
+                    {f.file.name}
+                  </span>
+                  <input
+                    type="password"
+                    value={passwords[f.id] ?? ''}
+                    onChange={(e) => setPasswords((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                    placeholder="Password"
+                    aria-label={`Password for ${f.file.name}`}
+                    data-testid="merge-password-input"
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] sm:w-56"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Merge options */}
+          <details className="rounded-lg border border-[var(--color-border)]" data-testid="merge-options">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--color-text-primary)]">
+              Options
+            </summary>
+            <div className="flex flex-col gap-3 p-4 pt-1">
+              <label className="flex items-start gap-2 text-sm text-[var(--color-text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={insertBlankPages}
+                  onChange={(e) => setInsertBlankPages(e.target.checked)}
+                  data-testid="insert-blank-pages"
+                  className="mt-0.5"
+                />
+                <span>
+                  Insert a blank page between documents
+                  <span className="block text-xs text-[var(--color-text-muted)]">
+                    Useful when the result will be printed double-sided.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-[var(--color-text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={preserveBookmarks}
+                  onChange={(e) => setPreserveBookmarks(e.target.checked)}
+                  data-testid="preserve-bookmarks"
+                  className="mt-0.5"
+                />
+                <span>
+                  Preserve bookmarks &amp; internal links
+                  <span className="block text-xs text-[var(--color-text-muted)]">
+                    Keeps each document&rsquo;s outline and in-document links. Loads a larger
+                    engine, so the merge takes longer.
+                  </span>
+                </span>
+              </label>
             </div>
           </details>
         </div>

@@ -10,6 +10,7 @@ import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { readEncryptionInfo, type EncryptionInfo } from '@/lib/pdf-encryption-info';
 import type { WorkerResponse, EncryptOptions } from '@/types/worker-messages';
 
 function EyeToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
@@ -66,6 +67,7 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [encryption, setEncryption] = useState<EncryptionInfo | null>(null);
 
   const { isRunning, progress, progressLabel, run } = useWorker();
   const strength = getPasswordStrength(userPassword);
@@ -73,12 +75,16 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0];
     if (!f) return;
-    setFile(f); setStatus('idle'); setResult(null); setErrorMsg(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
+    setFile(f); setStatus('idle'); setResult(null); setErrorMsg(null); setEncryption(null);
+    try {
+      const buf = await fileToArrayBuffer(f);
+      setBuffer(buf);
+      setEncryption(readEncryptionInfo(new Uint8Array(buf)));
+    } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, []);
 
   const handleRemoveFile = useCallback(() => {
-    setFile(null); setBuffer(null); setStatus('idle'); setResult(null); setErrorMsg(null);
+    setFile(null); setBuffer(null); setStatus('idle'); setResult(null); setErrorMsg(null); setEncryption(null);
   }, []);
 
   const handleProtect = useCallback(async () => {
@@ -221,6 +227,51 @@ export default function ProtectPdfTool({ defaultMode = 'protect' }: { defaultMod
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 pr-10 text-sm outline-none focus:border-[var(--color-primary)]" />
             <EyeToggle show={showUnlockPw} onToggle={() => setShowUnlockPw((v) => !v)} />
           </div>
+
+          {/* Encryption details, read from the file's own /Encrypt dictionary */}
+          {encryption && (
+            <div className="mt-5 border-t border-[var(--color-border)] pt-4" data-testid="encryption-details">
+              <p className="mb-2 text-xs font-medium text-[var(--color-text-primary)]">
+                Original encryption
+              </p>
+              {encryption.encrypted ? (
+                <>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)]">
+                    <dt className="text-[var(--color-text-muted)]">Algorithm</dt>
+                    <dd data-testid="encryption-algorithm">{encryption.algorithm}</dd>
+                    {encryption.keyLength !== undefined && (
+                      <>
+                        <dt className="text-[var(--color-text-muted)]">Key length</dt>
+                        <dd>{encryption.keyLength}-bit</dd>
+                      </>
+                    )}
+                    {encryption.revision !== undefined && (
+                      <>
+                        <dt className="text-[var(--color-text-muted)]">Handler</dt>
+                        <dd>
+                          Standard
+                          {encryption.version !== undefined ? ` V${encryption.version}` : ''}
+                          {` R${encryption.revision}`}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                  {encryption.permissions && (
+                    <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                      Allowed: {Object.entries(encryption.permissions)
+                        .filter(([, allowed]) => allowed)
+                        .map(([name]) => name.replace(/([A-Z])/g, ' $1').toLowerCase())
+                        .join(', ') || 'nothing beyond opening the file'}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-[var(--color-text-muted)]" data-testid="encryption-algorithm">
+                  This PDF is not encrypted — there is nothing to unlock.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

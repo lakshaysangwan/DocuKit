@@ -11,7 +11,11 @@ export interface RedactMark {
   height: number;
 }
 
-export function redactWithMupdf(buffer: ArrayBuffer, marks: RedactMark[]): Promise<ArrayBuffer> {
+export function redactWithMupdf(
+  buffer: ArrayBuffer,
+  marks: RedactMark[],
+  stripMetadata = false
+): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('../workers/mupdf-worker.ts', import.meta.url), {
       type: 'module',
@@ -29,6 +33,6 @@ export function redactWithMupdf(buffer: ArrayBuffer, marks: RedactMark[]): Promi
     };
 
     const copy = buffer.slice(0);
-    worker.postMessage({ buffer: copy, marks }, [copy]);
+    worker.postMessage({ buffer: copy, marks, stripMetadata }, [copy]);
   });
 }

@@ -20,6 +20,13 @@ export interface Coverage {
   state: CoverageState;
   /** Spec file(s) that prove it, relative to tests/e2e. */
   specs?: string[];
+  /**
+   * Vitest file(s) that prove it, relative to the repo root. For claims the
+   * browser suite cannot reach — the view-once backend is a Cloudflare Pages
+   * Function, and the e2e suite runs against a static build with no Functions
+   * runtime, so a unit test is the only honest proof available.
+   */
+  units?: string[];
   /** Why it is partial/unproven, or what the test actually shows. */
   note?: string;
 }
@@ -27,19 +34,23 @@ export interface Coverage {
 const C = (specs: string[], note?: string): Coverage => ({ state: 'covered', specs, note });
 const P = (specs: string[], note: string): Coverage => ({ state: 'partial', specs, note });
 const U = (note: string): Coverage => ({ state: 'unproven', note });
+/** Covered by unit tests rather than (or as well as) the browser suite. */
+const CU = (units: string[], note: string, specs: string[] = []): Coverage =>
+  ({ state: 'covered', specs, units, note });
 
 const T = (n: string) => `tools/${n}.spec.ts`;
 const GUARD = 'guards/no-external-requests.spec.ts';
 const VISUAL = 'visual/operation-visibility.spec.ts';
+const CLOSED = 'parity/closed-gaps.spec.ts';
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
   'merge-pdf': {
     'Drag-and-drop file reorder': C(['a11y/keyboard.spec.ts'], 'reorder proven via the keyboard equivalent of the drag interaction'),
     'Per-file page selection': C([T('merge-pdf')]),
-    'Preserve bookmarks & internal links': U('NOT IMPLEMENTED — MergeOptions.preserveBookmarks is declared but never read by the worker'),
-    'Optional blank page between documents': U('UNREACHABLE — the worker implements insertBlankPages, but nothing in the UI sets it'),
-    'Password-protected PDF support': U('NOT IMPLEMENTED — the merge tool has no password handling at all'),
+    'Preserve bookmarks & internal links': C([CLOSED], 'opt-in MuPDF graft path; the merged outline keeps its nesting and both bookmarks and links are rebased onto the new page numbers'),
+    'Optional blank page between documents': C([CLOSED], 'a blank lands between the two documents and not after the last one'),
+    'Password-protected PDF support': C([CLOSED], 'an encrypted input is detected, decrypted with its password and merged; a wrong password names the file instead of merging garbage'),
     'Up to 50 files, 200MB per file': U('large-input limits are P6.2, deferred'),
   },
   'split-pdf': {
@@ -58,12 +69,12 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   },
   'rearrange-pdf-pages': {
     'Drag-and-drop page reorder': U('page reorder is not asserted; the keyboard test covers file reorder on merge'),
-    'Multi-select with Ctrl+click / Shift+click': U('NOT IMPLEMENTED — no modifier-key handling in the organize tool'),
+    'Multi-select with Ctrl+click / Shift+click': C([CLOSED], 'was implemented all along — the audit missed the modifier handling in PageThumbnailGrid; Ctrl adds and Shift extends a range'),
     'Rotate 90° CW/CCW per page or batch': P([T('organize-pages')], 'single-page rotate tested; batch rotate is not'),
-    'Insert blank pages anywhere': U('NOT IMPLEMENTED — no such control in the organize tool'),
-    'Duplicate pages': U('NOT IMPLEMENTED — no such control in the organize tool'),
-    'Undo/redo up to 20 actions': P([T('organize-pages')], 'undo of a delete is tested; the 20-action depth is not'),
-    'Zoom control: 80 / 150 / 250px thumbnails': P(['parity/claims.spec.ts'], 'INACCURATE COPY — a zoom control exists and works, but the sizes are 80/120/160 (S/M/L), not 80/150/250'),
+    'Insert blank pages anywhere': C([CLOSED], 'the "+" affordance inserts at a chosen position and the output page really is blank'),
+    'Duplicate pages': C([CLOSED], 'the copy is an independent page, so the two can be rotated separately'),
+    'Undo/redo up to 20 actions': P([T('organize-pages'), CLOSED], 'undo of a delete and the Ctrl+Z / Ctrl+Shift+Z shortcuts are tested; the 20-action depth is not'),
+    'Zoom control: 80 / 120 / 160px thumbnails': C(['parity/claims.spec.ts'], 'copy corrected to the sizes the control actually offers (S/M/L)'),
   },
   'sign-pdf': {
     'Draw, type, or upload signature': P([T('sign-pdf')], 'typed and uploaded are tested; freehand draw is not'),
@@ -71,7 +82,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Auto background removal for uploaded images': U('not asserted'),
     '4 handwriting font options': U('font choices not exercised'),
     'Drag-and-drop placement with resize/rotate': P([T('sign-pdf')], 'placement tested; resize and rotate are not'),
-    'Date stamp and initials support': U('NOT IMPLEMENTED — no date-stamp or initials control in the sign tool'),
+    'Date stamp and initials support': C([CLOSED], 'a date stamp and initials can be placed alongside the signature; the date is drawn as real text and read back out of the output'),
     'Multi-page batch placement': U('not exercised'),
   },
   'digital-signature-pdf': {
@@ -94,7 +105,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   'unlock-pdf': {
     'Detects encryption automatically': C([T('protect-unlock-pdf')], 'an encrypted upload is recognised before the password is entered'),
     'Removes user and owner passwords': P([T('protect-unlock-pdf')], 'user password round-trip tested; owner password is not'),
-    'Shows original encryption details': U('NOT IMPLEMENTED — the unlock view shows no encryption details'),
+    'Shows original encryption details': CU(['src/lib/pdf-encryption-info.test.ts'], 'the /Encrypt dictionary is parsed and shown; the unit test pins the handler revisions and /P decoding', [CLOSED]),
     'Instant decryption in-browser': C([T('protect-unlock-pdf'), GUARD]),
   },
   'pdf-to-image': {
@@ -140,14 +151,14 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Visual crop with drag handles': P([VISUAL], 'the preview renders; dragging the handles is not simulated'),
     'Numeric margin input (mm, inches, points)': P([T('crop-pdf')], 'default units and pt tested; inches are not'),
     'Auto-crop whitespace detection': C([VISUAL]),
-    'CropBox (reversible) or Flatten (permanent)': U("UNREACHABLE — CropPdfTool hardcodes mode: 'cropbox'; Flatten cannot be selected"),
-    'Apply to current page, all pages, or custom range': P([T('crop-pdf')], 'all-pages and a range subset tested; current-page-only is not'),
+    'CropBox (reversible) or Flatten (permanent)': C([CLOSED], 'both modes are selectable; CropBox keeps the text layer, Flatten rasterises so the trimmed content is gone rather than hidden'),
+    'Apply to current page, all pages, or custom range': C([T('crop-pdf'), CLOSED], 'all three tested — current-page-only now exists and is proven to leave the other pages untouched'),
   },
   'redact-pdf': {
     'True redaction — content permanently destroyed': C([T('redact-pdf')], 'marked text is gone from the text layer while surrounding text survives'),
     'Find & Redact by text pattern': C([T('redact-pdf')]),
     'Post-redaction verification': C([T('redact-pdf')]),
-    'Full metadata strip option': U('NOT IMPLEMENTED — no metadata-strip control in the redact tool'),
+    'Full metadata strip option': C([CLOSED], 'against a fixture carrying Info fields, an XMP packet and an attachment: all three are gone from the output'),
     'Two-step safety workflow': C([T('redact-pdf')], 'the confirm step is required before output'),
     'SHA-256 before/after comparison': C([T('redact-pdf')]),
   },
@@ -184,9 +195,12 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   'view-once-image': {
     'End-to-end encrypted before upload': C([T('view-once-image')]),
     'Decryption key only in the URL fragment': C([T('view-once-image')]),
-    'Automatically deleted after first view': U('NOT VERIFIED — no burn-after-read logic found in the tool; needs the storage backend to confirm'),
-    'Configurable expiry: 1h, 6h, 24h, or 7 days': P([T('view-once-image')], 'TTL options are shown; expiry behaviour is not tested'),
+    // The delete-on-read guarantee lives in the Pages Function, which the e2e
+    // suite cannot reach — it runs against a static build with no Functions
+    // runtime. A unit test against a stub KV proves it instead.
+    'Automatically deleted after first view': CU(['functions/api/view-once/view-once.test.ts'], 'was implemented all along, server-side — the audit searched only client code; the handler deletes the blob on the first GET and a second read 404s'),
+    'Configurable expiry: 1h, 6h, 24h, or 7 days': { state: 'partial', specs: [T('view-once-image')], units: ['functions/api/view-once/view-once.test.ts'], note: 'TTL options are shown and an out-of-range TTL is clamped to 24h; real expiry over time is not tested' },
     'Works in any modern browser': C([XBROWSER]),
-    'Max 10MB image size': U('NOT IMPLEMENTED — no size cap found in the view-once tool'),
+    'Max 10MB image size': C([CLOSED], 'was implemented all along (VIEW_ONCE_MAX_SIZE); an 11MB file is refused before any encryption happens'),
   },
 };

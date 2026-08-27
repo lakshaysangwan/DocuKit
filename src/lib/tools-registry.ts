@@ -159,7 +159,7 @@ export const TOOLS: ToolDef[] = [
       'Insert blank pages anywhere',
       'Duplicate pages',
       'Undo/redo up to 20 actions',
-      'Zoom control: 80 / 150 / 250px thumbnails',
+      'Zoom control: 80 / 120 / 160px thumbnails',
     ],
   },
   {

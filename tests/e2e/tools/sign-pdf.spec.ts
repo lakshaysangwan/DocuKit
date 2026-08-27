@@ -37,9 +37,9 @@ test.describe('Sign PDF', () => {
 
     // Step 3: page thumbnails appear for placement.
     await expect(page.getByText('Step 3: Place signature on page(s)')).toBeVisible({ timeout: 20_000 });
-    // The placement buttons expose the target via title (their text content is "+ Sign").
+    // The placement buttons expose the target via title (their text is "+ <stamp type>").
     await page.locator('button[title="Place on page 1"]').click();
-    await expect(page.getByText('1 signature placed')).toBeVisible();
+    await expect(page.getByTestId('placed-count')).toHaveText('1 stamp placed');
 
     // Apply and download.
     await page.getByTestId('tool-action').click();

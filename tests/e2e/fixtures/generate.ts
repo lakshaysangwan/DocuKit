@@ -5,7 +5,7 @@
  * Raster images (JPEG/PNG/WebP) are produced by a real browser via canvas
  * during global setup, so we get valid, codec-correct files with no extra deps.
  */
-import { PDFDocument, StandardFonts, rgb, cmyk } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, cmyk, PDFName, PDFString, PDFNumber } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
@@ -36,6 +36,13 @@ export const FIXTURE = {
   // JPEG carrying a real EXIF APP1 segment (incl. a GPS tag), so "EXIF
   // stripping" can be proven rather than assumed.
   jpgExif: path.join(FIXTURES_DIR, 'photo-exif.jpg'),
+  // PDFs with a real /Outlines tree and an internal link, so merge's
+  // "preserve bookmarks & internal links" can be proven rather than assumed.
+  pdfBookmarks: path.join(FIXTURES_DIR, 'doc-bookmarks.pdf'),
+  pdfBookmarks2: path.join(FIXTURES_DIR, 'doc-bookmarks-2.pdf'),
+  // Carries an XMP metadata packet and an embedded attachment, so redact's
+  // "full metadata strip" can be proven to remove more than the Info dictionary.
+  pdfXmp: path.join(FIXTURES_DIR, 'doc-xmp.pdf'),
 } as const;
 
 async function makePdf(pages: number, landscape = false): Promise<Uint8Array> {
@@ -126,6 +133,9 @@ export async function generateFixtures(): Promise<void> {
 
   // ── AcroForm PDF ───────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfForm, await makeFormPdf());
+  await writeFile(FIXTURE.pdfBookmarks, await makeBookmarkedPdf('Alpha'));
+  await writeFile(FIXTURE.pdfBookmarks2, await makeBookmarkedPdf('Beta'));
+  await writeFile(FIXTURE.pdfXmp, await makeXmpPdf());
 
   // ── P7 corpus ──────────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfCmyk, await makeCmykPdf());
@@ -229,6 +239,137 @@ async function makeFormPdf(): Promise<Uint8Array> {
   plan.addOptions(['Free', 'Pro', 'Enterprise']);
   plan.select('Pro');
   plan.addToPage(page, { x: 130, y: 585, width: 160, height: 24 });
+
+  return doc.save();
+}
+
+/**
+ * A PDF carrying a real outline (bookmarks) and an internal link.
+ *
+ * pdf-lib has no outline API, so the /Outlines tree is written with its
+ * low-level object API: a root, two top-level items, and one nested child, all
+ * chained by /Prev and /Next the way the spec requires. Page 1 also gets a Link
+ * annotation targeting page 3, so a merge can be checked for keeping *both*
+ * halves of "preserve bookmarks & internal links".
+ */
+async function makeBookmarkedPdf(titlePrefix: string): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+
+  const pages = Array.from({ length: 3 }, (_, i) => {
+    const page = doc.addPage([612, 792]);
+    page.drawText(`${titlePrefix} — page ${i + 1}`, { x: 60, y: 700, size: 18, font, color: rgb(0, 0, 0) });
+    return page;
+  });
+
+  const ctx = doc.context;
+  const refs = pages.map((p) => p.ref);
+  const dest = (i: number) => [refs[i], PDFName.of('Fit')];
+
+  // Reserve every ref first, so the cross-links (/Parent, /Prev, /Next) can all
+  // be written inline instead of patched in afterwards.
+  const outlinesRef = ctx.nextRef();
+  const chapter1Ref = ctx.nextRef();
+  const chapter2Ref = ctx.nextRef();
+  const sectionRef = ctx.nextRef();
+
+  ctx.assign(
+    sectionRef,
+    ctx.obj({
+      Title: PDFString.of(`${titlePrefix} Section 1.1`),
+      Parent: chapter1Ref,
+      Dest: dest(1),
+    })
+  );
+
+  ctx.assign(
+    chapter1Ref,
+    ctx.obj({
+      Title: PDFString.of(`${titlePrefix} Chapter 1`),
+      Parent: outlinesRef,
+      Next: chapter2Ref,
+      Dest: dest(0),
+      First: sectionRef,
+      Last: sectionRef,
+      Count: PDFNumber.of(-1),
+    })
+  );
+
+  ctx.assign(
+    chapter2Ref,
+    ctx.obj({
+      Title: PDFString.of(`${titlePrefix} Chapter 2`),
+      Parent: outlinesRef,
+      Prev: chapter1Ref,
+      Dest: dest(2),
+    })
+  );
+
+  ctx.assign(
+    outlinesRef,
+    ctx.obj({
+      Type: PDFName.of('Outlines'),
+      First: chapter1Ref,
+      Last: chapter2Ref,
+      Count: PDFNumber.of(2),
+    })
+  );
+  doc.catalog.set(PDFName.of('Outlines'), outlinesRef);
+
+  // Internal link on page 1 pointing at page 3.
+  const linkRef = ctx.register(
+    ctx.obj({
+      Type: PDFName.of('Annot'),
+      Subtype: PDFName.of('Link'),
+      Rect: [60, 640, 300, 670],
+      Border: [0, 0, 0],
+      Dest: dest(2),
+    })
+  );
+  pages[0].node.set(PDFName.of('Annots'), ctx.obj([linkRef]));
+  pages[0].drawText('Jump to page 3', { x: 60, y: 648, size: 12, font, color: rgb(0, 0, 0.8) });
+
+  return doc.save();
+}
+
+/**
+ * A PDF whose identifying metadata lives in three separate places: the Info
+ * dictionary, an XMP packet, and an embedded file attachment.
+ *
+ * Stripping only the Info dictionary leaves the XMP copy of the same author and
+ * title sitting in the file, which is exactly the gap "full metadata strip" is
+ * supposed to close — so the fixture has to carry all three to test it.
+ */
+async function makeXmpPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([612, 792]);
+  page.drawText('Quarterly figures', { x: 60, y: 700, size: 18, font, color: rgb(0, 0, 0) });
+  page.drawText('Prepared by Ada Lovelace', { x: 60, y: 660, size: 12, font });
+
+  doc.setTitle('Confidential Q3 Report');
+  doc.setAuthor('Ada Lovelace');
+
+  const xmp = `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
+   <dc:title><rdf:Alt><rdf:li xml:lang="x-default">Confidential Q3 Report</rdf:li></rdf:Alt></dc:title>
+   <dc:creator><rdf:Seq><rdf:li>Ada Lovelace</rdf:li></rdf:Seq></dc:creator>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+
+  const metadataRef = doc.context.register(
+    doc.context.stream(xmp, { Type: PDFName.of('Metadata'), Subtype: PDFName.of('XML') })
+  );
+  doc.catalog.set(PDFName.of('Metadata'), metadataRef);
+
+  await doc.attach(Buffer.from('internal notes: do not distribute'), 'notes.txt', {
+    mimeType: 'text/plain',
+    description: 'Reviewer notes',
+  });
 
   return doc.save();
 }

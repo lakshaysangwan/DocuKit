@@ -64,6 +64,50 @@ function alphanumericPage(num: number): string {
 
 // ─── Operations ──────────────────────────────────────────────────────────────
 
+function isEncryptionError(err: unknown): boolean {
+  const text = err instanceof Error ? `${err.name} ${err.message}` : String(err);
+  return /encrypt/i.test(text);
+}
+
+/**
+ * Load a PDF that may be encrypted.
+ *
+ * pdf-lib cannot decrypt content streams, so loading an encrypted file with
+ * `ignoreEncryption: true` produces a document whose pages are garbage — it
+ * fails silently, which is what the merge path used to do. Encrypted input goes
+ * to qpdf instead. When no password was supplied we still try an empty one,
+ * which clears owner-password-only files (the common "permissions" case)
+ * without asking the user for anything.
+ */
+async function loadPossiblyEncrypted(
+  bytes: Uint8Array,
+  password: string | null,
+  name: string
+) {
+  const { PDFDocument } = await import('pdf-lib');
+
+  try {
+    // `plain` carries the bytes forward untouched when nothing needed decrypting,
+    // so callers that want the original file (not a pdf-lib re-serialisation of
+    // it) can have it.
+    return { doc: await PDFDocument.load(bytes), plain: bytes };
+  } catch (err) {
+    if (!isEncryptionError(err)) throw err;
+  }
+
+  const { qpdfDecrypt } = await import('./qpdf-helper');
+  try {
+    const decrypted = await qpdfDecrypt(bytes, password ?? '');
+    return { doc: await PDFDocument.load(decrypted), plain: decrypted };
+  } catch {
+    throw new Error(
+      password
+        ? `Incorrect password for "${name}".`
+        : `"${name}" is password-protected — enter its password to include it.`
+    );
+  }
+}
+
 async function merge(
   buffers: ArrayBuffer[],
   options: MergeOptions,
@@ -71,10 +115,32 @@ async function merge(
 ): Promise<ArrayBuffer> {
   const { PDFDocument } = await import('pdf-lib');
 
-  sendProgress(5, 'Loading documents…');
-  const docs = await Promise.all(
-    buffers.map((buf) => PDFDocument.load(toUint8Array(buf), { ignoreEncryption: true }))
+  // Decrypt up front either way — MuPDF would refuse the encrypted bytes too.
+  const loaded = await Promise.all(
+    buffers.map(async (buf, i) => {
+      const name = options.fileNames?.[i] ?? `File ${i + 1}`;
+      const password = options.passwords?.[i] ?? null;
+      const { doc, plain } = await loadPossiblyEncrypted(toUint8Array(buf), password, name);
+      return { doc, plain, name };
+    })
   );
+
+  if (options.preserveBookmarks) {
+    const { mergeWithOutlines } = await import('./mupdf-merge');
+    // Hand MuPDF the original bytes. Round-tripping them through pdf-lib first
+    // would rewrite the very structures this path exists to preserve, and pdf-lib
+    // has no concept of an outline to rewrite them faithfully.
+    const inputs = loaded.map(({ plain, name }, i) => ({
+      bytes: plain,
+      pages: options.pageSelections?.[i] ?? null,
+      name,
+    }));
+    const merged = await mergeWithOutlines(inputs, options.insertBlankPages ?? false, sendProgress);
+    return merged.buffer as ArrayBuffer;
+  }
+
+  sendProgress(5, 'Loading documents…');
+  const docs = loaded.map(({ doc }) => doc);
 
   sendProgress(20, 'Merging pages…');
   const merged = await PDFDocument.create();
@@ -187,15 +253,48 @@ async function reorder(
   const out = await PDFDocument.create();
 
   sendProgress(40, 'Reordering pages…');
-  const copied = await out.copyPages(src, options.order);
 
-  copied.forEach((page, i) => {
-    out.addPage(page);
-    const rotation = options.rotations[options.order[i]];
+  // Copy each distinct source page once. pdf-lib's copier is per-call and caches
+  // by object, so asking for the same index twice in one call would yield one
+  // shared page — rotating either copy would rotate both. Repeat occurrences
+  // therefore get their own copyPages call, which keeps them independent while
+  // leaving the common (no-duplicates) case at a single copy pass.
+  const distinct = [...new Set(options.order.filter((i) => i >= 0))];
+  const copiedDistinct = await out.copyPages(src, distinct);
+  const firstCopy = new Map<number, (typeof copiedDistinct)[number]>();
+  distinct.forEach((srcIdx, i) => firstCopy.set(srcIdx, copiedDistinct[i]));
+
+  // Blank pages adopt the size of the nearest preceding real page so they don't
+  // arrive as Letter in the middle of an A4 document.
+  const srcPageCount = src.getPageCount();
+  let blankSize: [number, number] = srcPageCount > 0
+    ? (() => { const { width, height } = src.getPage(0).getSize(); return [width, height]; })()
+    : [612, 792];
+
+  const used = new Set<number>();
+  for (let pos = 0; pos < options.order.length; pos++) {
+    const srcIdx = options.order[pos];
+    let page;
+
+    if (srcIdx < 0) {
+      page = out.addPage(blankSize);
+    } else {
+      if (used.has(srcIdx)) {
+        [page] = await out.copyPages(src, [srcIdx]);
+      } else {
+        page = firstCopy.get(srcIdx)!;
+        used.add(srcIdx);
+      }
+      out.addPage(page);
+      const { width, height } = page.getSize();
+      blankSize = [width, height];
+    }
+
+    const rotation = options.rotations[pos];
     if (rotation) {
       page.setRotation(degrees(rotation));
     }
-  });
+  }
 
   sendProgress(90, 'Saving…');
   const bytes = await out.save({ useObjectStreams: false });

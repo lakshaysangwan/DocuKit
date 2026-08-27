@@ -17,6 +17,7 @@ import { COVERAGE } from './coverage';
  * coverage.ts. It requires every bullet to have been *looked at*.
  */
 const E2E_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = path.join(E2E_ROOT, '..', '..');
 
 test.describe('P7 — feature parity: marketing copy vs. tested capability', () => {
   test('every tool in the registry has a coverage entry', () => {
@@ -70,21 +71,26 @@ test.describe('P7 — feature parity: marketing copy vs. tested capability', () 
         for (const spec of cov.specs ?? []) {
           if (!existsSync(path.join(E2E_ROOT, spec))) broken.push(`${slug}: "${feature}" -> ${spec}`);
         }
+        // Unit citations are repo-root relative, not tests/e2e relative.
+        for (const unit of cov.units ?? []) {
+          if (!existsSync(path.join(REPO_ROOT, unit))) broken.push(`${slug}: "${feature}" -> ${unit}`);
+        }
       }
     }
-    expect(broken, `coverage points at spec files that do not exist:\n  ${broken.join('\n  ')}`).toEqual([]);
+    expect(broken, `coverage points at test files that do not exist:\n  ${broken.join('\n  ')}`).toEqual([]);
   });
 
-  test('claims marked covered or partial cite at least one spec', () => {
+  test('claims marked covered or partial cite at least one test', () => {
     const bare: string[] = [];
     for (const [slug, entries] of Object.entries(COVERAGE)) {
       for (const [feature, cov] of Object.entries(entries)) {
-        if (cov.state !== 'unproven' && !(cov.specs && cov.specs.length)) {
+        const cited = (cov.specs?.length ?? 0) + (cov.units?.length ?? 0);
+        if (cov.state !== 'unproven' && cited === 0) {
           bare.push(`${slug}: ${feature} (${cov.state})`);
         }
       }
     }
-    expect(bare, `marked as tested but cite no spec:\n  ${bare.join('\n  ')}`).toEqual([]);
+    expect(bare, `marked as tested but cite no test:\n  ${bare.join('\n  ')}`).toEqual([]);
   });
 
   /**

@@ -22,10 +22,12 @@ interface RedactMark {
 interface Req {
   buffer: ArrayBuffer;
   marks: RedactMark[];
+  /** Also drop XMP metadata and embedded file attachments. */
+  stripMetadata?: boolean;
 }
 
 self.onmessage = async (e: MessageEvent<Req>) => {
-  const { buffer, marks } = e.data;
+  const { buffer, marks, stripMetadata } = e.data;
   try {
     // Import inside the handler (not top-level) so the ~10 MB WASM loads lazily,
     // the message handler registers immediately, and any load error is reported
@@ -71,6 +73,22 @@ self.onmessage = async (e: MessageEvent<Req>) => {
     // Strip document metadata — redacted files shouldn't leak author/title/etc.
     for (const key of ['info:Title', 'info:Author', 'info:Subject', 'info:Keywords', 'info:Creator', 'info:Producer']) {
       try { doc.setMetaData(key, ''); } catch { /* key may not exist */ }
+    }
+
+    // "Full metadata strip" goes past the Info dictionary: the XMP packet is a
+    // separate copy of the same fields, and attachments can carry anything at
+    // all. Both survive an Info-only strip, so clear them explicitly.
+    if (stripMetadata) {
+      try {
+        const root = doc.getTrailer().get('Root');
+        root.delete('Metadata');
+      } catch { /* no XMP stream present */ }
+
+      try {
+        for (const name of Object.keys(doc.getEmbeddedFiles())) {
+          doc.deleteEmbeddedFile(name);
+        }
+      } catch { /* no embedded files */ }
     }
 
     const out = doc.saveToBuffer('compress').asUint8Array();

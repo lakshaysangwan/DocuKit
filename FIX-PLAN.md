@@ -315,31 +315,75 @@ Phase 0 → 1.
     for the current page — so undoing the *first* annotation left it on screen (only the selection
     handles disappeared, which is why it looked like it worked), and redo then appeared dead. Both now
     load `'[]'` for an empty snapshot, which clears the canvas.
-- **⚠️ Copy drift — advertised features that are absent, unreachable, or inaccurate.** Found by
-  checking each unproven claim against the source. These are **product decisions**: implement, or trim
-  the copy. Nothing here has been changed on the site.
-  | Tool | Bullet | Finding |
+- **✅ Copy drift closed — all thirteen advertised-but-missing bullets now hold.** The audit's
+  central finding was that the site promised features the code did not have. Each was a product
+  decision (implement or trim); the decision was **implement all thirteen**, so nothing was removed
+  from the site except one inaccurate number. Three of the thirteen turned out to be implemented all
+  along — the audit had searched only client-side code.
+  | Tool | Bullet | Outcome |
   |---|---|---|
-  | merge-pdf | Preserve bookmarks & internal links | `MergeOptions.preserveBookmarks` is declared but never read by the worker |
-  | merge-pdf | Optional blank page between documents | worker implements `insertBlankPages`; **no UI sets it** |
-  | merge-pdf | Password-protected PDF support | no password handling in the tool at all |
-  | rearrange | Insert blank pages anywhere | no such control |
-  | rearrange | Duplicate pages | no such control |
-  | rearrange | Multi-select with Ctrl+click / Shift+click | no modifier-key handling |
-  | rearrange | Zoom control: 80 / 150 / 250px | control works, but the sizes are **80/120/160** (S/M/L) |
-  | sign-pdf | Date stamp and initials support | no such control |
-  | unlock-pdf | Shows original encryption details | no details shown |
-  | crop-pdf | CropBox (reversible) or Flatten (permanent) | `CropPdfTool` hardcodes `mode: 'cropbox'`; **Flatten unreachable** |
-  | redact-pdf | Full metadata strip option | no such control |
-  | view-once | Max 10MB image size | no size cap found |
-  | view-once | Automatically deleted after first view | no burn-after-read logic found |
-  Remaining genuinely-unproven-but-plausible claims (needing tests rather than decisions) are listed
-  by `parity.spec.ts` on every run; the one that cannot be automated at all is
+  | merge-pdf | Preserve bookmarks & internal links | **Built** — opt-in MuPDF graft path (`src/workers/mupdf-merge.ts`) |
+  | merge-pdf | Optional blank page between documents | **Built** — UI now sets the flag the worker already honoured |
+  | merge-pdf | Password-protected PDF support | **Built** — per-file prompt, decrypt via the existing qpdf path |
+  | rearrange | Insert blank pages anywhere | **Built** — "+" affordance between thumbnails |
+  | rearrange | Duplicate pages | **Built** — needed positional rotations (see below) |
+  | rearrange | Multi-select with Ctrl+click / Shift+click | **Already worked** — audit missed the handling in `PageThumbnailGrid` |
+  | rearrange | Zoom control: 80 / 150 / 250px | **Copy corrected** to 80/120/160, the sizes the control offers |
+  | sign-pdf | Date stamp and initials support | **Built** — stamp-type selector; the date is real text |
+  | unlock-pdf | Shows original encryption details | **Built** — `src/lib/pdf-encryption-info.ts` parses /Encrypt |
+  | crop-pdf | CropBox or Flatten | **Built** — `src/lib/pdf-flatten-crop.ts` rasterises and replaces |
+  | redact-pdf | Full metadata strip option | **Built** — now also clears XMP and embedded attachments |
+  | view-once | Max 10MB image size | **Already worked** — `VIEW_ONCE_MAX_SIZE`, enforced on drop |
+  | view-once | Automatically deleted after first view | **Already worked, server-side** — the Pages Function deletes on first GET |
+
+  Notes on the two that were more than UI work:
+  - **Bookmarks go through MuPDF, not pdf-lib.** pdf-lib has no outline API at all. MuPDF's
+    `graftPage` carries a page across with its dependent objects, which preserves internal link
+    targets; the outline itself is rebuilt as explicit PDF objects, since each source document's
+    bookmarks point at page numbers that all shift on merge. It is **opt-in** because MuPDF's WASM is
+    ~10 MB — far too steep for the many merges that have no outline. A test guards that the default
+    path stays on pdf-lib.
+  - **Flatten rasterises on the main thread**, matching `rasterizeRedact`: PDF page rendering needs
+    pdf.js plus a 2D surface, and Playwright's WebKit has no OffscreenCanvas in workers.
+
+  **Five bugs found and fixed while building these** — none of them in the original audit:
+  - **Click-to-select was dead.** `PageThumbnailGrid`'s drag overlay covers the whole thumbnail and
+    called `stopPropagation`, so every click landed on it instead of the card. Selection — including
+    the advertised Ctrl/Shift multi-select — was unreachable with a mouse. dnd-kit's pointer sensor
+    has a 5px activation distance, so a click without movement never starts a drag and can safely
+    fall through; the handler is gone.
+  - **Shift+click toggled the swept range** instead of adding to it, so extending a selection
+    deselected pages that were already in it.
+  - `ReorderOptions.rotations` was keyed by *source* page index, so two copies of one page could not
+    hold different rotations — duplicate-pages was impossible until it became positional.
+  - Merge loaded every input with `ignoreEncryption: true`. pdf-lib cannot decrypt content streams,
+    so an encrypted input silently produced a document of garbage pages. It now decrypts through qpdf
+    or fails with a message naming the file.
+  - Crop's `applyTo: 'current'` never set `pageIndex`, and the worker falls back to `pageRange` when
+    it is absent — so had the option existed, it would have cropped nothing.
+
+- **✅ crop-pdf "Apply to current page" — implemented.** Spotted during this pass, not in the audit's
+  table: the copy advertised three scopes and the UI offered two. `CropPreview` renders page 1 and is
+  labelled "(page 1)", so "current page" means the previewed page; the control now offers it and a
+  test proves the other pages come back untouched.
+
+- **Verified rather than assumed, on MuPDF:** `graftPage` carries neither outlines **nor link
+  annotations** — a grafted page arrives with no `/Annots` at all. The first implementation's comment
+  claimed links came across for free; a Node probe against the real library disproved it. Links are
+  now re-created explicitly on the output page against remapped page numbers.
+
+- **Parity coverage after this pass: 65 covered (57%), 26 partial (23%), 24 unproven (21%)** of 115
+  bullets — from 51/28/36. The remaining unproven ones need tests rather than decisions, except
   "Verifiable in Adobe Reader / Acrobat", which no headless test can demonstrate.
-- **Next up:** (1) P6.2 big-document hardening — deferred by decision; when picked up, generate large
-  fixtures at global-setup, ~100pp / ~50MB, never committed, and stage them on disk since Playwright
-  caps in-memory upload buffers at 50MB. (2) Decide on the copy-drift table above: implement or trim. (3) The remaining 36 unproven parity
-  claims — mostly tests still to write.
+- **Still outstanding:** (1) P6.2 big-document hardening — deferred by decision; when picked up,
+  generate large fixtures at global-setup, ~100pp / ~50MB, never committed, and stage them on disk
+  since Playwright caps in-memory upload buffers at 50MB. (2) The remaining 24 unproven parity
+  claims. The recommended next step there is a **source-check sweep rather than a test-writing
+  sweep**: read each unproven bullet against the code asking only "is this false?". That is what
+  found the original thirteen, and this pass showed the method still has yield — three of the
+  thirteen turned out to be implemented all along, and five bugs surfaced that no test was looking
+  for. Writing the tests can then follow as ordinary work.
+  current-page option. Same implement-or-trim decision as the table above.
 
 Grounding facts — **as of the original audit**. Several were true then and have since been fixed by
 the phases above; kept for the record, with the current state noted so they aren't read as live:

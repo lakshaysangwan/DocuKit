@@ -7,34 +7,11 @@ import {
   assertPdf,
   countPdfPagesStrict,
   extractPdfText,
+  drawRedactionMark,
 } from '../helpers/harness';
 
-/**
- * Drag a rectangle near the top of a redact-page element. The rendered page is
- * taller than the viewport, so we scroll it into view and keep the drag within
- * a small band near the top so the coordinates stay on-screen.
- */
-async function drawMark(page: import('@playwright/test').Page, pageEl = 0) {
-  const el = page.getByTestId('redact-page').nth(pageEl);
-  await expect(el.locator('img')).toBeVisible();
-  await expect.poll(async () => (await el.boundingBox())?.height ?? 0).toBeGreaterThan(100);
-  await el.scrollIntoViewIfNeeded();
-  const box = await el.boundingBox();
-  if (!box) throw new Error('redact page has no bounding box');
-  const x1 = box.x + box.width * 0.2;
-  const y1 = box.y + box.height * 0.06;
-  const x2 = box.x + box.width * 0.6;
-  const y2 = box.y + box.height * 0.18;
-  await page.mouse.move(x1, y1);
-  await page.mouse.down();
-  // Small pauses let React commit drawStart and re-bind the mouseup handler.
-  await page.waitForTimeout(120);
-  await page.mouse.move((x1 + x2) / 2, (y1 + y2) / 2, { steps: 5 });
-  await page.waitForTimeout(60);
-  await page.mouse.move(x2, y2, { steps: 5 });
-  await page.waitForTimeout(120);
-  await page.mouse.up();
-}
+/** Local alias — the drag lives in the harness so both specs share one copy. */
+const drawMark = drawRedactionMark;
 
 /**
  * Drag a full-width band across a page, from yTop% to yBottom% of its height.
@@ -90,7 +67,7 @@ test.describe('Redact PDF', () => {
 
     // Apply is gated on the confirmation checkbox.
     await expect(page.getByTestId('tool-action')).toBeDisabled();
-    await page.getByRole('checkbox').check();
+    await page.getByTestId('confirm-redaction').check();
     await expect(page.getByTestId('tool-action')).toBeEnabled();
 
     await page.getByTestId('tool-action').click();
@@ -116,7 +93,7 @@ test.describe('Redact PDF', () => {
     // Redact the top band (title + "Page 1 of 3") but not the body text below it.
     await drawBand(page, 0, 0.06, 0.2);
     await expect(page.getByText(/area(s)? marked for redaction/)).toBeVisible();
-    await page.getByRole('checkbox').check();
+    await page.getByTestId('confirm-redaction').check();
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60_000 });
@@ -148,7 +125,7 @@ test.describe('Redact PDF', () => {
     await page.getByTestId('redact-find').click();
     await expect(page.getByText(/area(s)? marked for redaction/)).toBeVisible();
 
-    await page.getByRole('checkbox').check();
+    await page.getByTestId('confirm-redaction').check();
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60_000 });
     const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
