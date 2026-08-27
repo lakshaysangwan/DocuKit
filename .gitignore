@@ -26,3 +26,4 @@ pnpm-debug.log*
 # playwright test artifacts
 test-results/
 playwright-report/
+.lighthouseci/

@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "generate:og": "tsx scripts/generate-og-images.ts"
+    "generate:og": "tsx scripts/generate-og-images.ts",
+    "lhci": "lhci autorun"
   },
   "dependencies": {
     "@astrojs/react": "^5.0.1",

@@ -205,8 +205,15 @@ Phase 0 → 1.
   `useWorker` (`resizeOne`), deleting the main-thread `<canvas>`/`<img>` path. All 6 resize e2e tests
   (exact output dims incl. Cover-crop, batch ZIP, presets) pass against the worker path. *(convert-image
   is still main-thread — same pattern, but its HEIC-decode fallback makes it a separate follow-up.)*
-- **Next up:** Phase 6 — P6.4 Lighthouse budget (LHCI wiring) → P6.2 big-document hardening (large
-  fixtures, memory) → P6.3 cross-browser (WebKit/Firefox projects). Then Phase 7 (release gates).
+- **✅ P6.4 done** — Wired `@lhci/cli`: `lighthouserc.json` (static `./dist`, desktop preset) asserts
+  **performance ≥ 0.95, accessibility = 1.0, interactive < 2000 ms**, `npm run lhci` script, results
+  gitignored (`.lighthouseci/`, `filesystem` target — no external upload). Verified locally (build →
+  autorun, exit 0): home + merge + compress-image + watermark all score **perf 100 / a11y 100 / TTI
+  ~0.5–0.6 s**, comfortably inside budget.
+- **Next up:** Phase 6 — P6.2 big-document hardening (large 100–500pp / 50–200MB fixtures, memory
+  guards) → P6.3 cross-browser (WebKit/Firefox Playwright projects). Then Phase 7 (release gates).
+  *(P6.2/P6.3 are the heavy items — large-fixture generation and cross-browser feature gaps — flagged
+  for a checkpoint.)*
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed
