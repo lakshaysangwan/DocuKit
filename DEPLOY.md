@@ -12,7 +12,7 @@
 | Build command | `npm run build` |
 | Build output directory | `dist` |
 
-3. Add environment variable: `NODE_VERSION` = `20`
+3. Add environment variable: `NODE_VERSION` = `22` (must be >= 22.12 — Astro 6 refuses older; the repo also pins this in `.nvmrc`)
 4. Click **Save and Deploy**
 
 Site is live at `https://<project>.pages.dev`. Auto-deploys on push to `main`.
@@ -57,6 +57,6 @@ Optionally set `ALLOWED_ORIGIN` = `https://docukit.uk` in **Settings** → **Env
 | View-Once upload error | KV not bound — do Step 3 |
 | CORS error on view-once | Set `ALLOWED_ORIGIN` env var to your domain |
 | SharedArrayBuffer unavailable | `public/_headers` must have COOP/COEP headers (already included) |
-| Build fails on Node version | Set `NODE_VERSION=20` in Pages env vars |
+| Build fails on Node version | Set `NODE_VERSION=22` in Pages env vars. `package.json` declares `engines: >=22.12.0`; an older value fails with "Node.js v20 is not supported by Astro" |
 | Stale PWA content | DevTools → Application → Storage → Clear site data |
 | Bindings not working | Redeploy after adding bindings (they don't apply retroactively) |
