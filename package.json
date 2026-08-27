@@ -68,6 +68,7 @@
     "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.1.0",
     "eslint-plugin-astro": "^1.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
