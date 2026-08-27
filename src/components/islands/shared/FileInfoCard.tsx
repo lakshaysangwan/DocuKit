@@ -1,4 +1,4 @@
-import { formatBytes } from '@/lib/utils';
+import { formatBytes, isLargeFile } from '@/lib/utils';
 
 interface FileInfoCardProps {
   file: File;
@@ -7,7 +7,9 @@ interface FileInfoCardProps {
 }
 
 export default function FileInfoCard({ file, extra, onRemove }: FileInfoCardProps) {
+  const large = isLargeFile(file.size);
   return (
+    <div className="flex flex-col gap-2">
     <div
       data-testid="file-info"
       data-filename={file.name}
@@ -29,6 +31,18 @@ export default function FileInfoCard({ file, extra, onRemove }: FileInfoCardProp
           </svg>
         </button>
       )}
+    </div>
+
+    {large && (
+      <p
+        data-testid="large-file-warning"
+        role="status"
+        className="rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 px-3 py-2 text-xs text-[var(--color-text-secondary)]"
+      >
+        Large file ({formatBytes(file.size)}). Everything runs in your browser, so
+        this may take a while and use significant memory — keep this tab open.
+      </p>
+    )}
     </div>
   );
 }

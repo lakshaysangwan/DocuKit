@@ -17,6 +17,18 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Threshold above which a client-side (in-browser WASM) operation is likely to
+ * feel slow or pressure memory, so tools warn the user before they commit. 50 MB
+ * is comfortably below where large PDFs/images start to struggle in the browser.
+ */
+export const LARGE_FILE_BYTES = 50 * 1024 * 1024;
+
+/** Whether a file is large enough to warrant a "this may be slow" heads-up. */
+export function isLargeFile(bytes: number): boolean {
+  return bytes >= LARGE_FILE_BYTES;
+}
+
 export function generateId(): string {
   return crypto.randomUUID();
 }

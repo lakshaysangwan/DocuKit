@@ -188,8 +188,19 @@ Phase 0 → 1.
   (1 pre-existing WASM-timeout flake in the local-resources guard, passes on retry). New: `NextStep`
   component, `src/lib/notify.ts`, `@custom-variant dark`; specs `ux/{feedback,errors}`,
   `mobile/mobile-smoke`, `a11y/axe-dark`.
-- **Next up:** P5.3 large-file UX (size/page warnings, cancellable long ops, progress ETAs).
-  Then Phases 6 (perf), 7 (gates).
+- **✅ P5.3 done (large-file heads-up)** — Added `isLargeFile`/`LARGE_FILE_BYTES` (50 MB) to
+  `utils.ts` and a non-blocking warning in the shared **`FileInfoCard`** (so **every single-file tool**
+  warns at once): "Large file (X) — everything runs in your browser, may be slow/memory-heavy, keep
+  this tab open." Unit test for the threshold (`utils.test.ts`) + e2e (`ux/large-file.spec.ts`:
+  a 51 MB file shows the heads-up, a normal file stays quiet). Also fixed `npm test`: Vitest had no
+  config and was trying to import the Playwright e2e `*.spec.ts` files — added `vitest.config.ts`
+  scoping it to `src/**/*.test.ts`. *(Cancellable long ops already exist where they matter — compress,
+  split, merge, sign pass `onCancel`; progress ETAs and batch-list size warnings left as a lighter
+  follow-up.)*
+- **✅ Phase 5 COMPLETE.** Suite: **227 passed** (desktop + mobile Playwright projects) + **5 Vitest
+  unit tests**. Phases 0–5 all done.
+- **Next up:** Phase 6 (perf/scale) — P6.1 image ops off main thread → P6.2 big-document hardening →
+  P6.3 cross-browser (WebKit/Firefox) → P6.4 Lighthouse budget. Then Phase 7 (release gates).
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed
