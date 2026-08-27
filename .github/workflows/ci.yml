@@ -40,3 +40,59 @@ jobs:
 
       - name: Audit
         run: npm audit --audit-level=critical
+
+  # The Playwright suite is the actual release gate — the parity meta-test that
+  # catches copy drift, the document corpus, and every tool's functional cover.
+  # It lived outside CI until now, which meant Phase 7's gates only ran when
+  # someone remembered to run them locally.
+  #
+  # It runs against a production build served by scripts/serve-dist.mjs, not the
+  # dev server: Vite serves workers as transformed modules rather than the static
+  # hashed files users get, and that difference has already hidden one real
+  # WebKit failure.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Serve the production build
+        run: |
+          node scripts/serve-dist.mjs &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4322/ >/dev/null && exit 0
+            sleep 1
+          done
+          echo "dist server did not come up" >&2
+          exit 1
+
+      # Visual snapshots are excluded: the committed baselines are
+      # *-chromium-win32.png, and a Linux runner renders text differently enough
+      # that they would fail on antialiasing alone. Generate Linux baselines with
+      # the visual-baselines workflow, commit them, then drop this filter.
+      - name: Run e2e
+        run: npx playwright test --grep-invert "visual regression"
+        env:
+          E2E_BASE_URL: http://localhost:4322
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

@@ -1,0 +1,56 @@
+name: Visual baselines (Linux)
+
+# Manual only. Playwright names snapshots per platform, so the committed
+# *-chromium-win32.png baselines are unusable on a Linux runner — text renders
+# differently enough to blow past maxDiffPixelRatio on antialiasing alone.
+#
+# Run this once, download the `linux-baselines` artifact, and commit the PNGs
+# into tests/e2e/visual/snapshots.spec.ts-snapshots/. Then delete the
+# `--grep-invert "visual regression"` filter from the e2e job in ci.yml so the
+# snapshots gate every push instead of only running on someone's laptop.
+on:
+  workflow_dispatch:
+
+jobs:
+  baselines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Chromium only — the snapshots are deliberately single-engine.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Serve the production build
+        run: |
+          node scripts/serve-dist.mjs &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4322/ >/dev/null && exit 0
+            sleep 1
+          done
+          echo "dist server did not come up" >&2
+          exit 1
+
+      - name: Write Linux baselines
+        run: npx playwright test tests/e2e/visual/snapshots.spec.ts --project=chromium --update-snapshots
+        env:
+          E2E_BASE_URL: http://localhost:4322
+
+      - name: Upload baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-baselines
+          path: tests/e2e/visual/snapshots.spec.ts-snapshots/*-linux.png
+          retention-days: 7
