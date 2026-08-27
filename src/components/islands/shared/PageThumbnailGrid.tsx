@@ -314,6 +314,7 @@ export default function PageThumbnailGrid({
         <div
           className={cn('flex flex-wrap gap-2', className)}
           role="group"
+          data-testid="page-grid"
           aria-label={`${pages.length} pages, ${selectedIds.size} selected`}
         >
           {pages.map((page, i) => {

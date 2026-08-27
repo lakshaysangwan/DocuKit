@@ -87,6 +87,52 @@ test.describe('P7 — visual regression: preview surfaces', () => {
     const thumb = page.getByTestId('page-thumb').first();
     await expect(thumb).toBeVisible({ timeout: 20_000 });
     await expect(thumb.locator('img').first()).toBeVisible({ timeout: 20_000 });
-    await expect(thumb).toHaveScreenshot('organize-page-thumb.png', shot);
+    await expect(thumb).toHaveScreenshot("organize-page-thumb.png", shot);
+  });
+});
+
+/**
+ * Phase 8 — visual regression for the CONTROL surfaces.
+ *
+ * The block above pins preview canvases; nothing pinned the panels around them.
+ * That gap is why closing the copy-drift list added controls to seven tools
+ * without a single snapshot changing. Behaviour is asserted in
+ * parity/closed-gaps.spec.ts — these pin what the controls actually look like,
+ * which no functional assertion can speak to.
+ */
+test.describe('P8 — visual regression: control surfaces', () => {
+  test.skip(({ browserName }) => browserName !== "chromium", 'baselines are Chromium-only by design');
+
+  const shot = { maxDiffPixelRatio: 0.02, animations: 'disabled' as const };
+
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("merge options panel", async ({ page }) => {
+    await page.goto("/merge-pdf");
+    await addFilesAndWait(page, [FIXTURE.pdf3page, FIXTURE.pdf3page], 2);
+    const details = page.locator("details[data-testid='merge-options']");
+    await details.locator("summary").click();
+    await expect(page.getByTestId("insert-blank-pages")).toBeVisible();
+    await expect(details).toHaveScreenshot("merge-options.png", shot);
+  });
+
+  test("crop mode toggle", async ({ page }) => {
+    await page.goto("/crop-pdf");
+    await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    const modes = page.getByTestId("crop-mode");
+    await expect(modes).toBeVisible({ timeout: 20_000 });
+    await expect(modes).toHaveScreenshot("crop-mode.png", shot);
+  });
+
+  test("rearrange grid with an inserted blank page", async ({ page }) => {
+    await page.goto("/rearrange-pdf-pages");
+    await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    await expect(page.getByTestId("page-thumb")).toHaveCount(3);
+    await expect(page.locator("[data-testid='page-thumb'] img").first()).toBeVisible({ timeout: 20_000 });
+    await page.locator("[data-testid='insert-blank'][data-position='1']").click();
+    await expect(page.locator("[data-testid='page-thumb'][data-blank='true']")).toHaveCount(1);
+    await expect(page.getByTestId("page-grid")).toHaveScreenshot("rearrange-blank-page.png", shot);
   });
 });
