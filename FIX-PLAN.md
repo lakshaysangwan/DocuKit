@@ -199,8 +199,14 @@ Phase 0 → 1.
   follow-up.)*
 - **✅ Phase 5 COMPLETE.** Suite: **227 passed** (desktop + mobile Playwright projects) + **5 Vitest
   unit tests**. Phases 0–5 all done.
-- **Next up:** Phase 6 (perf/scale) — P6.1 image ops off main thread → P6.2 big-document hardening →
-  P6.3 cross-browser (WebKit/Firefox) → P6.4 Lighthouse budget. Then Phase 7 (release gates).
+- **✅ P6.1 done** — Resize now runs **entirely off the main thread**. Implemented the (already-typed)
+  `resize-image` op in `image-worker.ts` (decode via `createImageBitmap` → scale into an
+  `OffscreenCanvas` under the fit mode → encode via jSquash) and routed `ResizeImageTool` through
+  `useWorker` (`resizeOne`), deleting the main-thread `<canvas>`/`<img>` path. All 6 resize e2e tests
+  (exact output dims incl. Cover-crop, batch ZIP, presets) pass against the worker path. *(convert-image
+  is still main-thread — same pattern, but its HEIC-decode fallback makes it a separate follow-up.)*
+- **Next up:** Phase 6 — P6.4 Lighthouse budget (LHCI wiring) → P6.2 big-document hardening (large
+  fixtures, memory) → P6.3 cross-browser (WebKit/Firefox projects). Then Phase 7 (release gates).
 
 Grounding facts (verified against the repo, not assumed):
 - Image ops (`src/workers/image-worker.ts`) use **OffscreenCanvas encoders**, so the installed

@@ -8,48 +8,13 @@ import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import NextStep from '@/components/islands/shared/NextStep';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { createZipAndDownload } from '@/lib/download';
-import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
+import { useWorker } from '@/hooks/use-worker';
 import { formatBytes, generateId } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import type { WorkerResponse } from '@/types/worker-messages';
 
 type FitMode = 'fit' | 'cover' | 'stretch';
 type Status = 'idle' | 'processing' | 'done' | 'error';
-
-/** Resize one image file to targetW×targetH under the given fit mode. */
-async function resizeOneImage(file: File, targetW: number, targetH: number, mode: FitMode): Promise<Blob> {
-  const buf = await file.arrayBuffer();
-  const url = URL.createObjectURL(new Blob([buf], { type: file.type }));
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const im = new Image();
-      im.onload = () => resolve(im);
-      im.onerror = () => reject(new Error(`Failed to load ${file.name}`));
-      im.src = url;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = targetW; canvas.height = targetH;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, targetW, targetH);
-    if (mode === 'stretch') {
-      ctx.drawImage(img, 0, 0, targetW, targetH);
-    } else if (mode === 'fit') {
-      const scale = Math.min(targetW / img.naturalWidth, targetH / img.naturalHeight);
-      const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-      ctx.drawImage(img, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
-    } else { // cover
-      const scale = Math.max(targetW / img.naturalWidth, targetH / img.naturalHeight);
-      const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-      ctx.drawImage(img, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
-    }
-    const outFormat: ImageFormat = file.type === 'image/png' ? 'png' : 'jpeg';
-    const data = ctx.getImageData(0, 0, targetW, targetH);
-    const out = await encodeImageData(data, outFormat, 92);
-    return new Blob([out], { type: formatMime(outFormat) });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 interface Preset { label: string; w: number; h: number }
 const PRESETS_KEY = 'docukit:resize-presets';
@@ -91,6 +56,33 @@ export default function ResizeImageTool() {
   const [batchResults, setBatchResults] = useState<{ name: string; blob: Blob }[]>([]);
   const [batchPct, setBatchPct] = useState(0);
   const isBatch = batch.length > 0;
+
+  const { run } = useWorker();
+
+  // Resize one file off the main thread via the image worker (decode → scale →
+  // encode all happen in the worker, so a big image doesn't jank the UI).
+  const resizeOne = useCallback(async (f: File): Promise<Blob> => {
+    const buf = await fileToArrayBuffer(f);
+    const { port1, port2 } = new MessageChannel();
+    const bufCopy = buf.slice(0);
+    const response: WorkerResponse | null = await run(
+      'image',
+      {
+        op: 'resize-image',
+        buffer: bufCopy,
+        mimeType: f.type,
+        options: { width: targetW, height: targetH, mode, maintainAspect: false },
+        progressPort: port2,
+      },
+      [bufCopy, port2],
+    );
+    port1.close();
+    if (!response || response.status !== 'success' || !response.result) {
+      throw new Error(response?.status === 'error' ? response.message : 'Resize failed');
+    }
+    const outType = f.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    return new Blob([response.result], { type: outType });
+  }, [run, targetW, targetH, mode]);
 
   // Load saved presets from localStorage on mount.
   useEffect(() => { setCustomPresets(loadPresets()); }, []);
@@ -177,7 +169,7 @@ export default function ResizeImageTool() {
         const out: { name: string; blob: Blob }[] = [];
         for (let i = 0; i < batch.length; i++) {
           setBatchPct(Math.round(((i + 1) / batch.length) * 100));
-          const blob = await resizeOneImage(batch[i].file, targetW, targetH, mode);
+          const blob = await resizeOne(batch[i].file);
           const ext = blob.type === 'image/png' ? 'png' : 'jpg';
           const base = batch[i].file.name.replace(/\.[^.]+$/, '');
           out.push({ name: `${base}-${targetW}x${targetH}.${ext}`, blob });
@@ -189,7 +181,7 @@ export default function ResizeImageTool() {
       }
 
       if (!file) { toast.error('Upload an image first'); return; }
-      const result = await resizeOneImage(file, targetW, targetH, mode);
+      const result = await resizeOne(file);
       setResultBlob(result);
       setStatus('done');
       toast.success('Image resized!');
@@ -197,7 +189,7 @@ export default function ResizeImageTool() {
       const msg = err instanceof Error ? err.message : 'Resize failed';
       setStatus('error'); setErrorMsg(msg); toast.error(msg);
     }
-  }, [isBatch, batch, file, targetW, targetH, mode]);
+  }, [isBatch, batch, file, targetW, targetH, resizeOne]);
 
   const handleDownload = useCallback(async () => {
     if (isBatch) {

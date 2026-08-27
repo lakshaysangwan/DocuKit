@@ -7,7 +7,7 @@
  *
  * Runs in a Web Worker for off-main-thread processing.
  */
-import type { WorkerRequest, WorkerResponse, CompressImageOptions } from '../types/worker-messages';
+import type { WorkerRequest, WorkerResponse, CompressImageOptions, ResizeImageOptions } from '../types/worker-messages';
 import { encodeImageData, type ImageFormat } from '../lib/image-codec';
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
@@ -20,6 +20,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   try {
     if (msg.op === 'compress-image') {
       const result = await compressImage(msg.buffer, msg.options, sendProgress);
+      const response: WorkerResponse = { status: 'success', result };
+      (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
+    } else if (msg.op === 'resize-image') {
+      const result = await resizeImage(msg.buffer, msg.mimeType, msg.options, sendProgress);
       const response: WorkerResponse = { status: 'success', result };
       (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
     } else {
@@ -61,6 +65,50 @@ async function encodeCanvas(
   const ctx = canvas.getContext('2d')!;
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
   return encodeImageData(data, format, quality);
+}
+
+/**
+ * Resize an image entirely off the main thread: decode via createImageBitmap,
+ * scale into an OffscreenCanvas under the chosen fit mode (white letterbox for
+ * fit; centre-crop for cover/fill; distort for stretch), then encode via
+ * jSquash. Mirrors the previous main-thread canvas path so output is identical.
+ */
+async function resizeImage(
+  buffer: ArrayBuffer,
+  mimeType: string,
+  options: ResizeImageOptions,
+  sendProgress: (pct: number, label?: string) => void,
+): Promise<ArrayBuffer> {
+  sendProgress(10, 'Decoding image…');
+  const bitmap = await createImageBitmap(new Blob([buffer]));
+  const nw = bitmap.width;
+  const nh = bitmap.height;
+  const W = Math.max(1, Math.round(options.width ?? nw));
+  const H = Math.max(1, Math.round(options.height ?? nh));
+
+  const canvas = new OffscreenCanvas(W, H);
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, W, H);
+
+  if (options.mode === 'stretch') {
+    ctx.drawImage(bitmap, 0, 0, W, H);
+  } else {
+    // 'cover'/'fill' fill the frame (centre-crop); 'fit' letterboxes inside it.
+    const cover = options.mode === 'cover' || options.mode === 'fill';
+    const scale = cover ? Math.max(W / nw, H / nh) : Math.min(W / nw, H / nh);
+    const dw = nw * scale;
+    const dh = nh * scale;
+    ctx.drawImage(bitmap, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
+  bitmap.close();
+
+  sendProgress(60, 'Encoding…');
+  const format: ImageFormat = mimeType === 'image/png' ? 'png' : 'jpeg';
+  const data = ctx.getImageData(0, 0, W, H);
+  const out = await encodeImageData(data, format, 92);
+  sendProgress(95, 'Finalizing…');
+  return out;
 }
 
 async function compressImage(
