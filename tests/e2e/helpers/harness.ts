@@ -378,3 +378,20 @@ export async function readPdfAnnotationSubtypes(bytes: Buffer): Promise<string[]
   }
   return subtypes;
 }
+
+/**
+ * Names of every interactive AcroForm field in a PDF, via a real parser.
+ *
+ * A plaintext scan for "/AcroForm" is unreliable: pdf-lib writes object streams
+ * by default, so the form dictionary is compressed and invisible to a substring
+ * match even when the fields are perfectly intact.
+ */
+export async function pdfFormFieldNames(bytes: Buffer): Promise<string[]> {
+  const { PDFDocument } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  try {
+    return doc.getForm().getFields().map((f) => f.getName()).sort();
+  } catch {
+    return []; // no AcroForm at all
+  }
+}

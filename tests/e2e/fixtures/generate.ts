@@ -21,6 +21,9 @@ export const FIXTURE = {
   pdfWide: path.join(FIXTURES_DIR, 'doc-landscape.pdf'),
   // Image-heavy PDF (embedded high-quality JPEGs) for real-compression tests.
   pdfPhoto: path.join(FIXTURES_DIR, 'doc-photo.pdf'),
+  // AcroForm PDF (text field, checkbox, dropdown) — P7 corpus: tools must not
+  // silently destroy interactive form fields.
+  pdfForm: path.join(FIXTURES_DIR, 'doc-form.pdf'),
   jpg: path.join(FIXTURES_DIR, 'photo.jpg'),
   jpg2: path.join(FIXTURES_DIR, 'photo-2.jpg'),
   png: path.join(FIXTURES_DIR, 'graphic.png'),
@@ -112,6 +115,41 @@ export async function generateFixtures(): Promise<void> {
   // Embeds the high-quality JPEGs full-page so image recompression has real work
   // to do — text-only PDFs have nothing to shrink.
   await writeFile(FIXTURE.pdfPhoto, await makePhotoPdf(encoded.jpg, encoded.jpg2));
+
+  // ── AcroForm PDF ───────────────────────────────────────────────────────────
+  await writeFile(FIXTURE.pdfForm, await makeFormPdf());
+}
+
+/**
+ * A PDF with real interactive form fields. Premium tools are expected to carry
+ * these through (or to say plainly that they flatten them); a tool that drops
+ * them silently is losing user data.
+ */
+async function makeFormPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([595, 842]);
+  const form = doc.getForm();
+
+  page.drawText('Application Form', { x: 50, y: 780, size: 20, font, color: rgb(0, 0, 0) });
+
+  page.drawText('Full name', { x: 50, y: 720, size: 12, font });
+  const name = form.createTextField('applicant.name');
+  name.setText('Ada Lovelace');
+  name.addToPage(page, { x: 50, y: 690, width: 300, height: 24 });
+
+  page.drawText('Subscribe', { x: 50, y: 640, size: 12, font });
+  const subscribe = form.createCheckBox('applicant.subscribe');
+  subscribe.addToPage(page, { x: 130, y: 638, width: 16, height: 16 });
+  subscribe.check();
+
+  page.drawText('Plan', { x: 50, y: 590, size: 12, font });
+  const plan = form.createDropdown('applicant.plan');
+  plan.addOptions(['Free', 'Pro', 'Enterprise']);
+  plan.select('Pro');
+  plan.addToPage(page, { x: 130, y: 585, width: 160, height: 24 });
+
+  return doc.save();
 }
 
 async function makePhotoPdf(jpgB64: string, jpg2B64: string): Promise<Uint8Array> {

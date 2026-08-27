@@ -274,9 +274,41 @@ Phase 0 → 1.
   main-thread image op. Its HEIC fallback was the reason it lagged; libheif is WASM and the 'bitmap'
   target uses `createImageBitmap`, both worker-safe. Shares `convertImage` in `src/lib/image-ops.ts`
   with the same main-thread fallback as the other canvas ops.
-- **Next up:** P6.2 big-document hardening (deferred by decision), then Phase 7 (release gates).
-  *(When P6.2 is picked up: generate large fixtures at global-setup, ~100pp / ~50MB, never committed —
-  and stage them on disk, since Playwright caps in-memory upload buffers at 50MB.)*
+- **✅ Phase 7 (partial) — release gates.** Run against a **production build** (see above), which is
+  the meaningful gate: **684 passed, 10 flaky, 0 genuine failures** across Chromium, Firefox, WebKit
+  and mobile. Every "flaky" test passes in isolation at `--workers=1`; they are contention on this
+  laptop from running four projects of WASM-heavy tools at once, not defects. axe is clean on all
+  three engines (69/69) and LHCI still reports perf 100 / a11y 100, TTI 367–598 ms.
+  - **Feature-parity meta-test** (`tests/e2e/parity/`) — the audit's core finding was copy drift, so
+    all **115** advertised `features` bullets in the registry are now mapped in `coverage.ts` as
+    `covered` / `partial` / `unproven`, and `parity.spec.ts` fails if a bullet is added, reworded or
+    deleted without a matching entry, or cites a spec that does not exist. Deliberately NOT
+    keyword-matched to test names: that would manufacture a flattering number by asserting coverage
+    nobody verified. Current honest tally: **44 covered (38%), 24 partial (21%), 47 unproven (41%)**.
+    The 47 unproven are real gaps in evidence, not necessarily in the product — e.g. "Verifiable in
+    Adobe Reader", "PBKDF2 (100,000 iterations)", "EXIF metadata stripping". Every run prints the list.
+  - **Visual regression** (`tests/e2e/visual/snapshots.spec.ts`) — 6 pixel baselines over the preview
+    surfaces (watermark, page-numbers, crop, editor canvas, merge thumbnail, organize thumbnail),
+    verified stable across consecutive runs. Chromium-only on purpose: font rasterisation and canvas
+    compositing differ enough per engine that extra baselines would produce diffs that say nothing
+    about the app, while cross-engine *correctness* is already covered by the functional suite.
+    Regenerate with `--update-snapshots`.
+  - **Corpus** (`tests/e2e/parity/corpus.spec.ts`) — image-only ("scanned") PDFs merge with pages
+    intact and thumbnail with real pixels; a new generated AcroForm fixture (`FIXTURE.pdfForm`) proves
+    interactive form fields survive **watermarking** and an **encrypt/decrypt round-trip**. Assertions
+    go through a real parser (`pdfFormFieldNames`, `countPdfPagesStrict`) because pdf-lib writes object
+    streams, so a plaintext scan for `/AcroForm` finds nothing even when the fields are intact.
+- **⚠️ Phase 7 outstanding — CJK/RTL and CMYK corpus.** Not delivered, and not fakeable: CJK/RTL needs
+  a multi-MB embedded font this repo does not carry, and CMYK needs a document authored in that colour
+  space, which pdf-lib cannot produce. Synthesising either would test the synthetic file rather than
+  the capability. **These need real sample documents** dropped into `tests/e2e/fixtures/files` — the
+  genuinely manual half of the gate. Worth noting the CJK path only became plausible at P6.3, when the
+  `cmaps` bundle started being served; it is still unverified.
+- **Next up:** (1) P6.2 big-document hardening — deferred by decision; when picked up, generate large
+  fixtures at global-setup, ~100pp / ~50MB, never committed, and stage them on disk since Playwright
+  caps in-memory upload buffers at 50MB. (2) Supply real CJK/RTL/CMYK sample documents to finish the
+  Phase 7 corpus. (3) Chip away at the 47 unproven parity claims — each is either a test to write or
+  copy to trim.
 
 Grounding facts — **as of the original audit**. Several were true then and have since been fixed by
 the phases above; kept for the record, with the current state noted so they aren't read as live:
