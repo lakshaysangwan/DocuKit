@@ -254,9 +254,22 @@ Phase 0 → 1.
   - **Parallelism**: four projects of WASM-heavy tools saturate a laptop, so `workers` is now 2 with a
     single local retry — failures were wandering between runs (a different set each time) rather than
     reproducing.
-- **⚠️ Known gap:** `Unlock PDF` round-trip + wrong-password still fail on **WebKit only**. WebKit
-  refuses the pdf-worker under COEP on the unlock route, yet the same worker loads fine for *encrypt*
-  on `/protect-pdf` — unexplained. 2 tests of ~640; everything else is green.
+- **Dev-server artifact, not a product bug (corrected).** `Unlock PDF` failed on WebKit for most of
+  this work and was first written up here as "WebKit refuses the pdf-worker under COEP". That was
+  wrong. Every blocked URL was a **Vite dev-transformed module** (`/src/workers/pdf-worker.ts?worker_file`);
+  plain static workers always loaded. Against a production build the same tests pass in ~5 s instead of
+  timing out at ~50 s. Real Safari users were never affected. An intermediate "WebKit's cache loses COEP
+  attribution" theory was also wrong and the cache-busting written for it has been reverted.
+- **Run the suite against a production build**: `scripts/serve-dist.mjs` serves `dist/` with the same
+  headers Cloudflare applies, and `E2E_BASE_URL` points Playwright at it:
+  `npm run build && node scripts/serve-dist.mjs` then
+  `E2E_BASE_URL=http://localhost:4322 npx playwright test`. This is the more meaningful gate — the dev
+  server serves workers as transformed modules rather than the static hashed files users actually get.
+  **Production-build result: 646 passed, 8 flaky, 1 failed → now 0 failed.** The one failure was the
+  axe mid-operation test polling for the overlay's fade to reach `opacity: 1`; against a production
+  build the operation finishes before the 0.3 s animation does. It now emulates
+  `prefers-reduced-motion`, which the app already honours by disabling the fade — deterministic, and it
+  keeps the original intent of grading contrast at steady state.
 - **Next up:** P6.2 big-document hardening (deferred by decision), then Phase 7 (release gates).
   *(When P6.2 is picked up: generate large fixtures at global-setup, ~100pp / ~50MB, never committed —
   and stage them on disk, since Playwright caps in-memory upload buffers at 50MB.)*

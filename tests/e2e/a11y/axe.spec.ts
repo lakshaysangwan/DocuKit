@@ -41,15 +41,20 @@ test.describe('P4.4 — axe: zero serious/critical violations', () => {
   }
 
   test('mid-operation (compress-pdf processing overlay)', async ({ page }) => {
+    // Reduced motion disables the overlay's fade-in outright (global.css sets
+    // "animation: none" under prefers-reduced-motion), so its opacity is a
+    // deterministic 1 as soon as it mounts. Waiting for the fade to finish
+    // instead is a race the app can win: against a production build the
+    // operation can complete before the 0.3s animation does.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/compress-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdfPhoto);
     await page.getByTestId('tool-action').click();
-    // Scan while the processing overlay is on screen — but wait for its fade-in
-    // to finish first, else axe grades contrast against a mid-animation opacity
-    // (blended, artificially lighter) rather than the real steady-state colours.
+    // Scan while the processing overlay is on screen. Contrast must be graded at
+    // the steady-state opacity, not a mid-animation blend — see emulateMedia above.
     const overlay = page.getByTestId('processing-overlay');
     await expect(overlay).toBeVisible();
-    await expect.poll(() => overlay.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    expect(await overlay.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     const violations = await seriousCriticalViolations(page);
     expect(violations, `axe violations mid-operation:\n${describe(violations)}`).toEqual([]);
   });

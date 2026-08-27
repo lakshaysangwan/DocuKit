@@ -30,7 +30,9 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }],
   ],
   use: {
-    baseURL: 'http://localhost:4321',
+    // E2E_BASE_URL lets the suite run against a production build served by
+    // scripts/serve-dist.mjs, instead of the Vite dev server.
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:4321',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -68,7 +70,8 @@ export default defineConfig({
       testMatch: '**/mobile/**',
     },
   ],
-  webServer: {
+  // Skipped when pointing at an already-running server (see E2E_BASE_URL).
+  webServer: process.env.E2E_BASE_URL ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:4321',
     reuseExistingServer: !process.env.CI,
