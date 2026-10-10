@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { TOOLS } from '../src/lib/tools-registry.ts';
+import { LANDING_PAGES } from '../src/lib/landing-pages.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(__dirname, '..', 'public', 'og');
@@ -227,8 +228,9 @@ async function generateDefault(): Promise<void> {
 }
 
 (async () => {
-  console.log(`Generating OG images for ${TOOLS.length} tools…`);
-  for (const tool of TOOLS) {
+  const pages = [...TOOLS, ...LANDING_PAGES];
+  console.log(`Generating OG images for ${pages.length} pages…`);
+  for (const tool of pages) {
     await generateOgImage(tool.slug, tool.name, tool.shortDescription, tool.category);
   }
   await generateDefault();

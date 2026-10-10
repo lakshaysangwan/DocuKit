@@ -1,5 +1,6 @@
 ---
 import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
+import { LANDING_PAGES } from '@/lib/landing-pages';
 ---
 
 <footer class="mt-auto border-t border-[var(--color-border)]">
@@ -75,6 +76,23 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
           </li>
         </ul>
       </div>
+    </div>
+
+    <!-- Task pages: existing tools under the names people search for -->
+    <div class="mt-8">
+      <h3 class="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">Popular</h3>
+      <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5">
+        {LANDING_PAGES.map(page => (
+          <li>
+            <a
+              href={`/${page.slug}/`}
+              class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+            >
+              {page.name}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
 
     <div class="mt-8 border-t border-[var(--color-border)] pt-6">

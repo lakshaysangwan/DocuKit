@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import CompressImageTool from '@/components/islands/compress-image/CompressImageTool';
+import { getLandingBySlug } from '@/lib/landing-pages';
+
+const tool = getLandingBySlug('compress-image-to-100kb')!;
+---
+
+<ToolPageLayout {tool}>
+  <CompressImageTool client:idle initialTargetKb={100} initialFormat="jpeg" />
+</ToolPageLayout>

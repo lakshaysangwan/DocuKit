@@ -24,7 +24,14 @@ const outMimeFor = (f: OutputFormat) =>
 const extFor = (mime: string) =>
   mime === 'image/webp' ? 'webp' : mime === 'image/png' ? 'png' : mime === 'image/avif' ? 'avif' : 'jpg';
 
-export default function CompressImageTool() {
+interface CompressImageToolProps {
+  /** Start in Target Size mode at this many KB — set by the size-specific landing pages. */
+  initialTargetKb?: number;
+  /** Pre-selected output format. Upload forms with a size limit usually want a JPG. */
+  initialFormat?: OutputFormat;
+}
+
+export default function CompressImageTool({ initialTargetKb, initialFormat = 'original' }: CompressImageToolProps) {
   // Single-file state (rich preview + before/after). Used when exactly one file.
   const [file, setFile] = useState<File | null>(null);
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
@@ -37,10 +44,10 @@ export default function CompressImageTool() {
   const [batchResults, setBatchResults] = useState<{ name: string; blob: Blob }[]>([]);
   const [batchPct, setBatchPct] = useState(0);
 
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>('original');
-  const [mode, setMode] = useState<Mode>('quality');
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>(initialFormat);
+  const [mode, setMode] = useState<Mode>(initialTargetKb ? 'target-size' : 'quality');
   const [quality, setQuality] = useState(75);
-  const [targetKb, setTargetKb] = useState(200);
+  const [targetKb, setTargetKb] = useState(initialTargetKb ?? 200);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 

@@ -8,14 +8,20 @@ import HowToSteps from './HowToSteps.astro';
 import FeatureGrid from './FeatureGrid.astro';
 import FaqSection from './FaqSection.astro';
 import RelatedTools from './RelatedTools.astro';
+import PopularTasks from './PopularTasks.astro';
 import type { ToolDef } from '@/lib/tools-registry';
 import { getRelatedTools } from '@/lib/tools-registry';
+import { getSiblingLandings, type LandingDef } from '@/lib/landing-pages';
 
 interface Props {
-  tool: ToolDef;
+  tool: ToolDef | LandingDef;
 }
 const { tool } = Astro.props;
 const relatedTools = getRelatedTools(tool);
+const popularTasks = getSiblingLandings(tool);
+// Landing pages carry a verb phrase for headings where the bare name reads badly
+// ("How to PDF to JPG").
+const howToName = 'howToName' in tool ? tool.howToName : tool.name;
 
 // JSON-LD structured data
 const softwareAppSchema = JSON.stringify({
@@ -47,7 +53,7 @@ const breadcrumbSchema = JSON.stringify({
 const howToSchema = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'HowTo',
-  name: `How to ${tool.name}`,
+  name: `How to ${howToName}`,
   description: tool.longDescription,
   step: tool.howToSteps.map((step, i) => ({
     '@type': 'HowToStep',
@@ -86,10 +92,11 @@ const howToSchema = JSON.stringify({
     </div>
 
     <!-- Related tools — shown immediately after the tool area -->
+    <PopularTasks tasks={popularTasks} />
     {relatedTools.length > 0 && <RelatedTools tools={relatedTools} />}
 
     <!-- Static SEO content sections (pure HTML, no JS) -->
-    <HowToSteps steps={tool.howToSteps} toolName={tool.name} />
+    <HowToSteps steps={tool.howToSteps} toolName={howToName} />
     <FeatureGrid features={tool.features} toolName={tool.name} />
     <FaqSection faqs={tool.faqs} toolName={tool.name} />
   </main>

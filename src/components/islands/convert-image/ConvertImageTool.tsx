@@ -42,9 +42,14 @@ async function convertSingleImage(
   return new Blob([response.result], { type: formatMime(targetFormat) });
 }
 
-export default function ConvertImageTool() {
+interface ConvertImageToolProps {
+  /** Pre-selected output format — set by the format-specific landing pages. */
+  initialFormat?: TargetFormat;
+}
+
+export default function ConvertImageTool({ initialFormat = 'webp' }: ConvertImageToolProps) {
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [targetFormat, setTargetFormat] = useState<TargetFormat>('webp');
+  const [targetFormat, setTargetFormat] = useState<TargetFormat>(initialFormat);
   const { run } = useWorker();
   const [quality, setQuality] = useState(85);
   const [convProgress, setConvProgress] = useState(0);

@@ -25,10 +25,10 @@ const DPI_PRESETS: { value: DpiPreset; label: string }[] = [
   { value: 600, label: '600 DPI (archival)' },
 ];
 
-export default function PdfToImageTool() {
+export default function PdfToImageTool({ initialFormat = 'png' }: { initialFormat?: OutputFormat }) {
   const [file, setFile] = useState<File | null>(null);
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-  const [format, setFormat] = useState<OutputFormat>('png');
+  const [format, setFormat] = useState<OutputFormat>(initialFormat);
   const [dpi, setDpi] = useState<DpiPreset>(150);
   const [quality, setQuality] = useState(85);
   const [pageMode, setPageMode] = useState<'all' | 'range'>('all');

@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import OrganizePagesTool from '@/components/islands/organize-pages/OrganizePagesTool';
+import { getLandingBySlug } from '@/lib/landing-pages';
+
+const tool = getLandingBySlug('rotate-pdf')!;
+---
+
+<ToolPageLayout {tool}>
+  <OrganizePagesTool client:idle />
+</ToolPageLayout>

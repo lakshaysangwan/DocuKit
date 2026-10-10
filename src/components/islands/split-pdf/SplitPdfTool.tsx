@@ -25,10 +25,10 @@ const MODES: { value: SplitMode; label: string; description: string }[] = [
   { value: 'each', label: 'Extract Each Page', description: 'One PDF per page (ZIP download)' },
 ];
 
-export default function SplitPdfTool() {
+export default function SplitPdfTool({ initialMode = 'extract' }: { initialMode?: SplitMode }) {
   const [file, setFile] = useState<File | null>(null);
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-  const [mode, setMode] = useState<SplitMode>('extract');
+  const [mode, setMode] = useState<SplitMode>(initialMode);
   const [rangeInput, setRangeInput] = useState('');
   const [everyN, setEveryN] = useState(2);
   const [status, setStatus] = useState<Status>('idle');
