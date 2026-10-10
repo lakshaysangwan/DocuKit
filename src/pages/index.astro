@@ -14,6 +14,16 @@ const websiteSchema = JSON.stringify({
   url: 'https://docukit.uk/',
   description: 'Browser-based PDF and image tools. No uploads, no accounts.',
 });
+
+// Ties the brand name to this site for Google's knowledge panel / site name.
+const organizationSchema = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Docukit',
+  url: 'https://docukit.uk/',
+  logo: 'https://docukit.uk/favicon.svg',
+  sameAs: ['https://github.com/lakshaysangwan/DocuKit'],
+});
 ---
 
 <BaseLayout
@@ -22,6 +32,7 @@ const websiteSchema = JSON.stringify({
   canonical="https://docukit.uk/"
 >
   <script type="application/ld+json" set:html={websiteSchema} slot="head" />
+  <script type="application/ld+json" set:html={organizationSchema} slot="head" />
 
   <TrustBanner />
   <Header />

@@ -62,6 +62,7 @@ const howToSchema = JSON.stringify({
   title={tool.pageTitle}
   description={tool.metaDescription}
   canonical={`https://docukit.uk/${tool.slug}/`}
+  ogImage={`/og/${tool.slug}.png`}
 >
   <!-- JSON-LD structured data -->
   <script type="application/ld+json" set:html={softwareAppSchema} slot="head" />
