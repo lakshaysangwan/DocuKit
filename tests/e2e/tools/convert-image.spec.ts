@@ -67,3 +67,44 @@ test.describe('Convert Image', () => {
     expect(name).toMatch(/\.jpg$/);
   });
 });
+
+/**
+ * HEIC is the one accepted input no browser decodes natively, so it goes
+ * through libheif (heic-to). That path is the first thing a stricter
+ * Content-Security-Policy breaks — heic-to's default build evaluates a string
+ * as script — which is why these run against a real HEVC-coded file.
+ */
+test.describe('Convert Image — HEIC (iPhone) input', () => {
+  test('HEIC → JPG produces a valid JPEG', async ({ page }) => {
+    const diag = new PageDiagnostics(page);
+    await page.goto('/convert-image');
+    await addFilesAndWait(page, FIXTURE.heic, 1);
+    await page.getByRole('button', { name: 'JPG', exact: true }).click();
+
+    await page.getByTestId('tool-action').click();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    assertImage(bytes, 'jpeg');
+    expect(name).toBe('photo.jpg');
+    expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('HEIC → PNG produces a valid PNG', async ({ page }) => {
+    await page.goto('/convert-image');
+    await addFilesAndWait(page, FIXTURE.heic, 1);
+    await page.getByRole('button', { name: 'PNG', exact: true }).click();
+
+    await page.getByTestId('tool-action').click();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    assertImage(bytes, 'png');
+  });
+
+  test('a file the browser cannot preview shows a placeholder, not a broken image', async ({ page }) => {
+    await page.goto('/convert-image');
+    await addFilesAndWait(page, FIXTURE.heic, 1);
+    // The <img> fails to decode and is swapped out for the placeholder.
+    await expect(page.getByTestId('file-card').getByTestId('file-thumbnail')).toHaveCount(0);
+    await expect(page.getByTestId('file-card')).toContainText('photo.heic');
+  });
+});

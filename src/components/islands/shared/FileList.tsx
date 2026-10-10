@@ -58,6 +58,25 @@ function XIcon({ className }: { className?: string }) {
 }
 
 // ── Document placeholder ──────────────────────────────────────────────────────
+/**
+ * A file's preview image. Browsers cannot decode every format we accept (HEIC,
+ * TIFF), and a failed <img> renders as a broken-image icon plus its alt text —
+ * so fall back to the document placeholder instead.
+ */
+function Thumbnail({ src, alt = '' }: { src: string; alt?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <DocPlaceholder />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setFailed(true)}
+      data-testid="file-thumbnail"
+      className="h-full w-full object-contain"
+    />
+  );
+}
+
 function DocPlaceholder({ pulse = false }: { pulse?: boolean }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[var(--color-background)]">
@@ -120,11 +139,7 @@ function SortableCardItem({
       {/* Page preview */}
       <div className="relative w-full bg-white" style={{ aspectRatio: '1 / 1.414' }}>
         {item.thumbnailUrl ? (
-          <img
-            src={item.thumbnailUrl}
-            alt={`First page of ${item.file.name}`}
-            className="h-full w-full object-contain"
-          />
+          <Thumbnail src={item.thumbnailUrl} alt={`Preview of ${item.file.name}`} />
         ) : (
           <DocPlaceholder pulse />
         )}
@@ -177,7 +192,7 @@ function CardOverlay({ item }: { item: FileItem }) {
     <div className="flex w-[180px] shrink-0 flex-col overflow-hidden rounded-xl border-2 border-[var(--color-primary)] bg-[var(--color-surface)] shadow-2xl ring-4 ring-[var(--color-primary)]/20">
       <div className="relative w-full bg-white" style={{ aspectRatio: '1 / 1.414' }}>
         {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt="" className="h-full w-full object-contain" />
+          <Thumbnail src={item.thumbnailUrl} />
         ) : (
           <DocPlaceholder />
         )}
@@ -242,7 +257,7 @@ function SortableRowItem({
       {/* Thumbnail */}
       <div className="relative h-[52px] w-9 shrink-0 overflow-hidden rounded border border-[var(--color-border)] bg-white">
         {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt="" className="h-full w-full object-contain" />
+          <Thumbnail src={item.thumbnailUrl} />
         ) : (
           <DocPlaceholder pulse />
         )}
@@ -282,7 +297,7 @@ function RowOverlay({ item }: { item: FileItem }) {
     <div className="flex items-center gap-2.5 rounded-lg border-2 border-[var(--color-primary)] bg-[var(--color-surface)] p-2 shadow-xl">
       <GripIcon className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
       <div className="relative h-[52px] w-9 shrink-0 overflow-hidden rounded border border-[var(--color-border)] bg-white">
-        {item.thumbnailUrl && <img src={item.thumbnailUrl} alt="" className="h-full w-full object-contain" />}
+        {item.thumbnailUrl && <Thumbnail src={item.thumbnailUrl} />}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-[var(--color-text-primary)]">{item.file.name}</p>

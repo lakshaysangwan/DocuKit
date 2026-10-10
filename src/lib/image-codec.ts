@@ -54,7 +54,9 @@ export async function bufferToImageData(
     bitmap = await createImageBitmap(blob);
   } catch {
     // HEIC/HEIF: the browser can't decode it, so fall back to libheif (heic-to).
-    const { heicTo } = await import('heic-to');
+    // The /csp build is deliberate: the default one evaluates a string as
+    // script, which our Content-Security-Policy (no 'unsafe-eval') blocks.
+    const { heicTo } = await import('heic-to/csp');
     bitmap = await heicTo({ blob, type: 'bitmap' });
   }
   const { canvas, ctx } = createCanvas2D(bitmap.width, bitmap.height);

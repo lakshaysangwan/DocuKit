@@ -74,7 +74,7 @@ export default defineConfig({
     plugins: [tailwindcss(), viewOnceMockPlugin()],
     optimizeDeps: {
       // These ship their own WASM and must not be pre-bundled by esbuild.
-      exclude: ['pdfjs-dist', 'mupdf', '@jsquash/jpeg', '@jsquash/png', '@jsquash/webp', '@jsquash/avif', 'heic-to'],
+      exclude: ['pdfjs-dist', 'mupdf', '@jsquash/jpeg', '@jsquash/png', '@jsquash/webp', '@jsquash/avif', 'heic-to', 'heic-to/csp'],
       // Crawl island + worker sources at server boot so heavy deps that are only
       // imported at operation time inside Web Workers (e.g. qpdf-wasm in
       // pdf-worker) are pre-bundled ONCE up front. Otherwise Vite discovers them

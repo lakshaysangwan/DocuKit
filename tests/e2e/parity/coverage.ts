@@ -180,7 +180,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   },
   'convert-image': {
     'JPEG, PNG, WebP, AVIF, BMP, TIFF, ICO, GIF, SVG': P([T('convert-image')], 'JPEG, PNG, WebP and AVIF tested; BMP, TIFF, ICO, GIF and SVG are not'),
-    'HEIC (iPhone) conversion': U('no HEIC fixture; the libheif fallback path is untested'),
+    'HEIC (iPhone) conversion': C([T('convert-image')], 'a real HEVC-coded HEIC converts to JPEG and PNG through the libheif fallback, under the production CSP'),
     'Batch conversion to same format': C([T('convert-image')]),
     'Per-format quality settings': C([T('convert-image')]),
   },

@@ -120,7 +120,7 @@ export default function ConvertImageTool({ initialFormat = 'webp' }: ConvertImag
         accept={ACCEPTED}
         multiple
         onFiles={handleFiles}
-        hint="JPEG, PNG, WebP, GIF, BMP · Batch conversion"
+        hint="JPEG, PNG, WebP, AVIF, HEIC, GIF, BMP · Batch conversion"
         compact={files.length > 0}
       />
 

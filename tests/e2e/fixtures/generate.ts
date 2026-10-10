@@ -36,6 +36,12 @@ export const FIXTURE = {
   // JPEG carrying a real EXIF APP1 segment (incl. a GPS tag), so "EXIF
   // stripping" can be proven rather than assumed.
   jpgExif: path.join(FIXTURES_DIR, 'photo-exif.jpg'),
+  /**
+   * A real HEVC-coded HEIC, as an iPhone produces. Committed rather than
+   * generated: nothing in the toolchain can encode HEIC (it was made once with
+   * the Windows HEIF encoder from photo.jpg, scaled to 600×400).
+   */
+  heic: path.join(DIR, 'static', 'photo.heic'),
   // PDFs with a real /Outlines tree and an internal link, so merge's
   // "preserve bookmarks & internal links" can be proven rather than assumed.
   pdfBookmarks: path.join(FIXTURES_DIR, 'doc-bookmarks.pdf'),
