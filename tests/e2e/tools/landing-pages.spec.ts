@@ -111,6 +111,26 @@ test.describe('Landing pages — the preset is applied', () => {
     await expect(page.getByLabel('Target Size (KB)')).toHaveValue('50');
   });
 
+  test('Compress PDF to 100KB starts in Target size mode at 100 KB and delivers a PDF under it', async ({ page }) => {
+    await page.goto('/compress-pdf-to-100kb/');
+    await addSingleFileAndWait(page, FIXTURE.pdfPhoto);
+    await expect(page.getByLabel('Make the PDF no larger than')).toHaveValue('100');
+    await expect(page.getByLabel('Size unit')).toHaveValue('KB');
+
+    await page.getByTestId('tool-action').click();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60_000 });
+    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    assertPdf(bytes);
+    expect(bytes.byteLength).toBeLessThanOrEqual(100 * 1024);
+  });
+
+  test('Compress PDF to 1MB presets the limit as 1 MB, not 1024 KB', async ({ page }) => {
+    await page.goto('/compress-pdf-to-1mb/');
+    await addSingleFileAndWait(page, FIXTURE.pdfPhoto);
+    await expect(page.getByLabel('Make the PDF no larger than')).toHaveValue('1');
+    await expect(page.getByLabel('Size unit')).toHaveValue('MB');
+  });
+
   test('Delete PDF Pages opens in Remove mode: listed pages are dropped, the rest kept', async ({ page }) => {
     await page.goto('/delete-pdf-pages/');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);

@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import CompressPdfTool from '@/components/islands/compress-pdf/CompressPdfTool';
+import { getLandingBySlug } from '@/lib/landing-pages';
+
+const tool = getLandingBySlug('compress-pdf-to-1mb')!;
+---
+
+<ToolPageLayout {tool}>
+  <CompressPdfTool client:idle initialTargetKb={1024} />
+</ToolPageLayout>
