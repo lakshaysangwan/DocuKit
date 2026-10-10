@@ -114,6 +114,7 @@ export const TOOLS: ToolDef[] = [
       { q: 'Will compression reduce visual quality?', a: 'Lossless mode maintains full quality. Medium and High modes re-encode images — use the side-by-side preview to check quality before downloading.' },
       { q: 'What is the Custom mode?', a: 'Custom lets you set the exact JPEG quality (1–100), DPI target, grayscale conversion, and font stripping for precise control.' },
       { q: 'Does this work for scanned PDFs?', a: 'Yes — scanned PDFs (which are essentially images) benefit significantly from image re-encoding compression.' },
+      { q: 'Can I compress a PDF to a specific size?', a: 'Yes — choose Target size and enter a limit in KB or MB. The images are compressed only as far as needed to fit. A PDF that is mostly text may not reach a very small limit; when that happens you are told, and given the smallest version.' },
     ],
     howToSteps: [
       { title: 'Upload your PDF', description: 'Drop your PDF into the upload area or click to browse.' },
@@ -126,6 +127,7 @@ export const TOOLS: ToolDef[] = [
       'Before/after file size comparison',
       'Custom DPI and JPEG quality controls',
       'Grayscale conversion option',
+      'Target size mode: fit under a KB or MB limit',
     ],
   },
   {

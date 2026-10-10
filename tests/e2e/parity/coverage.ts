@@ -66,6 +66,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Before/after file size comparison': C([T('compress-pdf')]),
     'Custom DPI and JPEG quality controls': P([T('compress-pdf')], 'controls are revealed; their effect on output is not measured'),
     'Grayscale conversion option': P([T('compress-pdf')], 'control is revealed; grayscale output is not verified'),
+    'Target size mode: fit under a KB or MB limit': C([T('compress-pdf')], 'output lands under a reachable target, a looser target keeps more quality, and an unreachable one is reported rather than passed off as success'),
   },
   'rearrange-pdf-pages': {
     'Drag-and-drop page reorder': U('page reorder is not asserted; the keyboard test covers file reorder on merge'),

@@ -13,20 +13,39 @@ import { triggerDownload } from '@/lib/download';
 import { formatBytes, cn } from '@/lib/utils';
 import type { WorkerResponse, CompressPdfOptions } from '@/types/worker-messages';
 
-type Level = 'low' | 'medium' | 'high' | 'custom';
+type Level = 'low' | 'medium' | 'high' | 'custom' | 'target';
 type Status = 'idle' | 'processing' | 'done' | 'error';
+type SizeUnit = 'KB' | 'MB';
+
+const UNIT_BYTES: Record<SizeUnit, number> = { KB: 1024, MB: 1024 * 1024 };
+/** Size limits people are commonly asked to meet by upload forms and email. */
+const TARGET_PRESETS_KB = [100, 200, 500, 1024, 2048];
+const formatTargetKb = (kb: number) => (kb >= 1024 ? `${kb / 1024} MB` : `${kb} KB`);
 
 const LEVELS: { value: Level; label: string; description: string }[] = [
   { value: 'low', label: 'Low', description: 'Lossless — no quality loss' },
   { value: 'medium', label: 'Medium', description: 'Good balance' },
   { value: 'high', label: 'High', description: 'Maximum compression' },
   { value: 'custom', label: 'Custom', description: 'Fine-tune settings' },
+  { value: 'target', label: 'Target size', description: 'Fit under a size limit' },
 ];
 
-export default function CompressPdfTool() {
+interface CompressPdfToolProps {
+  /** Start in Target size mode at this many KB — set by the size-specific landing pages. */
+  initialTargetKb?: number;
+}
+
+export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProps) {
   const [file, setFile] = useState<File | null>(null);
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-  const [level, setLevel] = useState<Level>('medium');
+  const [level, setLevel] = useState<Level>(initialTargetKb ? 'target' : 'medium');
+  // The target is held as the number and unit the user sees, not as bytes, so
+  // "2 MB" round-trips through the field instead of becoming "2048 KB".
+  const [targetValue, setTargetValue] = useState(
+    initialTargetKb && initialTargetKb >= 1024 ? initialTargetKb / 1024 : initialTargetKb ?? 200,
+  );
+  const [targetUnit, setTargetUnit] = useState<SizeUnit>(initialTargetKb && initialTargetKb >= 1024 ? 'MB' : 'KB');
+  const targetBytes = Math.round(targetValue * UNIT_BYTES[targetUnit]);
   const [dpi, setDpi] = useState(150);
   const [jpegQuality, setJpegQuality] = useState(75);
   const [grayscale, setGrayscale] = useState(false);
@@ -34,6 +53,9 @@ export default function CompressPdfTool() {
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // The target the current result was compressed for (null in the other modes),
+  // kept with the result so editing the field afterwards cannot re-judge it.
+  const [resultTargetBytes, setResultTargetBytes] = useState<number | null>(null);
   const [beforePreview, setBeforePreview] = useState<string | null>(null);
   const [afterPreview, setAfterPreview] = useState<string | null>(null);
 
@@ -74,7 +96,7 @@ export default function CompressPdfTool() {
   }, []);
 
   const handleRemoveFile = useCallback(() => {
-    setFile(null); setBuffer(null); setStatus('idle'); setResult(null); setErrorMsg(null);
+    setFile(null); setBuffer(null); setStatus('idle'); setResult(null); setErrorMsg(null); setResultTargetBytes(null);
   }, []);
 
   const handleCompress = useCallback(async () => {
@@ -84,13 +106,17 @@ export default function CompressPdfTool() {
     setErrorMsg(null);
     setResult(null);
 
-    const options: CompressPdfOptions = {
-      level,
-      dpi: level === 'custom' ? dpi : level === 'low' ? 300 : level === 'medium' ? 150 : 72,
-      jpegQuality: level === 'custom' ? jpegQuality : level === 'low' ? 90 : level === 'medium' ? 75 : 50,
-      grayscale: level === 'custom' ? grayscale : false,
-      stripFonts: level === 'custom' ? stripFonts : false,
-    };
+    if (level === 'target' && !(targetBytes > 0)) { toast.error('Enter a target size'); return; }
+
+    const options: CompressPdfOptions = level === 'target'
+      ? { level: 'custom', targetBytes }
+      : {
+          level,
+          dpi: level === 'custom' ? dpi : level === 'low' ? 300 : level === 'medium' ? 150 : 72,
+          jpegQuality: level === 'custom' ? jpegQuality : level === 'low' ? 90 : level === 'medium' ? 75 : 50,
+          grayscale: level === 'custom' ? grayscale : false,
+          stripFonts: level === 'custom' ? stripFonts : false,
+        };
 
     try {
       const { port1, port2 } = new MessageChannel();
@@ -114,8 +140,13 @@ export default function CompressPdfTool() {
 
       if (response.status === 'success') {
         setResult(response.result);
+        setResultTargetBytes(level === 'target' ? targetBytes : null);
         setStatus('done');
-        toast.success('PDF compressed successfully!');
+        if (level === 'target' && response.result.byteLength > targetBytes) {
+          toast.warning('Could not reach the target size — this is the smallest result');
+        } else {
+          toast.success('PDF compressed successfully!');
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Compression failed';
@@ -123,13 +154,15 @@ export default function CompressPdfTool() {
       setErrorMsg(msg);
       toast.error(msg);
     }
-  }, [buffer, file, level, dpi, jpegQuality, grayscale, stripFonts, run]);
+  }, [buffer, file, level, dpi, jpegQuality, grayscale, stripFonts, targetBytes, run]);
 
   const handleDownload = useCallback(async () => {
     if (!result || !file) return;
     const baseName = file.name.replace(/\.pdf$/i, '');
     triggerDownload(result, `${baseName}-compressed.pdf`, 'application/pdf');
   }, [result, file]);
+
+  const missedTarget = !!result && resultTargetBytes !== null && result.byteLength > resultTargetBytes;
 
   const savedPct = file && result
     ? Math.round(((file.size - result.byteLength) / file.size) * 100)
@@ -154,7 +187,7 @@ export default function CompressPdfTool() {
             <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
               Compression level
             </label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {LEVELS.map((l) => (
                 <button
                   key={l.value}
@@ -174,6 +207,42 @@ export default function CompressPdfTool() {
               ))}
             </div>
           </div>
+
+          {/* Target size */}
+          {level === 'target' && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <label htmlFor="cp-target-size" className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
+                Make the PDF no larger than
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input id="cp-target-size" type="number" min={1} step="any" value={targetValue}
+                  onChange={(e) => setTargetValue(Math.max(0, Number(e.target.value)))}
+                  className="w-28 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
+                <select aria-label="Size unit" value={targetUnit} onChange={(e) => setTargetUnit(e.target.value as SizeUnit)}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none">
+                  <option value="KB">KB</option>
+                  <option value="MB">MB</option>
+                </select>
+                <div className="flex flex-wrap gap-1.5">
+                  {TARGET_PRESETS_KB.map((kb) => (
+                    <button key={kb} type="button"
+                      onClick={() => { setTargetValue(kb >= 1024 ? kb / 1024 : kb); setTargetUnit(kb >= 1024 ? 'MB' : 'KB'); }}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        targetBytes === kb * 1024
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]'
+                          : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)]/50'
+                      )}>
+                      {formatTargetKb(kb)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+                Images are compressed only as much as needed to fit. Text stays sharp — it is never converted to an image.
+              </p>
+            </div>
+          )}
 
           {/* Custom options */}
           {level === 'custom' && (
@@ -244,6 +313,20 @@ export default function CompressPdfTool() {
           {status === 'done' && result && (
             <DownloadButton onClick={handleDownload} label="Download Compressed PDF" />
           )}
+        </div>
+      )}
+
+      {/* Target missed: say so plainly rather than report success */}
+      {status === 'done' && result && missedTarget && resultTargetBytes !== null && (
+        <div role="status" data-testid="target-missed"
+          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-primary)]">
+          <p className="font-medium">
+            This PDF could not be brought under {formatBytes(resultTargetBytes)} — the smallest it gets is {formatBytes(result.byteLength)}.
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            Only images can be compressed further. What remains is mostly text, fonts or vector graphics, which are already compact.
+            Splitting the document into parts is the reliable way under a strict limit.
+          </p>
         </div>
       )}
 

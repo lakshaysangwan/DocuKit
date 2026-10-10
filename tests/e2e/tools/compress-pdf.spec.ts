@@ -79,3 +79,52 @@ test.describe('Compress PDF', () => {
     assertPdf(bytes);
   });
 });
+
+/** Compress the image-heavy fixture in Target size mode and return the download. */
+async function runTarget(page: import('@playwright/test').Page, value: number, unit: 'KB' | 'MB' = 'KB') {
+  await page.goto('/compress-pdf');
+  await addSingleFileAndWait(page, FIXTURE.pdfPhoto);
+  await page.getByRole('button', { name: /Target size/ }).click();
+  await page.getByLabel('Make the PDF no larger than').fill(String(value));
+  await page.getByLabel('Size unit').selectOption(unit);
+  await page.getByTestId('tool-action').click();
+  await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60_000 });
+  return expectDownload(page, () => page.getByTestId('download-button').click());
+}
+
+test.describe('Compress PDF — target size', () => {
+  test('the output fits under a reachable target and is still a valid PDF', async ({ page }) => {
+    const { bytes } = await runTarget(page, 30);
+    assertPdf(bytes);
+    expect(bytes.length).toBeLessThanOrEqual(30 * 1024);
+    await expect(page.getByTestId('target-missed')).toHaveCount(0);
+  });
+
+  test('a looser target keeps more quality: it is not compressed harder than needed', async ({ page }) => {
+    const loose = await runTarget(page, 45);
+    const tight = await runTarget(page, 12);
+    expect(loose.bytes.length).toBeLessThanOrEqual(45 * 1024);
+    expect(tight.bytes.length).toBeLessThanOrEqual(12 * 1024);
+    // Same input, so the only reason for the difference is the target.
+    expect(loose.bytes.length).toBeGreaterThan(tight.bytes.length);
+  });
+
+  test('an unreachable target is reported, not passed off as success', async ({ page }) => {
+    const orig = (await readFile(FIXTURE.pdfPhoto)).length;
+    const { bytes } = await runTarget(page, 1);
+    assertPdf(bytes);
+    // Best effort is still delivered…
+    expect(bytes.length).toBeLessThan(orig);
+    expect(bytes.length).toBeGreaterThan(1024);
+    // …with the miss stated plainly.
+    await expect(page.getByTestId('target-missed')).toContainText('could not be brought under 1 KB');
+  });
+
+  test('a file already under the target is never made larger', async ({ page }) => {
+    const orig = (await readFile(FIXTURE.pdfPhoto)).length;
+    const { bytes } = await runTarget(page, 1, 'MB');
+    assertPdf(bytes);
+    expect(bytes.length).toBeLessThanOrEqual(orig);
+    await expect(page.getByTestId('target-missed')).toHaveCount(0);
+  });
+});

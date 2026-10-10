@@ -35,6 +35,13 @@ export type CompressPdfOptions = {
   jpegQuality?: number;   // 1-100
   grayscale?: boolean;
   stripFonts?: boolean;
+  /** Linear scale applied to embedded images (0–1). Overrides the DPI-derived scale. */
+  imageScale?: number;
+  /**
+   * Target-size mode: fit the output under this many bytes, keeping as much
+   * quality as will fit. When set, the other options are ignored.
+   */
+  targetBytes?: number;
 };
 
 export type ReorderOptions = {
