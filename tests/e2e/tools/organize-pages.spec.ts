@@ -78,3 +78,54 @@ test.describe('Rearrange PDF Pages', () => {
     expect(countPdfPages(bytes)).toBe(3);
   });
 });
+
+/** Rotation of every page in the output, read with a real parser. */
+async function pageRotations(bytes: Buffer): Promise<number[]> {
+  const { PDFDocument } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  return doc.getPages().map((p) => p.getRotation().angle);
+}
+
+async function applyAndReadRotations(page: import('@playwright/test').Page): Promise<number[]> {
+  await page.getByTestId('tool-action').click();
+  await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+  const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+  return pageRotations(bytes);
+}
+
+test.describe('Rearrange PDF Pages — batch rotation', () => {
+  test('"Rotate all right" turns every page', async ({ page }) => {
+    await page.goto('/rearrange-pdf-pages');
+    await loadPdf(page, FIXTURE.pdf3page, 3);
+
+    await page.getByRole('button', { name: /Rotate all right/ }).click();
+
+    expect(await applyAndReadRotations(page)).toEqual([90, 90, 90]);
+  });
+
+  test('rotating one page of a multi-selection rotates the whole selection, and only it', async ({ page }) => {
+    await page.goto('/rearrange-pdf-pages');
+    await loadPdf(page, FIXTURE.pdf3page, 3);
+
+    const thumbs = page.getByTestId('page-thumb');
+    await thumbs.nth(0).click();
+    await thumbs.nth(1).click({ modifiers: ['ControlOrMeta'] });
+    // With more than one page selected the toolbar acts on the selection.
+    await expect(page.getByRole('button', { name: /Rotate selected left/ })).toBeVisible();
+
+    await thumbs.nth(0).hover();
+    await thumbs.nth(0).getByRole('button', { name: 'Rotate clockwise' }).click();
+
+    expect(await applyAndReadRotations(page)).toEqual([90, 90, 0]);
+  });
+
+  test('a batch rotation is a single undo step', async ({ page }) => {
+    await page.goto('/rearrange-pdf-pages');
+    await loadPdf(page, FIXTURE.pdf3page, 3);
+
+    await page.getByRole('button', { name: /Rotate all left/ }).click();
+    await page.getByRole('button', { name: /Undo/ }).click();
+
+    expect(await applyAndReadRotations(page)).toEqual([0, 0, 0]);
+  });
+});

@@ -141,13 +141,28 @@ export default function OrganizePagesTool() {
     });
   }, []);
 
-  const handleRotate = useCallback((id: string, direction: 'cw' | 'ccw') => {
-    updatePages(pages.map((p) => {
-      if (p.id !== id) return p;
-      const delta = direction === 'cw' ? 90 : -90;
-      return { ...p, rotation: ((p.rotation + delta) % 360 + 360) % 360 as 0 | 90 | 180 | 270 };
-    }));
+  const rotatePages = useCallback((ids: Set<string>, direction: 'cw' | 'ccw') => {
+    const delta = direction === 'cw' ? 90 : -90;
+    updatePages(pages.map((p) => (
+      ids.has(p.id)
+        ? { ...p, rotation: ((p.rotation + delta) % 360 + 360) % 360 as 0 | 90 | 180 | 270 }
+        : p
+    )));
   }, [pages, updatePages]);
+
+  // Rotating a page that is part of a multi-selection rotates the whole
+  // selection, as one undoable step; otherwise just that page.
+  const handleRotate = useCallback((id: string, direction: 'cw' | 'ccw') => {
+    const batch = selectedIds.size > 1 && selectedIds.has(id);
+    rotatePages(batch ? selectedIds : new Set([id]), direction);
+  }, [selectedIds, rotatePages]);
+
+  // Toolbar rotate: a multi-selection if there is one, otherwise every page. A
+  // single selected page doesn't count — a plain click always selects one, which
+  // would leave "rotate all" unreachable; the per-page controls cover that case.
+  const handleRotateMany = useCallback((direction: 'cw' | 'ccw') => {
+    rotatePages(selectedIds.size > 1 ? selectedIds : new Set(pages.map((p) => p.id)), direction);
+  }, [selectedIds, pages, rotatePages]);
 
   const handleDelete = useCallback((id: string) => {
     updatePages(pages.filter((p) => p.id !== id));
@@ -253,6 +268,14 @@ export default function OrganizePagesTool() {
             className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-[var(--color-surface)]"
             title="Redo">
             ↪ Redo
+          </button>
+          <button onClick={() => handleRotateMany('ccw')} data-testid="rotate-many-ccw"
+            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-surface)]">
+            ↺ Rotate {selectedIds.size > 1 ? 'selected' : 'all'} left
+          </button>
+          <button onClick={() => handleRotateMany('cw')} data-testid="rotate-many-cw"
+            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-surface)]">
+            ↻ Rotate {selectedIds.size > 1 ? 'selected' : 'all'} right
           </button>
 
           <div className="ml-auto flex items-center gap-2">

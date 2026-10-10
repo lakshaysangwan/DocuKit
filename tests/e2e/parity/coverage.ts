@@ -70,7 +70,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   'rearrange-pdf-pages': {
     'Drag-and-drop page reorder': U('page reorder is not asserted; the keyboard test covers file reorder on merge'),
     'Multi-select with Ctrl+click / Shift+click': C([CLOSED], 'was implemented all along — the audit missed the modifier handling in PageThumbnailGrid; Ctrl adds and Shift extends a range'),
-    'Rotate 90° CW/CCW per page or batch': P([T('organize-pages')], 'single-page rotate tested; batch rotate is not'),
+    'Rotate 90° CW/CCW per page or batch': C([T('organize-pages')], 'per-page, multi-selection and rotate-all are each checked against the rotation of every output page'),
     'Insert blank pages anywhere': C([CLOSED], 'the "+" affordance inserts at a chosen position and the output page really is blank'),
     'Duplicate pages': C([CLOSED], 'the copy is an independent page, so the two can be rotated separately'),
     'Undo/redo up to 20 actions': P([T('organize-pages'), CLOSED], 'undo of a delete and the Ctrl+Z / Ctrl+Shift+Z shortcuts are tested; the 20-action depth is not'),
