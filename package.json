@@ -19,8 +19,8 @@
     "lhci": "lhci autorun"
   },
   "dependencies": {
-    "@astrojs/react": "^5.0.1",
-    "@astrojs/sitemap": "^3.7.1",
+    "@astrojs/react": "^7.0.1",
+    "@astrojs/sitemap": "^3.7.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -32,7 +32,7 @@
     "@signpdf/signpdf": "^3.3.0",
     "@tailwindcss/vite": "^4.2.2",
     "@vite-pwa/astro": "^1.2.0",
-    "astro": "^6.0.8",
+    "astro": "^7.3.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
