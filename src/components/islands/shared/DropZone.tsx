@@ -74,7 +74,9 @@ export default function DropZone({
       data-compact={compact ? 'true' : 'false'}
       data-hydrated={hydrated ? 'true' : 'false'}
       className={cn(
-        'relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all duration-150',
+        // Colours only: animating the height made the controls below slide for
+        // 150ms after a file was added, and a click made in that window missed.
+        'relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors duration-150',
         compact ? 'min-h-0 py-3' : 'min-h-40',
         'focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]',
         stateClasses[dropState],
@@ -132,9 +134,13 @@ export default function DropZone({
         </div>
       )}
 
+      {/* In compact mode the accepted/rejected flashes are one line, the same
+          height as the idle compact row. A taller flash made the zone shrink
+          again 1.5s after adding files, shifting every control below it just as
+          the user reached for one. */}
       {dropState === 'accepted' && (
-        <div key="accepted" className="flex flex-col items-center gap-2 text-[var(--color-success)]">
-          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <div key="accepted" className={cn('flex items-center gap-2 text-[var(--color-success)]', !compact && 'flex-col')}>
+          <svg className={compact ? 'h-4 w-4' : 'h-8 w-8'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p className="text-sm font-medium">Files added</p>
@@ -142,8 +148,8 @@ export default function DropZone({
       )}
 
       {dropState === 'rejected' && (
-        <div key="rejected" className="flex flex-col items-center gap-2 text-[var(--color-error)]">
-          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <div key="rejected" className={cn('flex items-center gap-2 text-[var(--color-error)]', !compact && 'flex-col')}>
+          <svg className={compact ? 'h-4 w-4' : 'h-8 w-8'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p className="text-sm font-medium">File not supported</p>
