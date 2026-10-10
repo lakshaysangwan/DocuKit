@@ -188,7 +188,7 @@ export default function ImageToPdfTool() {
       )}
 
       {status === 'done' && result && (
-        <NextStep href="/compress-pdf" label="Compress PDF">Large file? Shrink it with</NextStep>
+        <NextStep href="/compress-pdf/" label="Compress PDF">Large file? Shrink it with</NextStep>
       )}
     </div>
   );

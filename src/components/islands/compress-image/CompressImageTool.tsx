@@ -299,7 +299,7 @@ export default function CompressImageTool() {
       )}
 
       {status === 'done' && (isBatch ? batchResults.length > 0 : resultBlob) && (
-        <NextStep href="/resize-image" label="Resize Image">Need different dimensions? Try</NextStep>
+        <NextStep href="/resize-image/" label="Resize Image">Need different dimensions? Try</NextStep>
       )}
     </div>
   );

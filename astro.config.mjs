@@ -14,7 +14,12 @@ export default defineConfig({
   },
   integrations: [
     react(),
-    sitemap(),
+    sitemap({
+      // /view/ is the one-time image recipient page — it carries <meta name="robots"
+      // content="noindex">, so submitting it here is what makes Search Console report
+      // it as "Excluded by 'noindex' tag". Keep it crawlable but out of the sitemap.
+      filter: (page) => !page.endsWith('/view/'),
+    }),
     AstroPWA({
       registerType: 'autoUpdate',
       workbox: {

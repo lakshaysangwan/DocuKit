@@ -369,7 +369,7 @@ export default function ResizeImageTool() {
       )}
 
       {status === 'done' && resultBlob && resultBlob.size > 500 * 1024 && (
-        <NextStep href="/compress-image" label="Compress Image">File still large? Optimize it further with</NextStep>
+        <NextStep href="/compress-image/" label="Compress Image">File still large? Optimize it further with</NextStep>
       )}
     </div>
   );

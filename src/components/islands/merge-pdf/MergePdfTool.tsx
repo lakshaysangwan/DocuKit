@@ -304,7 +304,7 @@ export default function MergePdfTool() {
       )}
 
       {status === 'done' && result && (
-        <NextStep href="/compress-pdf" label="Compress PDF">Large merged file? Shrink it with</NextStep>
+        <NextStep href="/compress-pdf/" label="Compress PDF">Large merged file? Shrink it with</NextStep>
       )}
     </div>
   );

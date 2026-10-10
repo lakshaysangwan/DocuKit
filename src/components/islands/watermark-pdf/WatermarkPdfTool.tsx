@@ -206,7 +206,7 @@ export default function WatermarkPdfTool() {
       )}
 
       {status === 'done' && result && file && (
-        <NextStep href="/protect-pdf" label="Protect PDF">Keep it private? Add a password with</NextStep>
+        <NextStep href="/protect-pdf/" label="Protect PDF">Keep it private? Add a password with</NextStep>
       )}
     </div>
   );

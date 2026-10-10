@@ -15,11 +15,20 @@ const {
   title,
   description,
   ogImage = '/og-default.png',
-  canonical = Astro.url.href,
+  canonical,
   noIndex = false,
 } = Astro.props;
 
-const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url.origin).href;
+// Canonical URLs always use the trailing-slash form. Astro builds directory-style
+// output (/merge-pdf/index.html) and Cloudflare Pages 308-redirects the slash-less
+// path to it, so a slash-less canonical would point Google at a redirect.
+const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+const canonicalPath = Astro.url.pathname.endsWith('/')
+  ? Astro.url.pathname
+  : `${Astro.url.pathname}/`;
+const canonicalUrl = canonical ?? new URL(canonicalPath, siteOrigin).href;
+
+const ogImageUrl = new URL(ogImage, siteOrigin).href;
 ---
 
 <!doctype html>
@@ -30,14 +39,14 @@ const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url.origin).href;
     <title>{title}</title>
     <meta name="description" content={description} />
     {noIndex && <meta name="robots" content="noindex" />}
-    <link rel="canonical" href={canonical} />
+    <link rel="canonical" href={canonicalUrl} />
 
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImageUrl} />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content={canonical} />
+    <meta property="og:url" content={canonicalUrl} />
     <meta property="og:site_name" content="Docukit" />
 
     <!-- Twitter Card -->

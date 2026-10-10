@@ -12,7 +12,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
           {PDF_TOOLS.slice(0, 8).map(tool => (
             <li>
               <a
-                href={`/${tool.slug}`}
+                href={`/${tool.slug}/`}
                 class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
               >
                 {tool.name}
@@ -29,7 +29,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
           {PDF_TOOLS.slice(8).map(tool => (
             <li>
               <a
-                href={`/${tool.slug}`}
+                href={`/${tool.slug}/`}
                 class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
               >
                 {tool.name}
@@ -46,7 +46,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
           {IMAGE_TOOLS.map(tool => (
             <li>
               <a
-                href={`/${tool.slug}`}
+                href={`/${tool.slug}/`}
                 class="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
               >
                 {tool.name}
@@ -61,7 +61,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
         <h3 class="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">Links</h3>
         <ul class="mt-3 space-y-1.5">
           <li>
-            <a href="/privacy" class="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">Privacy</a>
+            <a href="/privacy/" class="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">Privacy</a>
           </li>
           <li>
             <a

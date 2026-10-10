@@ -239,7 +239,7 @@ export default function PdfToImageTool() {
       )}
 
       {status === 'done' && results.length > 0 && (
-        <NextStep href="/compress-image" label="Compress Image">Exported images large at high DPI? Optimize with</NextStep>
+        <NextStep href="/compress-image/" label="Compress Image">Exported images large at high DPI? Optimize with</NextStep>
       )}
     </div>
   );
