@@ -70,6 +70,17 @@ test.describe('Landing pages — the preset is applied', () => {
     assertImage(bytes, 'png');
   });
 
+  test('HEIC to JPG converts a real iPhone-format photo', async ({ page }) => {
+    await page.goto('/heic-to-jpg/');
+    await addFilesAndWait(page, FIXTURE.heic, 1);
+    await expect(page.getByTestId('tool-action')).toContainText('to JPG');
+
+    await page.getByTestId('tool-action').click();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    assertImage(bytes, 'jpeg');
+  });
+
   test('PDF to JPG exports JPEG', async ({ page }) => {
     await page.goto('/pdf-to-jpg/');
     await addSingleFileAndWait(page, FIXTURE.pdf1page);

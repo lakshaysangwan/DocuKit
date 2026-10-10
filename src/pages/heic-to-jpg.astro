@@ -1,0 +1,11 @@
+---
+import ToolPageLayout from '@/components/tool-page/ToolPageLayout.astro';
+import ConvertImageTool from '@/components/islands/convert-image/ConvertImageTool';
+import { getLandingBySlug } from '@/lib/landing-pages';
+
+const tool = getLandingBySlug('heic-to-jpg')!;
+---
+
+<ToolPageLayout {tool}>
+  <ConvertImageTool client:idle initialFormat="jpeg" />
+</ToolPageLayout>
