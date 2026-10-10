@@ -12,8 +12,9 @@ Read sections 1–5 before spawning anything. Section 6 is the backlog.
 
 - **Production** is `https://docukit.uk`, deployed by Cloudflare Pages from `main`. Every push to `main`
   deploys (about 1–2 minutes).
-- **`main` = `c61ae27`** ("Upgrade to Astro 7…"). The local branch `remediation/phases-0-3` is the same
-  commit. All work from the last session is committed, pushed and verified live.
+- **The last code change on `main` is `c61ae27`** ("Upgrade to Astro 7…"); the only commits after it
+  add this file and `WORKLOG.md`. The local branch `remediation/phases-0-3` points at the same commit
+  as `main`. All work from the last session is committed, pushed and verified live.
 - **CI** (`.github/workflows/ci.yml`): job `ci` = typecheck, lint, unit tests, build, Lighthouse
   (non-blocking), `npm audit --audit-level=critical`. Job `e2e` = full Playwright suite on four projects
   against a production build. `ci` is green as of `c61ae27`.
