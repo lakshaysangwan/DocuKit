@@ -33,6 +33,6 @@ test.describe('P5.1 — toast is distinct from the persistent result panel', () 
 
     const nextStep = page.getByTestId('next-step');
     await expect(nextStep).toBeVisible({ timeout: 45_000 });
-    await expect(nextStep.getByRole('link', { name: 'Compress PDF' })).toHaveAttribute('href', '/compress-pdf');
+    await expect(nextStep.getByRole('link', { name: 'Compress PDF' })).toHaveAttribute('href', '/compress-pdf/');
   });
 });

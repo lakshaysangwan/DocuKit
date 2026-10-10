@@ -188,7 +188,7 @@ export default function ConvertImageTool() {
         </div>
       )}
       {status === 'done' && results.length > 0 && (
-        <NextStep href="/compress-image" label="Compress Image">Want a smaller file?</NextStep>
+        <NextStep href="/compress-image/" label="Compress Image">Want a smaller file?</NextStep>
       )}
     </div>
   );

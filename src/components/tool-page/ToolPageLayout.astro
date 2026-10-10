@@ -26,21 +26,21 @@ const softwareAppSchema = JSON.stringify({
   applicationCategory: 'Utility',
   operatingSystem: 'Web',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-  url: `https://docukit.uk/${tool.slug}`,
+  url: `https://docukit.uk/${tool.slug}/`,
 });
 
 const breadcrumbSchema = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
   itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://docukit.uk' },
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://docukit.uk/' },
     {
       '@type': 'ListItem',
       position: 2,
       name: tool.category === 'pdf' ? 'PDF Tools' : 'Image Tools',
       item: `https://docukit.uk/#${tool.category}-tools`,
     },
-    { '@type': 'ListItem', position: 3, name: tool.name, item: `https://docukit.uk/${tool.slug}` },
+    { '@type': 'ListItem', position: 3, name: tool.name, item: `https://docukit.uk/${tool.slug}/` },
   ],
 });
 
@@ -61,7 +61,7 @@ const howToSchema = JSON.stringify({
 <BaseLayout
   title={tool.pageTitle}
   description={tool.metaDescription}
-  canonical={`https://docukit.uk/${tool.slug}`}
+  canonical={`https://docukit.uk/${tool.slug}/`}
 >
   <!-- JSON-LD structured data -->
   <script type="application/ld+json" set:html={softwareAppSchema} slot="head" />

@@ -33,7 +33,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
         >
           {PDF_TOOLS.map(tool => (
             <a
-              href={`/${tool.slug}`}
+              href={`/${tool.slug}/`}
               class="block rounded-md px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
               role="menuitem"
             >
@@ -57,7 +57,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
         >
           {IMAGE_TOOLS.map(tool => (
             <a
-              href={`/${tool.slug}`}
+              href={`/${tool.slug}/`}
               class="block rounded-md px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
               role="menuitem"
             >
@@ -103,7 +103,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
       <p class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">PDF</p>
       {PDF_TOOLS.map(tool => (
         <a
-          href={`/${tool.slug}`}
+          href={`/${tool.slug}/`}
           class="block rounded-md px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
         >
           {tool.name}
@@ -112,7 +112,7 @@ import { PDF_TOOLS, IMAGE_TOOLS } from '@/lib/tools-registry';
       <p class="mt-2 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">Image</p>
       {IMAGE_TOOLS.map(tool => (
         <a
-          href={`/${tool.slug}`}
+          href={`/${tool.slug}/`}
           class="block rounded-md px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-primary)]"
         >
           {tool.name}
