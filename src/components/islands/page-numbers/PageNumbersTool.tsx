@@ -35,6 +35,7 @@ export default function PageNumbersTool() {
   const [format, setFormat] = useState<PageNumberOptions['format']>('page-n-of-total');
   const [startNumber, setStartNumber] = useState(1);
   const [skipFirstN, setSkipFirstN] = useState(0);
+  const [font, setFont] = useState<PageNumberOptions['font']>('Helvetica');
   const [fontSize, setFontSize] = useState(10);
   const [color, setColor] = useState('#333333');
   const [marginX] = useState(20);
@@ -61,7 +62,7 @@ export default function PageNumbersTool() {
     setStatus('processing');
     const opts: PageNumberOptions = {
       position, format, startNumber, skipFirstN,
-      font: 'Helvetica', fontSize, color, marginX, marginY,
+      font, fontSize, color, marginX, marginY,
     };
     const { port1, port2 } = new MessageChannel();
     const bufCopy = buffer.slice(0);
@@ -72,7 +73,7 @@ export default function PageNumbersTool() {
     if (!response) { setStatus('idle'); return; }
     if (response.status === 'error') { setStatus('error'); setErrorMsg(response.message); toast.error(response.message); return; }
     if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Page numbers ready to download'); }
-  }, [buffer, file, position, format, startNumber, skipFirstN, fontSize, color, marginX, marginY, run]);
+  }, [buffer, file, position, format, startNumber, skipFirstN, font, fontSize, color, marginX, marginY, run]);
 
   const handleDownload = useCallback(async () => {
     if (!result || !file) return;
@@ -130,6 +131,16 @@ export default function PageNumbersTool() {
                   className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
               </div>
               <div>
+                <label htmlFor="pn-font" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Font</label>
+                <select id="pn-font" data-testid="pn-font" value={font}
+                  onChange={(e) => setFont(e.target.value as PageNumberOptions['font'])}
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none">
+                  <option value="Helvetica">Helvetica (sans-serif)</option>
+                  <option value="Times-Roman">Times (serif)</option>
+                  <option value="Courier">Courier (monospace)</option>
+                </select>
+              </div>
+              <div>
                 <label htmlFor="pn-font-size" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
                   <span>Font size</span><span>{fontSize}pt</span>
                 </label>
@@ -149,7 +160,7 @@ export default function PageNumbersTool() {
       {file && (
         <PageNumbersPreview
           buffer={buffer}
-          options={{ position, format, startNumber, skipFirstN, fontSize, color, marginX, marginY }}
+          options={{ position, format, startNumber, skipFirstN, font, fontSize, color, marginX, marginY }}
         />
       )}
 

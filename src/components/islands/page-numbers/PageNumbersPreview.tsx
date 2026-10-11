@@ -4,7 +4,7 @@ import type { PageNumberOptions } from '@/types/worker-messages';
 
 interface Props {
   buffer: ArrayBuffer | null;
-  options: Pick<PageNumberOptions, 'position' | 'format' | 'startNumber' | 'skipFirstN' | 'fontSize' | 'color' | 'marginX' | 'marginY'>;
+  options: Pick<PageNumberOptions, 'position' | 'format' | 'startNumber' | 'skipFirstN' | 'font' | 'fontSize' | 'color' | 'marginX' | 'marginY'>;
 }
 
 interface PageRender {
@@ -108,7 +108,14 @@ export default function PageNumbersPreview({ buffer, options }: Props) {
     const marginX = mmToPoints(options.marginX ?? 20) * scale;
     const marginY = mmToPoints(options.marginY ?? 15) * scale;
 
-    ctx.font = `${fontSize}px Helvetica, Arial, sans-serif`;
+    // Mirror the base-14 family the worker will embed, so the preview's metrics
+    // and shapes match the output rather than always looking like Helvetica.
+    const CSS_FONT: Record<PageNumberOptions['font'], string> = {
+      Helvetica: 'Helvetica, Arial, sans-serif',
+      'Times-Roman': '"Times New Roman", Times, serif',
+      Courier: '"Courier New", Courier, monospace',
+    };
+    ctx.font = `${fontSize}px ${CSS_FONT[options.font ?? 'Helvetica']}`;
     ctx.fillStyle = options.color ?? '#333333';
     ctx.textBaseline = 'alphabetic';
     const textW = ctx.measureText(label).width;
@@ -138,6 +145,7 @@ export default function PageNumbersPreview({ buffer, options }: Props) {
     options.format,
     options.startNumber,
     options.skipFirstN,
+    options.font,
     options.fontSize,
     options.color,
     options.marginX,

@@ -544,7 +544,14 @@ async function addPageNumbers(
   const pages = doc.getPages();
   const total = pages.length;
 
-  const font = await doc.embedFont(StandardFonts.Helvetica);
+  // The three PDF base-14 families, so the output needs no embedded font file.
+  const STANDARD_FONTS = {
+    Helvetica: StandardFonts.Helvetica,
+    'Times-Roman': StandardFonts.TimesRoman,
+    Courier: StandardFonts.Courier,
+  } as const;
+  const fontKey = (options.font ?? 'Helvetica') as keyof typeof STANDARD_FONTS;
+  const font = await doc.embedFont(STANDARD_FONTS[fontKey] ?? StandardFonts.Helvetica);
   const [r, g, b] = parseColor(options.color ?? '#000000');
   const marginX = mmToPoints(options.marginX ?? 20);
   const marginY = mmToPoints(options.marginY ?? 15);

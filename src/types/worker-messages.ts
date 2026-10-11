@@ -106,7 +106,7 @@ export type PageNumberOptions = {
   format: 'n' | 'page-n' | 'page-n-of-total' | 'n-of-total' | 'roman' | 'alpha';
   startNumber: number;
   skipFirstN: number;
-  font: string;
+  font: 'Helvetica' | 'Times-Roman' | 'Courier';
   fontSize: number;
   color: string;
   marginX: number;  // mm
