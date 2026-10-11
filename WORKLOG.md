@@ -42,11 +42,27 @@ a dependency, exercise the unproven features by hand.
 
 ## 2026-10-11 — first coordinator session
 
+The session opened on 2026-10-10 and stopped at the account session limit within the hour; everything
+below was finished, verified and shipped on the 11th.
+
 | Commit | What shipped | Verified |
 |---|---|---|
 | `f6805f6`…`5ac8727` (T0, 7 commits) | The source-check batch: page thumbnails in Split PDF and PDF to Image; Watermark "Specific pages" and a front/behind layer; a font selector in Add Page Numbers; Image to PDF margins in mm / in / pt; Sign PDF "Place on all pages"; false claims trimmed from the registry | Clean worktree of `5ac8727`: 310 Chromium, 268 Firefox/WebKit, 22 mobile, 9 visual. Live: all six tools run end to end on docukit.uk in Chromium, Split and Sign also in WebKit; Watermark "behind" pixel-checked |
-
 | `32dbf58` (T4) | Compress PDF no longer turns pages black or garbles images: only an allow-list of image shapes is re-encoded, everything else is left untouched; the original is returned when the result would not be smaller | Clean worktree: 327 Chromium, 300 Firefox/WebKit (16 new image-safety tests on each engine), 22 mobile, 67 unit. Live: synthetic masked-image PDF at High / Medium / Target in Chromium and High in WebKit, and Lakshay's own file at High and Target 200 KB — every page as light as the original |
+| `2e2ae36`, `491dcb4` (T14) | Protect PDF writes the permissions the visitor ticks; the open and permissions passwords are always different (a random one is generated and shown once); new "No password, restrictions only" mode; passwords starting with `@` or `--` work; the screen and copy say permissions are advisory | Clean worktree: 354 Chromium, 357 Firefox/WebKit (28 permission + 7 protect/unlock tests on each of three engines), 22 mobile, 94 unit. Live: seven cases on Chromium and two on WebKit, reading `/P`, pdf.js permissions and the password role from the downloaded files |
+
+### The Protect PDF permissions bug (T14), for the record
+
+Lakshay protected a PDF with copying disallowed and could still copy. Three causes, all real:
+`qpdfEncrypt` passed a fixed `--print=none --modify=none` and the worker never forwarded the ticked
+options, so every output had `/P -3376` (copy always allowed, everything else forbidden); the open
+password doubled as the owner password, so opening the file granted every right; and Firefox's
+built-in viewer ignores permission flags unless `pdfjs.enablePermissions` is set. Not verified: that
+Adobe Acrobat honours the flags (the on-screen note and a FAQ name it — Adobe's help page could not be
+fetched and no copy of Acrobat was available), and what Chrome/Edge's built-in viewer does.
+Left open: the Unlock PDF FAQ says a restrictions-only file unlocks with no password, but the tool
+refuses an empty password; the Unlock how-to says "password-free PDF", which puts "free" in visible
+copy.
 
 ### The black-page bug (T4), for the record
 
@@ -75,3 +91,16 @@ black page; `tools/compress-pdf-image-safety.spec.ts` is the pixel guard.
 - A lower-case drive letter in the shell's working directory (`d:\…`) makes `npm test` fail with "Cannot read properties of undefined (reading 'config')". `cd /c/ && cd "D:/Project/DocuKit"` fixes it.
 - Production still logs one CSP violation per page: Cloudflare injects the Web Analytics beacon at the edge and the CSP blocks it. Lakshay's to-do (switch Web Analytics off in the dashboard) is still open.
 - **Working mode changed:** Lakshay asked for one sub-agent at a time ("too much token consumption") after six parallel agents hit the account session limit. Tasks now run serially.
+- Two read-only design agents ran on 2026-10-10: the shared tool workspace (T13) and the compression quality preview (T12). Their reports existed only in session transcripts and are now saved unedited in `docs/design/tool-workspace.md` and `docs/design/compress-preview.md`. Nothing from either is built.
+- The GitHub CLI is now installed and logged in, so CI can be read with `gh run list --branch main`. The workflow concluded `success` for every commit up to `d3f7b5c`; the run for `491dcb4` was still in progress at handoff.
+
+### Left open at the end of the session
+
+Closed from the previous session's list: the uncommitted source-check work shipped as T0, and CI for
+`c61ae27` concluded `success`. The queue, in order, is `HANDOFF.md` section 6. Open now:
+
+- `task/T11-home-search` (homepage tool search): three commits on the old base `085a6e0`, never verified. Its agent was stopped before it reported. The worktree is still at `C:\Users\LAKSHAY\AppData\Local\Temp\docukit-wt\t11`, without a `node_modules` junction.
+- The shared tool workspace (T13) is designed, not started. Three questions are waiting on Lakshay: the Image to PDF output changes, whether to migrate all 20 tools, and whether pages 2, 4 and 5 of his `merged-3-organized.pdf` are really blank.
+- Lakshay's requests from this session that are queued, not started: Crop PDF cursor and handles (T16), PDF to Image without the forced ZIP (T15), the compression quality preview (T12).
+- Not verified by anyone: that Adobe Acrobat honours the Protect PDF permissions, which the screen and a FAQ say it does. Lakshay to check in Acrobat Reader (File → Properties → Security).
+- Cloudflare Web Analytics is still switched on and still blocked by the CSP.
