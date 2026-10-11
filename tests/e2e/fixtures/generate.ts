@@ -20,6 +20,9 @@ export const FIXTURE = {
   pdf3page: path.join(FIXTURES_DIR, 'doc-3page.pdf'),
   pdf5page: path.join(FIXTURES_DIR, 'doc-5page.pdf'),
   pdf1page: path.join(FIXTURES_DIR, 'doc-1page.pdf'),
+  // Long enough that per-page costs show: thumbnails for it must not re-render
+  // the whole grid once per page, and its page count must not wait for them.
+  pdf48page: path.join(FIXTURES_DIR, 'doc-48page.pdf'),
   pdfWide: path.join(FIXTURES_DIR, 'doc-landscape.pdf'),
   // Image-heavy PDF (embedded high-quality JPEGs) for real-compression tests.
   pdfPhoto: path.join(FIXTURES_DIR, 'doc-photo.pdf'),
@@ -88,6 +91,7 @@ export async function generateFixtures(): Promise<void> {
   await writeFile(FIXTURE.pdf3page, await makePdf(3));
   await writeFile(FIXTURE.pdf5page, await makePdf(5));
   await writeFile(FIXTURE.pdf1page, await makePdf(1));
+  await writeFile(FIXTURE.pdf48page, await makePdf(48));
   await writeFile(FIXTURE.pdfWide, await makePdf(2, true));
 
   // ── Images (browser canvas) ───────────────────────────────────────────────
