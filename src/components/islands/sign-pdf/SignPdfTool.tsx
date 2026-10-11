@@ -163,8 +163,13 @@ export default function SignPdfTool() {
     reader.readAsDataURL(f);
   }, []);
 
-  const handlePlaceOnPage = useCallback(async (pageIdx: number) => {
-    if (!signatureDataUrl) return;
+  /**
+   * Build the stamp for one page. Returns null when the stamp cannot be made
+   * (initials with nothing to derive them from), so callers can bail out once
+   * instead of toasting the same error for every page in a batch.
+   */
+  const buildStamp = useCallback(async (pageIdx: number): Promise<PlacedAnnotation | null> => {
+    if (!signatureDataUrl) return null;
 
     // Each stamp gets its own spot on the page so a signature, its date and the
     // initials can sit side by side rather than on top of one another.
@@ -183,10 +188,7 @@ export default function SignPdfTool() {
       };
     } else if (stampType === 'initials') {
       const text = (initialsText.trim() || deriveInitials(typedText)).slice(0, 4);
-      if (!text) {
-        toast.error('Enter your initials first');
-        return;
-      }
+      if (!text) return null;
       newAnn = {
         id: generateId(),
         type: 'initials',
@@ -208,6 +210,15 @@ export default function SignPdfTool() {
       };
     }
 
+    return newAnn;
+  }, [signatureDataUrl, stampType, initialsText, typedText, renderHandwritten]);
+
+  const handlePlaceOnPage = useCallback(async (pageIdx: number) => {
+    const newAnn = await buildStamp(pageIdx);
+    if (!newAnn) {
+      if (stampType === 'initials') toast.error('Enter your initials first');
+      return;
+    }
     // Replace only the same kind of stamp on this page, so repeated clicks don't
     // stack duplicates but different stamp types can coexist.
     setAnnotations((prev) => [
@@ -215,7 +226,35 @@ export default function SignPdfTool() {
       newAnn,
     ]);
     toast.success(`${STAMP_LABELS[stampType]} placed on page ${pageIdx + 1}`);
-  }, [signatureDataUrl, stampType, initialsText, typedText, renderHandwritten]);
+  }, [buildStamp, stampType]);
+
+  /** Stamp every page in one action — the advertised multi-page batch placement. */
+  const handlePlaceOnAllPages = useCallback(async () => {
+    // pageCount, not thumbnails.length: thumbnails arrive one page at a time, so
+    // counting them would stamp only the pages rendered so far on a long PDF.
+    const total = pageCount;
+    if (total === 0) return;
+
+    // The stamp is identical on every page, so build it once and copy it.
+    const template = await buildStamp(0);
+    if (!template) {
+      if (stampType === 'initials') toast.error('Enter your initials first');
+      return;
+    }
+    const stamps: PlacedAnnotation[] = Array.from({ length: total }, (_, i) => ({
+      ...template,
+      id: generateId(),
+      pageIndex: i,
+    }));
+
+    // One state update for the whole batch, replacing any same-type stamp that
+    // was already placed by hand so the two paths cannot double up.
+    setAnnotations((prev) => [
+      ...prev.filter((a) => a.type !== stampType),
+      ...stamps,
+    ]);
+    toast.success(`${STAMP_LABELS[stampType]} placed on all ${total} page${total !== 1 ? 's' : ''}`);
+  }, [buildStamp, stampType, pageCount]);
 
   const handleApply = useCallback(async () => {
     if (!pdfBuffer || !pdfFile || annotations.length === 0) {
@@ -424,6 +463,14 @@ export default function SignPdfTool() {
                 className="w-20 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
               />
             )}
+            <button
+              type="button"
+              onClick={handlePlaceOnAllPages}
+              data-testid="place-all-pages"
+              className="ml-auto rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs transition-colors hover:bg-[var(--color-background)]"
+            >
+              {pageCount === 1 ? 'Place on the page' : `Place on all ${pageCount} pages`}
+            </button>
           </div>
 
           {/* Page thumbnails for placement */}
