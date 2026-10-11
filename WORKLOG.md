@@ -52,9 +52,18 @@ below was finished, verified and shipped on the 11th.
 | `2e2ae36`, `491dcb4` (T14) | Protect PDF writes the permissions the visitor ticks; the open and permissions passwords are always different (a random one is generated and shown once); new "No password, restrictions only" mode; passwords starting with `@` or `--` work; the screen and copy say permissions are advisory | Clean worktree: 354 Chromium, 357 Firefox/WebKit (28 permission + 7 protect/unlock tests on each of three engines), 22 mobile, 94 unit. Live: seven cases on Chromium and two on WebKit, reading `/P`, pdf.js permissions and the password role from the downloaded files |
 | `99b4cec`…`36a1db1` (T11, 3 commits) | A search field on the homepage over all 20 tools and 15 task pages: jpg/jpeg and image/photo/picture match each other, arrow keys and Enter choose, `/` or Ctrl+K focuses, hidden without JavaScript; about 8.5 KB of script | Clean worktree: 376 Chromium, 400 Firefox/WebKit, 26 mobile, 116 unit. Live: nine checks on Chromium, three on WebKit and Firefox; all 35 result links return 200 |
 | `4610097`, `b25e3ce`, `f19ca59` (T16) | Crop PDF: eight visible drag handles, resize cursors only over handles and edges, corner drag, box move, touch scrolling on the preview, keyboard nudging, a live size readout; one false FAQ line corrected; the flaky Firefox home-search test fixed | Clean worktree: 381 Chromium, 410 Firefox/WebKit, 26 mobile, 9 visual, 116 unit. Live: handle drags and the CropBox of the downloaded file checked on three engines, plus an emulated-touch run |
+| `792392d`, `379b6da` (T15) | PDF to Image hands over the images themselves: a card and Download button per image, "Download all" as separate files for 2–10 images, ZIP as a secondary (primary above 10), "Save to a folder…" in Chromium, a share option where files can be shared, files named by source page (`-page-03`); DPI and quality copy corrected. Site-wide: scrolled-to targets stop below the sticky header, smooth scrolling only without reduced motion; the test suite now runs with reduced motion | Clean worktree: 400 Chromium, 444 Firefox/WebKit, 26 mobile, 9 visual, 123 unit; no download-timeout flakes. Live: 39 checks; "Download all" produced 3 download events on each of three engines; ZIP entries, source-page names and the 12-page case checked on Chromium |
 
-Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11 and T16
-are done. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
+T15 notes: several downloads fired with no gap are dropped (Chromium kept 10 of 40, WebKit 1); with
+150 ms between them all three engines delivered 40 of 40 — hence 10 files at 300 ms. A page cannot
+tell whether the browser saved each file, so the status line reports only what was started. Not
+verified: the real Chrome multiple-download prompt, real Safari/iOS/Android, the real folder picker
+and share sheet (stubs only). `shared/MultiFileDownload.tsx` is reusable; Split PDF and the batch modes
+of Convert, Compress and Resize Image still force a ZIP. One lost-click flake remains
+(`tools/watermark-pdf.spec.ts:41` on Firefox, once, not reproduced in 13 runs).
+
+Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16 and
+T15 are done. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
   file can show "PDFWorker.create - the worker is being destroyed"; a second click works. 2 in 30 runs
