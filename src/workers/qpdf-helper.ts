@@ -4,6 +4,13 @@
  */
 import createModule from '@neslinesli93/qpdf-wasm';
 import type { QpdfInstance } from '@neslinesli93/qpdf-wasm';
+import { readEncryptionInfo } from '../lib/pdf-encryption-info';
+import {
+  passwordProblem,
+  permissionsToFlags,
+  permissionsToQpdfArgs,
+  type ProtectPermissions,
+} from '../lib/pdf-protect';
 
 // Emscripten FS has more methods than the package types declare
 interface EmscriptenFSExt {
@@ -56,21 +63,55 @@ export async function qpdfCompress(pdfBytes: Uint8Array): Promise<Uint8Array> {
   }
 }
 
+export interface QpdfEncryptOptions {
+  /** Opens the file with the restrictions in force. Empty = opens without a prompt. */
+  userPassword: string;
+  /** Opens the file with no restrictions. Must be set and differ from the user password. */
+  ownerPassword: string;
+  /** What someone holding only the user password may do. Anything left out is withheld. */
+  permissions?: Partial<ProtectPermissions>;
+}
+
+/**
+ * Encrypt with AES-256 (PDF 2.0, handler revision 6).
+ *
+ * Passwords go in as `--user-password=…` / `--owner-password=…`, never as bare
+ * arguments: qpdf reads a bare argument starting with "@" as a file of
+ * arguments and one starting with "--" as an option, so a password of either
+ * shape used to fail (and the generator can produce a leading "@").
+ */
 export async function qpdfEncrypt(
   pdfBytes: Uint8Array,
-  userPassword: string,
-  ownerPassword: string,
-  keyLength: '128' | '256' = '256',
+  { userPassword, ownerPassword, permissions }: QpdfEncryptOptions,
 ): Promise<Uint8Array> {
+  const problem = passwordProblem(userPassword, ownerPassword);
+  if (problem) throw new Error(problem);
+
   const qpdf = await getModule();
   qpdf.FS.writeFile('/input.pdf', pdfBytes);
   try {
     qpdf.callMain([
-      '--encrypt', userPassword, ownerPassword, keyLength,
-      '--print=none', '--modify=none', '--',
+      '--encrypt',
+      ...(userPassword ? [`--user-password=${userPassword}`] : []),
+      `--owner-password=${ownerPassword}`,
+      '--bits=256',
+      ...permissionsToQpdfArgs(permissions),
+      '--',
       '/input.pdf', '/output.pdf',
     ]);
-    const result = qpdf.FS.readFile('/output.pdf');
+    let result: Uint8Array;
+    try {
+      result = qpdf.FS.readFile('/output.pdf');
+    } catch {
+      // qpdf wrote nothing: most often the input is itself password-protected.
+      throw new Error('This PDF could not be encrypted. If it already has a password, unlock it first.');
+    }
+    // Hand back only a file that says what was asked for. The checkboxes were
+    // once ignored without anyone noticing; this makes that impossible to repeat.
+    const written = readEncryptionInfo(result);
+    if (!written.encrypted || written.permissionFlags !== permissionsToFlags(permissions)) {
+      throw new Error('The encrypted file did not carry the chosen permissions, so it was not saved.');
+    }
     return result;
   } finally {
     try { qpdf.FS.unlink('/input.pdf'); } catch { /* ignore */ }

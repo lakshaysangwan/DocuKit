@@ -32,6 +32,8 @@ export interface EncryptionInfo {
   revision?: number;
   /** Key length in bits. */
   keyLength?: number;
+  /** /P exactly as stored: a signed 32-bit integer, one bit per permission. */
+  permissionFlags?: number;
   permissions?: PdfPermissions;
 }
 
@@ -79,6 +81,28 @@ function describeAlgorithm(version: number | undefined, revision: number | undef
   return 'Unknown';
 }
 
+/**
+ * The text of the encryption dictionary that holds `/Filter /Standard`.
+ *
+ * Normally that is exactly one indirect object, so the scan is bounded to it:
+ * the bytes just before it are the tail of another object's (encrypted) stream,
+ * and a chance "/P 7" in that noise must not be read as this file's
+ * permissions. When the object's edges cannot be found, a generous fixed window
+ * is used instead — /O, /U, /OE and /UE hold long strings.
+ */
+function encryptionDictionary(text: string, filterIdx: number): string {
+  const lookBehind = Math.max(0, filterIdx - 2048);
+  const head = text.slice(lookBehind, filterIdx);
+  const lastObj = head.lastIndexOf('obj');
+  // "12 0 obj" opens an object; "endobj" closes the previous one.
+  const opensHere = lastObj > 0 && /\s/.test(head[lastObj - 1]);
+  const start = opensHere ? lookBehind + lastObj : Math.max(0, filterIdx - 512);
+
+  const endObj = text.indexOf('endobj', filterIdx);
+  const end = endObj !== -1 && endObj - filterIdx < 4096 ? endObj : filterIdx + 2048;
+  return text.slice(start, end);
+}
+
 export function readEncryptionInfo(bytes: Uint8Array): EncryptionInfo {
   const text = toLatin1(bytes);
 
@@ -90,9 +114,7 @@ export function readEncryptionInfo(bytes: Uint8Array): EncryptionInfo {
     return { encrypted: true, algorithm: 'Unknown (non-standard security handler)' };
   }
 
-  // Bound the scan to the dictionary around /Filter /Standard. The window is
-  // generous because /O, /U, /OE and /UE hold long literal strings.
-  const dict = text.slice(Math.max(0, filterIdx - 512), filterIdx + 2048);
+  const dict = encryptionDictionary(text, filterIdx);
 
   const version = readInt(dict, 'V');
   const revision = readInt(dict, 'R');
@@ -106,6 +128,7 @@ export function readEncryptionInfo(bytes: Uint8Array): EncryptionInfo {
     version,
     revision,
     keyLength,
+    permissionFlags: p,
     permissions: p === undefined ? undefined : decodePermissions(p),
   };
 }

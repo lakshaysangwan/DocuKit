@@ -28,7 +28,7 @@ test.describe('Protect PDF', () => {
     // Strength meter reflects a strong password.
     await expect(page.getByText(/Strong|Good/)).toBeVisible();
     // Toggle a permission off.
-    await page.getByRole('checkbox', { name: /Modify Contents/i }).setChecked(false);
+    await page.getByRole('checkbox', { name: 'Edit the content' }).setChecked(false);
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });

@@ -71,6 +71,25 @@ describe('readEncryptionInfo', () => {
     });
   });
 
+  it('reports /P exactly as stored', () => {
+    expect(readEncryptionInfo(encryptedPdf('/V 5 /R 6 /Length 256 /P -3392')).permissionFlags).toBe(-3392);
+    expect(readEncryptionInfo(encryptedPdf('/V 5 /R 6 /Length 256')).permissionFlags).toBeUndefined();
+  });
+
+  it('reads /P from the encryption dictionary, not from bytes that precede it', () => {
+    // The object before /Encrypt is usually an encrypted stream: arbitrary
+    // bytes that can spell "/P 7" by chance. Only the dictionary's own /P counts.
+    const noisy = bytes(
+      '%PDF-1.7\n1 0 obj\n<< /Length 9 >>\nstream\nxx/P 7 /R 2 yy\nendstream\nendobj\n' +
+        '2 0 obj\n<< /CF << /StdCF << /CFM /AESV3 >> >> /Filter /Standard /Length 256 /P -3392 /R 6 /V 5 >>\nendobj\n' +
+        '3 0 obj\n<< /P 99 >>\nendobj\ntrailer\n<< /Encrypt 2 0 R /Root 4 0 R >>\n%%EOF'
+    );
+    const info = readEncryptionInfo(noisy);
+    expect(info.permissionFlags).toBe(-3392);
+    expect(info.revision).toBe(6);
+    expect(info.algorithm).toBe('AES-256');
+  });
+
   it('does not claim to understand a non-standard security handler', () => {
     const info = readEncryptionInfo(
       bytes('%PDF-1.7\n1 0 obj\n<< /Filter /Custom /V 4 >>\nendobj\ntrailer\n<< /Encrypt 1 0 R >>\n%%EOF')

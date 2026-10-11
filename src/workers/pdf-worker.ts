@@ -374,12 +374,13 @@ async function encrypt(
 
   sendProgress(30, 'Encrypting with AES-256…');
   const input = new Uint8Array(buffer);
-  const result = await qpdfEncrypt(
-    input,
-    options.userPassword,
-    options.ownerPassword ?? options.userPassword,
-    '256',
-  );
+  // The owner password is never defaulted to the open password: that would make
+  // whoever opens the file its owner, and the permissions would bind no one.
+  const result = await qpdfEncrypt(input, {
+    userPassword: options.userPassword,
+    ownerPassword: options.ownerPassword ?? '',
+    permissions: options.permissions,
+  });
 
   sendProgress(100, 'Done');
   return result.buffer as ArrayBuffer;
