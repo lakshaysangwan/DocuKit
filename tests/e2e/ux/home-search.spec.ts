@@ -234,15 +234,38 @@ test.describe('Homepage search', () => {
     // Idle islands and the first screen's prefetches are part of loading.
     await page.waitForLoadState('networkidle');
 
-    const requests: string[] = [];
-    page.on('request', (req) => requests.push(req.url()));
+    const requests: { method: string; url: string; body: string }[] = [];
+    page.on('request', (req) => requests.push({ method: req.method(), url: req.url(), body: req.postData() ?? '' }));
     await input.pressSequentially('pdf to jpg');
     await expect(page.getByRole('option').first()).toHaveAttribute('href', '/pdf-to-jpg/');
     await input.fill('spreadsheet');
     await expect(page.getByTestId('tool-search-empty')).toBeVisible();
 
-    // Searching is done in the page: typing fetches nothing, from anywhere.
-    expect(requests, `requests made while typing:\n${requests.join('\n')}`).toEqual([]);
+    // Searching is done in the page: nothing is asked for results, and what was
+    // typed goes nowhere. The one thing typing can set off is the site's own link
+    // prefetch — a result that stays on screen is a link like any other, so its
+    // page may be fetched ahead of a click. That is a plain GET of a page of this
+    // site, naming the page and never the words typed.
+    const origin = new URL(page.url()).origin;
+    const pagePaths = new Set([...TOOLS, ...LANDING_PAGES].map((p) => `/${p.slug}/`));
+    const isPagePrefetch = (r: { method: string; url: string; body: string }) => {
+      const url = new URL(r.url);
+      return r.method === 'GET' && !r.body && url.origin === origin && !url.search && !url.hash && pagePaths.has(url.pathname);
+    };
+    const listed = requests.map((r) => `${r.method} ${r.url}`).join('\n');
+    expect(
+      requests.filter((r) => !isPagePrefetch(r)).map((r) => `${r.method} ${r.url}`),
+      `requests made while typing, other than prefetches of this site's pages:\n${listed}`,
+    ).toEqual([]);
+
+    // What was typed, in the forms a URL or a request body could carry it.
+    const typed = ['pdf to jpg', 'spreadsheet'].flatMap((q) => [q, q.replaceAll(' ', '+'), encodeURIComponent(q)]);
+    const carriers = requests.filter((r) => {
+      const url = new URL(r.url);
+      const sent = `${url.search}${url.hash}${r.body}`.toLowerCase();
+      return typed.some((q) => sent.includes(q.toLowerCase()));
+    });
+    expect(carriers.map((r) => `${r.method} ${r.url}`), 'requests carrying the typed text').toEqual([]);
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 });
@@ -316,7 +339,10 @@ test.describe('Homepage search — before it has loaded', () => {
       await route.continue();
     });
 
-    await page.goto('/');
+    // Not the default 'load': a browser may ask for the island's script before
+    // load fires (Firefox sometimes does), and load would then wait on the very
+    // request this test is holding back.
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     const search = page.getByTestId('tool-search');
     const input = page.getByRole('combobox', { name: 'Search tools' });
     await input.click();
