@@ -383,7 +383,117 @@ Phase 0 → 1.
   found the original thirteen, and this pass showed the method still has yield — three of the
   thirteen turned out to be implemented all along, and five bugs surfaced that no test was looking
   for. Writing the tests can then follow as ordinary work.
-  current-page option. Same implement-or-trim decision as the table above.
+- **✅ Source-check sweep done — all 24 remaining unproven bullets read against the code.** The
+  question asked of each was only *"is this false?"*, not *"is it tested?"*. Verdict: **12 false,
+  10 true-but-untested, 2 out of scope.** The method's yield held up: this is a *higher* false rate
+  (50%) than the original thirteen, because the easy wins were already taken and what was left is
+  where nobody had looked. Every verdict is recorded in the bullet's own note in
+  `tests/e2e/parity/coverage.ts`, greppable as `SOURCE CHECK`.
+
+  **False — advertised, not implemented (12):**
+  | Tool | Bullet | What the code actually does |
+  |---|---|---|
+  | watermark-pdf | Layer behind or on top of content | `WatermarkOptions.layer` exists in the type, the UI hardcodes `layer: 'front'`, and the worker **never reads it**. Everything is drawn on top. |
+  | watermark-pdf | Apply to all, odd, even, or **specific pages** | The worker handles `applyTo: 'range'` via `options.pageRange`, but the UI type is `'all' \| 'odd' \| 'even'` and offers only those three. Identical shape to the crop `applyTo: 'current'` gap. |
+  | add-page-numbers | **Font**, size, and color controls | Size and colour are real. There is no font control: the tool hardcodes `font: 'Helvetica'` and the worker never reads `options.font`, embedding `StandardFonts.Helvetica` unconditionally. |
+  | edit-pdf | Image and **emoji** overlays | Image overlays work. `AnnotationTool` has 11 members and none is emoji — yet the registry FAQ lists it as a distinct annotation tool. |
+  | sign-pdf | Auto background removal for uploaded images | `handleUploadSignature` is `FileReader.readAsDataURL` and nothing else. The UI hint ("PNG with transparent background works best") contradicts the bullet. |
+  | sign-pdf | Pressure-sensitive drawing (Apple Pencil / stylus) | signature_pad 5.1.3 *records* `event.pressure` per point, but `_strokeWidth()` is `max(maxWidth/(velocity+1), minWidth)` — velocity only. A stylus draws exactly like a mouse. |
+  | sign-pdf | Multi-page batch placement | One click per page thumbnail. No apply-to-all/range affordance, so nothing is batched. |
+  | split-pdf | Visual thumbnail page selector | `usePdfThumbnails` is called but only `pageCount` is destructured — **no thumbnail is ever rendered**. The selector is a plain text range input. |
+  | pdf-to-image | Page preview before download | Same bug, same shape: thumbnails rendered, discarded, no preview. |
+  | image-to-pdf | Margin controls in mm **or inches** | The control is labelled "Margins (pt)" and the value reaches the worker as points. No unit selector exists. |
+  | image-to-pdf | Per-image or global settings | One `ImagesToPdfOptions` is built for the whole batch; no per-image state exists. |
+  | compress-image | Smart codec selection for photos vs illustrations | The codec is whatever the user picks in the format selector. No content heuristic exists in `image-ops.ts`, `image-codec.ts` or the tool. |
+
+  **True, needs only a test (10):** rearrange drag-and-drop page reorder (`PageThumbnailGrid`);
+  sign-pdf's 4 handwriting fonts; digital-signature `.p12`/`.pfx` upload (`loadP12`) and its
+  visible+cryptographic combination (`pdf-sign.ts` draws the box on page 1); protect-pdf and
+  lock-image password strength meters (both real 0–4 bars); image-to-pdf multi-image reorder; watermark opacity/rotation/size sliders and its tiled grid; convert-image
+  HEIC (libheif fallback is wired, needs a real fixture).
+
+  **Out of scope (2):** "Verifiable in Adobe Reader / Acrobat" (manual, see below) and merge's
+  "Up to 50 files, 200MB per file" — the 50-file cap is real (`maxFiles={50}`), the 200MB figure is
+  **not enforced** (no `maxSize` passed) and untested; that is P6.2.
+
+  **Bonus finding, outside the 24 — a `partial` that is really false.** sign-pdf's
+  "Drag-and-drop placement with resize/rotate" has no drag handlers, no resize, and `rotation` is a
+  literal `0` at every construction site. Placement is click-a-thumbnail-to-drop at fixed
+  coordinates. Worth re-reading the other 25 partials with the same question.
+
+  **Bonus finding — a real performance bug.** `usePdfThumbnails` rasterises *every* page to a canvas
+  and JPEG-encodes it on the main thread, with a `setThumbnails([...results])` state update per page.
+  split-pdf and pdf-to-image pay that whole cost and then use only `doc.numPages`, which pdf.js hands
+  over for free. On a 100-page document that is 100 needless page renders on the main thread before
+  the user has chosen anything. Directly relevant to P6.2.
+
+- **✅ Source-check remediation — 7 built, 5 trimmed, all 12 closed.** The implement-or-trim call from
+  D2 was re-run per item, because unlike the original thirteen these were not all wiring gaps: five
+  were genuine unbuilt features. As committed, the parity meta-test reports **75 covered (67%), 25
+  partial (22%), 12 unproven (11%)** of 112 bullets: seven bullets moved from unproven to covered and
+  four were removed outright. The parity folder and the specs of the six tools touched pass on
+  Chromium against the production build (86 tests); the full cross-browser gate is run separately.
+
+  **Built (7)** — pinned by `tests/e2e/parity/source-check-closures.spec.ts`, which asserts on output
+  structure rather than on a control existing, since "a control nothing downstream reads" was the
+  sweep's whole finding:
+  | Tool | Bullet | How it was closed |
+  |---|---|---|
+  | watermark-pdf | …or specific pages | UI gained a `range` mode + page-range field feeding the `applyTo: 'range'` path the worker already had. Test: pages 2 and 4 watermarked, the other three untouched. |
+  | watermark-pdf | Layer behind or on top | Worker now reorders `/Contents`. pdf-lib has no z-order API, but `addContentStream` normalises `/Contents` into an array and pushes ours last, so moving that entry to the front paints it first. Verified by Node probe before wiring, and asserted structurally — the two modes are pixel-identical on a page with no background. |
+  | add-page-numbers | Font control | Worker now honours `options.font` across the three base-14 families instead of always embedding Helvetica; `PageNumbersPreview` mirrors the family so the preview stops lying. Test reads `/Courier` and `/Times-Roman` out of the output. |
+  | image-to-pdf | Margins in mm or inches | mm/in/pt selector. The margin is held in points and shown in the chosen unit, so 10 mm becomes 0.39 in (not 10 in) and comes back as 10 mm. Test: a 1.5 in margin puts the image 108 pt from the page edge in the output. |
+  | sign-pdf | Multi-page batch placement | "Place on all N pages" stamps every page in one action, replacing any same-type stamp already placed by hand so the two paths cannot double up. |
+  | split-pdf | Visual thumbnail page selector | New shared `PageSelectorGrid`. Two-way synced with the range field, with the text authoritative so keywords like `odd`/`last` survive until a thumbnail is actually clicked. |
+  | pdf-to-image | Page preview before download | Same grid; shows which pages will be exported, clicking one drops it. |
+
+  **Trimmed (5)** — real features nobody had built, where the copy was the thing that was wrong:
+  sign-pdf's *auto background removal* and *pressure-sensitive drawing* (plus the FAQ line promising
+  background removal), image-to-pdf's *per-image settings* (and its matching step copy),
+  compress-image's *smart codec selection*, and the *emoji* half of edit-pdf's "Image and emoji
+  overlays" (the bullet is now "Image overlays"; the FAQ no longer lists emoji as a tool).
+
+  **The discarded-rasterisation bug is gone as a side effect.** split-pdf and pdf-to-image were
+  rendering and JPEG-encoding every page on the main thread and then using only `doc.numPages`. Those
+  pixels now reach the screen, and a new `getPdfPageCount()` in `src/lib/pdf-preview.ts` gives the
+  cheap count to callers that genuinely only want the number.
+
+  **One bug introduced and caught by its own test.** Reading the page count on file-drop made it
+  arrive a beat after the file card, so clicking Apply in that window parsed the range against a
+  total of 0 and told the user to "enter which pages to watermark" — which they had. `handleApply`
+  now reads the count on demand when state has not caught up. Worth noting the test only failed
+  because it asserted on the *output*; a test that checked the control existed would have passed.
+
+  **Review before commit — six fixes to the batch itself.** (1) sign-pdf's "Place on all pages"
+  counted rendered thumbnails, which arrive one page at a time, so on a long PDF it stamped only the
+  pages drawn so far; it now uses the page count. (2) pdf-to-image exported *every* page when the
+  custom selection was empty while the new grid said "0 pages will be exported"; an empty selection
+  now exports nothing and says so. (3) image-to-pdf converted the rounded on-screen number at each
+  unit switch, so 10 mm → in → mm came back as 9.91 mm and 10 mm → in → pt read 28.08 pt instead of
+  28.35; the margin is now held in points. (4) The watermark worker moved the last content stream to the back even when it
+  had drawn nothing, which would have reordered the page's own content; it now moves only what it
+  drew. (5) Split and pdf-to-image thumbnails were rasterised at 80/120 px and shown 96 px tall, so
+  they were blurry; both render at 200 px. (6) The new button groups are labelled groups, the
+  read-only grid says which pages are selected, and the four "Apply to" buttons wrap on a phone.
+  Copy: the split FAQ promised Shift/Ctrl+click on the grid (it is click-to-toggle), the sign FAQ
+  named a "batch mode" that is really one button, and the image-to-pdf step still listed a
+  background colour control that does not exist — all three now say what the tool does.
+
+- **Still outstanding after this pass:**
+  1. **The 26 partials deserve the same sweep.** sign-pdf's "Drag-and-drop placement with
+     resize/rotate" is marked `partial` but is false: there are no drag handlers, no resize, and
+     `rotation` is a literal `0` at every construction site — placement is click-a-thumbnail-to-drop
+     at fixed coordinates. If one partial is really a falsehood, the bucket has not been read with
+     the "is this false?" question, only the unproven one has.
+  2. **P6.2 big-document hardening** — unchanged, and now also relevant to `usePdfThumbnails`, which
+     still rasterises every page on the main thread with a state update per page. That is fine for
+     the 3-5 page fixtures and untested above them.
+  3. **"Verifiable in Adobe Reader / Acrobat"** — no headless test can show this. It needs one manual
+     open of a signed output in Acrobat, with the version and date recorded here; until then it
+     should stay `unproven` rather than be quietly upgraded.
+  4. **CI does not gate deploys.** Cloudflare Pages builds independently of Actions, so a red CI
+     still ships. That is a Pages setting, not a repo change.
+
 
 Grounding facts — **as of the original audit**. Several were true then and have since been fixed by
 the phases above; kept for the record, with the current state noted so they aren't read as live:
