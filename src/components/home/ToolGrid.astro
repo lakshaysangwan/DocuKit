@@ -1,6 +1,9 @@
 ---
 import ToolCard from './ToolCard.astro';
+import ToolSearch from '@/components/islands/home/ToolSearch';
 import type { ToolDef } from '@/lib/tools-registry';
+import { LANDING_PAGES } from '@/lib/landing-pages';
+import { buildSearchIndex, serializeSearchIndex } from '@/lib/tool-search';
 
 interface Props {
   tools: ToolDef[];
@@ -13,9 +16,21 @@ const imageTools = tools.filter(t => t.category === 'image');
 // First 3 PDF tools are featured (larger cards)
 const featuredPdf = pdfTools.slice(0, 3);
 const restPdf = pdfTools.slice(3);
+
+// The search covers the tools in the grid plus the task pages, which have no
+// card of their own. Built here, at build time, from the two registries.
+const searchIndex = serializeSearchIndex(buildSearchIndex([...tools, ...LANDING_PAGES]));
 ---
 
 <section class="mx-auto max-w-6xl px-4 pb-20 sm:px-6" id="tools" aria-labelledby="tools-heading">
+  {/* Search. It needs JavaScript, so with scripting off it is removed rather than
+      left as a field that does nothing — the grid below is the full list either
+      way. The island renders at its final height on the server, so hydrating it
+      moves nothing. */}
+  <div class="mb-10 max-w-xl [@media(scripting:none)]:hidden" role="search" aria-label="Tools">
+    <ToolSearch client:idle index={searchIndex} />
+  </div>
+
   <!-- PDF Tools -->
   <div>
     <div class="mb-5 flex items-center gap-2">
