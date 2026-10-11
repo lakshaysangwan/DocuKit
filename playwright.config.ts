@@ -38,6 +38,14 @@ export default defineConfig({
     video: 'retain-on-failure',
     // Downloads are how tools deliver output — we assert on them.
     acceptDownloads: true,
+    // Run with reduced motion so scrolling is instant (global.css only enables
+    // `scroll-behavior: smooth` under prefers-reduced-motion: no-preference).
+    // Playwright scrolls a target into view and then clicks the point it just
+    // measured; on WebKit and Firefox that scroll was animated, the button was
+    // still moving when the click landed, and about 4% of runs lost the click
+    // ("waiting for event download"). Tests that are about motion can still
+    // opt back in with page.emulateMedia({ reducedMotion: 'no-preference' }).
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     {

@@ -130,8 +130,19 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    /* The site header is sticky and 61px tall. Without this, anything scrolled
+       to the top edge — a focused control, an in-page anchor, scrollIntoView —
+       comes to rest underneath it, where it can be neither seen nor clicked.
+       72px clears the header with a little air. */
+    scroll-padding-top: 4.5rem;
     height: 100%;
+  }
+
+  /* Animated scrolling is motion: only for visitors who have not asked for less. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   body {
