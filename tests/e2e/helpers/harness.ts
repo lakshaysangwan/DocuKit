@@ -575,3 +575,54 @@ export async function readPdfCropBoxes(bytes: Buffer): Promise<[number, number][
     return [Math.round(box.width), Math.round(box.height)] as [number, number];
   });
 }
+
+/**
+ * The decoded text of each content stream on a page, in paint order.
+ *
+ * A page's /Contents is an array of streams painted in array order, which makes
+ * this the place to ask structural questions the rendered pixels cannot answer:
+ * which stream paints first, or where exactly an image was positioned.
+ */
+export async function readPdfContentStreams(bytes: Buffer, pageIndex = 0): Promise<string[]> {
+  const { PDFDocument, PDFArray, PDFStream, PDFRef } = await import('pdf-lib');
+  const { inflateSync } = await import('node:zlib');
+
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  const contents = doc.getPages()[pageIndex].node.Contents();
+  const entries = contents instanceof PDFArray ? contents.asArray() : contents ? [contents] : [];
+
+  return entries.map((entry) => {
+    const stream = entry instanceof PDFRef ? doc.context.lookup(entry) : entry;
+    if (!(stream instanceof PDFStream)) return '';
+    const raw = Buffer.from(stream.getContents());
+    // Streams are usually Flate-compressed but need not be — inflate when that
+    // works and take the bytes as they are when it does not.
+    try { return inflateSync(raw).toString('latin1'); } catch { return raw.toString('latin1'); }
+  });
+}
+
+/**
+ * Where a page's drawn text sits in the z-order.
+ *
+ * "Behind the content" means the watermark's stream comes first and "on top"
+ * means it comes last. Returns the index of the first stream containing `needle`
+ * and how many streams the page has, which is what distinguishes the two layer
+ * modes — the pixels alone can't, since both look identical on a page with no
+ * background.
+ */
+export async function findPdfContentStreamIndex(
+  bytes: Buffer,
+  needle: string,
+  pageIndex = 0,
+): Promise<{ index: number; total: number }> {
+  const streams = await readPdfContentStreams(bytes, pageIndex);
+
+  // pdf-lib writes show-text operands as PDF hex strings, not literals, so
+  // "CONFIDENTIAL" appears as <434F4E...>. Look for either form.
+  const hex = Buffer.from(needle, 'latin1').toString('hex').toLowerCase();
+  const index = streams.findIndex(
+    (text) => text.includes(needle) || text.toLowerCase().includes(hex),
+  );
+
+  return { index, total: streams.length };
+}

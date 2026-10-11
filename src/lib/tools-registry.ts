@@ -79,7 +79,7 @@ export const TOOLS: ToolDef[] = [
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
       { q: 'What split modes are available?', a: 'Extract Pages, Split by Range, Split Every N Pages, Extract Each Page as Individual PDF, and Remove Pages.' },
-      { q: 'Can I visually select which pages to extract?', a: 'Yes — a thumbnail grid lets you click to select pages. Shift+click selects a range, Ctrl+click toggles individual pages.' },
+      { q: 'Can I visually select which pages to extract?', a: 'Yes — a thumbnail grid shows every page. Click a page to add it to or remove it from the selection; the grid and the page-range field stay in sync.' },
       { q: 'How does the output work for multiple splits?', a: 'Multiple ranges produce a ZIP file containing one PDF per range. Single-range extraction produces a single PDF.' },
       { q: 'Is there a page limit?', a: 'Docukit handles up to 500 pages reliably. For larger documents, processing may be slower depending on your device.' },
     ],
@@ -178,9 +178,9 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['digital-signature-pdf', 'edit-pdf', 'protect-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
-      { q: 'What signature methods are supported?', a: 'Draw with mouse or touch, type your name in a handwriting font, or upload an image of your signature (PNG/JPG/SVG with auto background removal).' },
+      { q: 'What signature methods are supported?', a: 'Draw with mouse or touch, type your name in a handwriting font, or upload an image of your signature (a PNG with a transparent background works best).' },
       { q: 'Is this a legally binding signature?', a: 'Visual signatures apply an image of your signature. For legally binding cryptographic signatures (PKCS#7 / PAdES standard), use our Digital Signature tool.' },
-      { q: 'Can I sign multiple pages?', a: 'Yes — place your signature on any page. Use multi-page batch mode to apply the same signature at the same position across multiple pages.' },
+      { q: 'Can I sign multiple pages?', a: 'Yes — click any page to place your signature on it, or use "Place on all pages" to put the same signature at the same position on every page in one step.' },
       { q: 'Is my signature saved anywhere?', a: 'Your signature is stored only in your browser\'s sessionStorage for the duration of your session. It is deleted when you close the tab.' },
     ],
     howToSteps: [
@@ -190,8 +190,6 @@ export const TOOLS: ToolDef[] = [
     ],
     features: [
       'Draw, type, or upload signature',
-      'Pressure-sensitive drawing (Apple Pencil / stylus)',
-      'Auto background removal for uploaded images',
       '4 handwriting font options',
       'Drag-and-drop placement with resize/rotate',
       'Date stamp and initials support',
@@ -349,7 +347,7 @@ export const TOOLS: ToolDef[] = [
     ],
     howToSteps: [
       { title: 'Upload your images', description: 'Drop one or more image files. Drag to reorder them — each becomes a page in the PDF.' },
-      { title: 'Configure layout', description: 'Choose page size, image placement, margins, and background color. Set per-image or global options.' },
+      { title: 'Configure layout', description: 'Choose page size, image placement, and margins — these apply to every image in the batch.' },
       { title: 'Convert and download', description: 'Click "Convert & Download" to get your PDF.' },
     ],
     features: [
@@ -357,7 +355,6 @@ export const TOOLS: ToolDef[] = [
       'Multi-image drag-and-drop reorder',
       'Fit Image, A4, Letter, Legal, custom page sizes',
       'Margin controls in mm or inches',
-      'Per-image or global settings',
     ],
   },
   {
@@ -408,7 +405,7 @@ export const TOOLS: ToolDef[] = [
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
       { q: 'Can I edit existing text in a PDF?', a: 'This is an annotation/overlay editor — you can add new text on top of the PDF. Modifying existing PDF text streams is not supported (it requires re-parsing complex PDF content streams).' },
-      { q: 'What annotation tools are available?', a: 'Text boxes, image overlays, emoji, shapes (rectangle, circle, line, arrow), freehand drawing, highlights, whiteout, and stamps (APPROVED, DRAFT, CONFIDENTIAL, etc.).' },
+      { q: 'What annotation tools are available?', a: 'Text boxes, image overlays, shapes (rectangle, circle, line, arrow), freehand drawing, highlights, whiteout, and stamps (APPROVED, DRAFT, CONFIDENTIAL, etc.).' },
       { q: 'What is the difference between Flatten and Keep as Annotations?', a: 'Flatten permanently composites annotations into the page — they cannot be edited later. Keep as Annotations saves them as PDF annotation objects, viewable and editable in Adobe Reader.' },
       { q: 'Is there undo/redo?', a: 'Yes — Ctrl+Z / Ctrl+Shift+Z with up to 50 action history.' },
     ],
@@ -422,7 +419,7 @@ export const TOOLS: ToolDef[] = [
       'Shapes: rectangle, ellipse, line, arrow',
       'Freehand drawing with Bezier smoothing',
       'Highlight, whiteout, and stamp tools',
-      'Image and emoji overlays',
+      'Image overlays',
       'Undo/redo (50 actions)',
       'Flatten or keep as PDF annotations',
     ],
@@ -557,7 +554,6 @@ export const TOOLS: ToolDef[] = [
       'Before/after size comparison',
       'EXIF metadata stripping',
       'Batch compression with ZIP download',
-      'Smart codec selection for photos vs illustrations',
     ],
   },
   {

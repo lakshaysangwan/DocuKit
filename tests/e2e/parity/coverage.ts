@@ -42,6 +42,7 @@ const T = (n: string) => `tools/${n}.spec.ts`;
 const GUARD = 'guards/no-external-requests.spec.ts';
 const VISUAL = 'visual/operation-visibility.spec.ts';
 const CLOSED = 'parity/closed-gaps.spec.ts';
+const SOURCED = 'parity/source-check-closures.spec.ts';
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -51,11 +52,11 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Preserve bookmarks & internal links': C([CLOSED], 'opt-in MuPDF graft path; the merged outline keeps its nesting and both bookmarks and links are rebased onto the new page numbers'),
     'Optional blank page between documents': C([CLOSED], 'a blank lands between the two documents and not after the last one'),
     'Password-protected PDF support': C([CLOSED], 'an encrypted input is detected, decrypted with its password and merged; a wrong password names the file instead of merging garbage'),
-    'Up to 50 files, 200MB per file': U('large-input limits are P6.2, deferred'),
+    'Up to 50 files, 200MB per file': U("The 50-file cap is real (DropZone maxFiles={50}); the 200MB figure is not enforced (no maxSize passed) and not verified — large-input work is P6.2, deferred."),
   },
   'split-pdf': {
     '5 split modes': C([T('split-pdf')], 'extract, remove, by-range, extract-each and every-N all tested'),
-    'Visual thumbnail page selector': U('thumbnail selector not asserted for split'),
+    'Visual thumbnail page selector': C([SOURCED], 'built after the source check found the thumbnails were rendered and discarded — the grid now shows them, and the test proves real pixels plus two-way sync with the range field'),
     'Text syntax: "1-5, 8, odd, even, last"': C(['parity/claims.spec.ts'], 'odd, even and last all resolve to the right pages'),
     'ZIP output for multi-file splits': C([T('split-pdf')]),
     'Range input with live page count': C(['parity/claims.spec.ts']),
@@ -69,7 +70,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Target size mode: fit under a KB or MB limit': C([T('compress-pdf')], 'output lands under a reachable target, a looser target keeps more quality, and an unreachable one is reported rather than passed off as success'),
   },
   'rearrange-pdf-pages': {
-    'Drag-and-drop page reorder': U('page reorder is not asserted; the keyboard test covers file reorder on merge'),
+    'Drag-and-drop page reorder': U("SOURCE CHECK — implemented at PageThumbnailGrid (DndContext + useSortable + arrayMove); needs a test."),
     'Multi-select with Ctrl+click / Shift+click': C([CLOSED], 'was implemented all along — the audit missed the modifier handling in PageThumbnailGrid; Ctrl adds and Shift extends a range'),
     'Rotate 90° CW/CCW per page or batch': C([T('organize-pages')], 'per-page, multi-selection and rotate-all are each checked against the rotation of every output page'),
     'Insert blank pages anywhere': C([CLOSED], 'the "+" affordance inserts at a chosen position and the output page really is blank'),
@@ -79,27 +80,25 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   },
   'sign-pdf': {
     'Draw, type, or upload signature': P([T('sign-pdf')], 'typed and uploaded are tested; freehand draw is not'),
-    'Pressure-sensitive drawing (Apple Pencil / stylus)': U('needs pointer-pressure input'),
-    'Auto background removal for uploaded images': U('not asserted'),
-    '4 handwriting font options': U('font choices not exercised'),
+    '4 handwriting font options': U("SOURCE CHECK — implemented at SIGNATURE_FONTS (Dancing Script, Caveat, Pacifico, Sacramento); needs a test."),
     'Drag-and-drop placement with resize/rotate': P([T('sign-pdf')], 'placement tested; resize and rotate are not'),
     'Date stamp and initials support': C([CLOSED], 'a date stamp and initials can be placed alongside the signature; the date is drawn as real text and read back out of the output'),
-    'Multi-page batch placement': U('not exercised'),
+    'Multi-page batch placement': C([SOURCED], 'built: one click stamps all five pages of the fixture, and every page of the output carries the signature image'),
   },
   'digital-signature-pdf': {
     'PKCS#7 / PAdES standard digital signatures': C([T('digital-signature')], 'the signature is cryptographically verified in the harness'),
     'In-browser RSA-2048 key & certificate generation': C([T('digital-signature')]),
-    'Upload existing .p12/.pfx certificates': U('only the generated-cert path is tested'),
+    'Upload existing .p12/.pfx certificates': U("SOURCE CHECK — implemented at DigitalSignatureTool certSource=\"upload\" + loadP12(); needs a test."),
     'SHA-256 hash of document content': C([T('digital-signature')], 'messageDigest is checked against the ByteRange'),
     'Private key never stored or transmitted': C([GUARD], 'zero cross-origin requests during the flow'),
     'Verifiable in Adobe Reader / Acrobat': U('third-party reader verification cannot run headless'),
-    'Combine visible + cryptographic signature': U('not exercised'),
+    'Combine visible + cryptographic signature': U("SOURCE CHECK — implemented: pdf-sign.ts draws a visible box + signer text on page 1 alongside the PKCS#7 dict (unconditionally); needs a test."),
   },
   'protect-pdf': {
     'AES-256 encryption (PDF 2.0)': P([T('protect-unlock-pdf')], 'output is proven encrypted; the specific cipher is not asserted'),
     'User and owner passwords': P([T('protect-unlock-pdf')], 'user password tested; owner password is not'),
     'Permission controls (print, copy, edit, etc.)': P(['parity/claims.spec.ts'], 'the toggles work and a restricted file still encrypts; the /P flags in the output are not decoded'),
-    'Password strength meter': U('not exercised'),
+    'Password strength meter': U("SOURCE CHECK — implemented at ProtectPdfTool getPasswordStrength() with a 0-4 bar; needs a test."),
     'Random password generator': C([T('protect-unlock-pdf')]),
     '100% client-side — password never transmitted': C([GUARD]),
   },
@@ -113,22 +112,21 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'PNG, JPEG, WebP, AVIF output': P([T('pdf-to-image')], 'PNG, JPEG and AVIF tested; WebP is not'),
     'Custom DPI up to 600': C(['parity/claims.spec.ts'], '600 DPI yields a markedly larger raster than 72 DPI'),
     'Single page, all pages, or page range': C([T('pdf-to-image')]),
-    'Page preview before download': U('preview not asserted'),
+    'Page preview before download': C([SOURCED], 'built on the same discarded thumbnails as split; the grid shows which pages will be exported, clicking one removes it, and the export then contains exactly the pages still highlighted'),
     'ZIP download for multi-page exports': C([T('pdf-to-image')]),
   },
   'image-to-pdf': {
     'JPEG, PNG, WebP, BMP, TIFF, SVG, HEIC support': P([T('image-to-pdf')], 'JPEG and PNG tested; the rest are not'),
-    'Multi-image drag-and-drop reorder': U('reorder not asserted for this tool'),
+    'Multi-image drag-and-drop reorder': U("SOURCE CHECK — implemented at handleReorder + arrayMove wired to FileList onReorder; needs a test."),
     'Fit Image, A4, Letter, Legal, custom page sizes': P([T('image-to-pdf')], 'Fit Image, A4 and Letter tested; Legal and custom are not'),
-    'Margin controls in mm or inches': U('units not exercised'),
-    'Per-image or global settings': U('not exercised'),
+    'Margin controls in mm or inches': C([SOURCED], 'built: mm/in/pt selector converts rather than reinterpreting the number (10 mm becomes 0.39 in and back to 10 mm without drift), and a 1.5 in margin positions the image 108 pt in from the page edge in the output'),
   },
   'watermark-pdf': {
     'Text and image watermarks': C([T('watermark-pdf')]),
-    'Full opacity, rotation, and size control': U('controls not exercised'),
-    'Single placement or tiled/repeated grid': U('tiled mode not exercised'),
-    'Apply to all, odd, even, or specific pages': U('page targeting not exercised'),
-    'Layer behind or on top of content': U('not exercised'),
+    'Full opacity, rotation, and size control': U("SOURCE CHECK — implemented at WatermarkPdfTool sliders (opacity 5-100%, rotation -90..90 deg, font size 12-120pt); needs a test."),
+    'Single placement or tiled/repeated grid': U("SOURCE CHECK — implemented at placement \"center\" | \"tiled\", both honoured by the worker; needs a test."),
+    'Apply to all, odd, even, or specific pages': C([SOURCED], 'built: the worker already handled applyTo "range", so the UI now reaches it — pages 2 and 4 are watermarked and the other three are not'),
+    'Layer behind or on top of content': C([SOURCED], 'built: the worker now reorders /Contents so the watermark stream paints first. Asserted structurally (behind = index 0, front = last) because the two are pixel-identical on a page with no background'),
     'Live preview on sample page': C([VISUAL]),
   },
   'edit-pdf': {
@@ -136,7 +134,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Shapes: rectangle, ellipse, line, arrow': C(['parity/claims.spec.ts'], 'each of the four visibly marks the canvas'),
     'Freehand drawing with Bezier smoothing': P(['parity/claims.spec.ts'], 'drawing marks the canvas; the Bezier smoothing itself is not measured'),
     'Highlight, whiteout, and stamp tools': C(['parity/claims.spec.ts']),
-    'Image and emoji overlays': U('not exercised'),
+    'Image overlays': U('SOURCE CHECK — implemented at activeTool "image" -> file picker -> addImage; needs a test. Copy trimmed: the emoji half was never built, so it is gone from the bullet.'),
     'Undo/redo (50 actions)': P(['parity/claims.spec.ts'], 'undo and redo both verified (this test found and fixed a bug where the first undo did not revert); the 50-action depth is not'),
     'Flatten or keep as PDF annotations': C([T('edit-pdf')], 'both modes verified at the /Annot level'),
   },
@@ -145,7 +143,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Numeric, Roman, and alphabetic formats': P([T('page-numbers')], 'format switching tested; not every format is verified in output'),
     'Custom starting number': C([T('page-numbers')]),
     'Skip first N pages (for TOC/cover)': C([T('page-numbers')]),
-    'Font, size, and color controls': U('not exercised'),
+    'Font, size, and color controls': C([SOURCED], 'font control built and the worker now honours options.font instead of always embedding Helvetica; the test reads /Courier and /Times-Roman back out of the output'),
     'Live preview on first and last page': C([VISUAL]),
   },
   'crop-pdf': {
@@ -169,7 +167,6 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Before/after size comparison': C([T('compress-image')]),
     'EXIF metadata stripping': C(['parity/claims.spec.ts'], 'a fixture carrying a real EXIF APP1 segment comes back stripped'),
     'Batch compression with ZIP download': C([T('compress-image')]),
-    'Smart codec selection for photos vs illustrations': U('the selection heuristic is not asserted'),
   },
   'resize-image': {
     'Exact dimensions, percentage, or one-side resize': P([T('resize-image')], 'exact dimensions tested; percentage and one-side are not'),
@@ -191,7 +188,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Self-contained HTML — works offline': C([T('lock-image')], 'the produced HTML decrypts on its own'),
     'No server involved — 100% client-side': C([GUARD]),
     'Works in any modern browser': C([XBROWSER], 'the suite runs on Chromium, Firefox and WebKit'),
-    'Password strength meter': U('not exercised'),
+    'Password strength meter': U("SOURCE CHECK — implemented at LockImageTool getStrength() with a 0-4 bar; needs a test."),
   },
   'view-once-image': {
     'End-to-end encrypted before upload': C([T('view-once-image')]),
