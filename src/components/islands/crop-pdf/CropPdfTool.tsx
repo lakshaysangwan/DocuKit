@@ -4,7 +4,7 @@ import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
 import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
-import CropPreview from './CropPreview';
+import CropPreview, { MM_TO_PT } from './CropPreview';
 import { useWorker } from '@/hooks/use-worker';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
@@ -15,8 +15,6 @@ import type { WorkerResponse, CropOptions } from '@/types/worker-messages';
 
 type ApplyTo = 'current' | 'all' | 'range';
 type Status = 'idle' | 'processing' | 'done' | 'error';
-
-const MM_TO_PT = 2.8346;
 
 /**
  * CropPreview renders page 1 and is labelled "(page 1)", so "current page" in
@@ -228,6 +226,7 @@ export default function CropPdfTool() {
       {file && (
         <CropPreview
           buffer={buffer}
+          unit={unit}
           marginsPt={{
             top: margins.top * (unit === 'mm' ? MM_TO_PT : 1),
             right: margins.right * (unit === 'mm' ? MM_TO_PT : 1),
@@ -236,6 +235,7 @@ export default function CropPdfTool() {
           }}
           onChangePt={(pt) => {
             const f = unit === 'mm' ? MM_TO_PT : 1;
+            // The preview reports exact points; the fields keep 0.1 mm or whole points.
             const conv = (v: number) => (unit === 'mm' ? Math.round((v / f) * 10) / 10 : Math.round(v / f));
             setMargins({ top: conv(pt.top), right: conv(pt.right), bottom: conv(pt.bottom), left: conv(pt.left) });
           }}

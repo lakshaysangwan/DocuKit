@@ -147,7 +147,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Live preview on first and last page': C([VISUAL]),
   },
   'crop-pdf': {
-    'Visual crop with drag handles': P([VISUAL], 'the preview renders; dragging the handles is not simulated'),
+    'Visual crop with drag handles': C(['tools/crop-pdf-handles.spec.ts', VISUAL], 'edge and corner handles are dragged with the mouse (and one by touch), the margin fields follow, and the crop box in the downloaded file matches'),
     'Numeric margin input (mm, inches, points)': P([T('crop-pdf')], 'default units and pt tested; inches are not'),
     'Auto-crop whitespace detection': C([VISUAL]),
     'CropBox (reversible) or Flatten (permanent)': C([CLOSED], 'both modes are selectable; CropBox keeps the text layer, Flatten rasterises so the trimmed content is gone rather than hidden'),
