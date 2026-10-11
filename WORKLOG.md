@@ -46,6 +46,20 @@ a dependency, exercise the unproven features by hand.
 |---|---|---|
 | `f6805f6`…`5ac8727` (T0, 7 commits) | The source-check batch: page thumbnails in Split PDF and PDF to Image; Watermark "Specific pages" and a front/behind layer; a font selector in Add Page Numbers; Image to PDF margins in mm / in / pt; Sign PDF "Place on all pages"; false claims trimmed from the registry | Clean worktree of `5ac8727`: 310 Chromium, 268 Firefox/WebKit, 22 mobile, 9 visual. Live: all six tools run end to end on docukit.uk in Chromium, Split and Sign also in WebKit; Watermark "behind" pixel-checked |
 
+| `32dbf58` (T4) | Compress PDF no longer turns pages black or garbles images: only an allow-list of image shapes is re-encoded, everything else is left untouched; the original is returned when the result would not be smaller | Clean worktree: 327 Chromium, 300 Firefox/WebKit (16 new image-safety tests on each engine), 22 mobile, 67 unit. Live: synthetic masked-image PDF at High / Medium / Target in Chromium and High in WebKit, and Lakshay's own file at High and Target 200 KB — every page as light as the original |
+
+### The black-page bug (T4), for the record
+
+Lakshay compressed a real 4-page scan on the live site and page 1 came out black. Each page ended with
+a full-page RGB image carrying both `/SMask` and a stencil `/Mask`; `compressPdfOnce` re-encoded it as
+a JPEG under a brand-new dictionary with no masks, so the overlay turned opaque and its hidden samples
+are black. The same loop was also inverting `/Decode [1 0]`, `/Indexed` and `/Separation` images,
+garbling Flate images with a PNG predictor and shifting CMYK. Cost of the fix: that file now shrinks
+13% at most (641 KB → 558 KB) and misses a 200 KB target, which the tool reports. Two follow-ups would
+win size back: deduplicating identical image streams (about 150 KB on that file, lossless) and
+alpha-aware compression of masked images. The pre-existing compare-slider test would have passed on a
+black page; `tools/compress-pdf-image-safety.spec.ts` is the pixel guard.
+
 ### Fixed during the T0 review (part of the commits above)
 
 - Sign "Place on all pages" counted rendered thumbnails, so a long PDF would have been stamped only as far as its thumbnails had loaded.
