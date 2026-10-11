@@ -18,11 +18,28 @@ type Status = 'idle' | 'processing' | 'done' | 'error';
 
 const ACCEPTED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/gif'];
 
+type MarginUnit = 'mm' | 'in' | 'pt';
+
+/** PDF user space is 72 points to the inch; everything else derives from that. */
+const POINTS_PER: Record<MarginUnit, number> = { pt: 1, in: 72, mm: 72 / 25.4 };
+const MARGIN_UNIT_LABEL: Record<MarginUnit, string> = {
+  mm: 'millimetres', in: 'inches', pt: 'points',
+};
+
 export default function ImageToPdfTool() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [pageSize, setPageSize] = useState<PageSize>('a4');
   const [placement, setPlacement] = useState<Placement>('center');
-  const [margins, setMargins] = useState({ top: 28, right: 28, bottom: 28, left: 28 });
+  // Margins are held in points — the only unit the worker's ImagesToPdfOptions
+  // take — and shown in the chosen unit. Switching units therefore re-displays
+  // the same physical margin: "10 mm" becomes "0.39 in", never "10 in", and going
+  // back gives 10 mm again rather than a value rounded twice.
+  const [marginUnit, setMarginUnit] = useState<MarginUnit>('mm');
+  const [marginsPt, setMarginsPt] = useState(() => {
+    const m = 10 * POINTS_PER.mm;
+    return { top: m, right: m, bottom: m, left: m };
+  });
+  const round2 = (v: number) => Math.round(v * 100) / 100;
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -62,7 +79,15 @@ export default function ImageToPdfTool() {
     try {
       const buffers = await Promise.all(files.map((f) => fileToArrayBuffer(f.file)));
       const mimeTypes = files.map((f) => f.file.type || 'image/jpeg');
-      const opts: ImagesToPdfOptions = { pageSize, placement, margins, backgroundColor: '#FFFFFF' };
+      const opts: ImagesToPdfOptions = {
+        pageSize,
+        placement,
+        margins: {
+          top: round2(marginsPt.top), right: round2(marginsPt.right),
+          bottom: round2(marginsPt.bottom), left: round2(marginsPt.left),
+        },
+        backgroundColor: '#FFFFFF',
+      };
       const { port1, port2 } = new MessageChannel();
       const response: WorkerResponse | null = await run(
         'pdf',
@@ -77,7 +102,7 @@ export default function ImageToPdfTool() {
       const msg = err instanceof Error ? err.message : 'Conversion failed';
       setStatus('error'); setErrorMsg(msg); toast.error(msg);
     }
-  }, [files, pageSize, placement, margins, run]);
+  }, [files, pageSize, placement, marginsPt, run]);
 
   const handleDownload = useCallback(async () => {
     if (!result) return;
@@ -148,14 +173,32 @@ export default function ImageToPdfTool() {
 
           {pageSize !== 'fit' && (
             <div>
-              <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">Margins (pt)</label>
+              <div className="mb-2 flex flex-wrap items-center gap-3">
+                <label className="block text-sm font-medium text-[var(--color-text-primary)]">Margins</label>
+                <div className="flex gap-1" role="group" aria-label="Margin units" data-testid="i2p-margin-unit">
+                  {(['mm', 'in', 'pt'] as MarginUnit[]).map((u) => (
+                    <button key={u} type="button" onClick={() => setMarginUnit(u)}
+                      data-testid={`i2p-unit-${u}`}
+                      aria-pressed={marginUnit === u}
+                      title={MARGIN_UNIT_LABEL[u]}
+                      className={cn('rounded-lg border px-2.5 py-1 text-xs transition-colors',
+                        marginUnit === u
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]'
+                          : 'border-[var(--color-border)]'
+                      )}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-4 gap-3">
                 {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
                   <div key={side}>
                     <label htmlFor={`i2p-margin-${side}`} className="mb-1 block text-xs capitalize text-[var(--color-text-muted)]">{side}</label>
-                    <input id={`i2p-margin-${side}`} type="number" min={0} value={margins[side]}
-                      aria-label={`${side} margin`}
-                      onChange={(e) => setMargins((p) => ({ ...p, [side]: Math.max(0, Number(e.target.value)) }))}
+                    <input id={`i2p-margin-${side}`} type="number" min={0} step={marginUnit === 'in' ? 0.25 : 1}
+                      value={round2(marginsPt[side] / POINTS_PER[marginUnit])}
+                      aria-label={`${side} margin in ${MARGIN_UNIT_LABEL[marginUnit]}`}
+                      onChange={(e) => setMarginsPt((p) => ({ ...p, [side]: Math.max(0, Number(e.target.value)) * POINTS_PER[marginUnit] }))}
                       className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
                   </div>
                 ))}
