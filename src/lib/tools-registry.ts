@@ -472,7 +472,7 @@ export const TOOLS: ToolDef[] = [
     wasmDeps: ['pdf-lib', 'pdfjs', 'mupdf'],
     faqs: [
       { q: 'What is the difference between CropBox and Flatten modes?', a: 'CropBox hides content outside the crop area but keeps it in the file (reversible). Flatten mode permanently removes cropped content, producing a smaller file.' },
-      { q: 'Can I crop individual pages differently?', a: 'Yes — enable "Custom per-page" mode to set different crop margins for each page.' },
+      { q: 'Can I crop individual pages differently?', a: 'Not in one pass. Each run applies one set of margins to page 1, to every page, or to a page range you type.' },
       { q: 'What is Auto-crop whitespace?', a: 'It automatically detects white borders around the page content and removes them, like a document scanner trim.' },
       { q: 'Can I enter exact crop values?', a: 'Yes — use Numeric Input mode to enter precise top, right, bottom, and left margins in mm, inches, or PDF points.' },
     ],
