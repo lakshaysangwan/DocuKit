@@ -61,9 +61,20 @@ verified: the real Chrome multiple-download prompt, real Safari/iOS/Android, the
 and share sheet (stubs only). `shared/MultiFileDownload.tsx` is reusable; Split PDF and the batch modes
 of Convert, Compress and Resize Image still force a ZIP. One lost-click flake remains
 (`tools/watermark-pdf.spec.ts:41` on Firefox, once, not reproduced in 13 runs).
+| `20c5a2b`…`afb93bd` (W1, 5 commits) | Workspace step 1a, no visible change: `src/lib/pdf/` (`doc-handle`, `page-geometry`, `render-scheduler`), hooks `use-pdf-document` and `use-page-thumb`, `usePdfThumbnails` rebuilt on them (blob thumbnails, page count as soon as the file opens, document closed and URLs revoked); every pdf.js document now shares one `PDFWorker`, which removes the Crop Flatten "worker is being destroyed" error | Clean worktree: 405 Chromium, 455 Firefox/WebKit, 26 mobile, 9 visual, 453 unit (geometry proven on 16 real rotated / offset PDFs by pixel). Live: five thumbnail tools, four round trips reading the output, 48-page file, Flatten 10/10 Chromium and 5/5 Firefox |
 
-Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16 and
-T15 are done. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
+W1 notes: the API is documented in the files; it differs from the design's section 3.1 in that
+`destroy()` is async, `requestThumb` returns a promise, and `releasePage(url)` / `closeDocument()`
+exist — a viewer must release a render when it replaces it. `use-history.ts` was not built. No caller
+of `usePdfThumbnails` calls `clear()` when a file is removed, so thumbnails live until the next file
+or leaving the tool. WebKit is 4–7% slower to the last thumbnail of a 48-page file. Remaining lost
+clicks (Firefox in the gate, WebKit in the live check: 8 in 40 same-tab reloads of Crop PDF) are the
+Crop button moving between pointer-down and pointer-up as the page settles (y 877 → 72); a second
+click works. The workspace's fixed action bar is the structural fix.
+
+Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
+T15 and W1 are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
   file can show "PDFWorker.create - the worker is being destroyed"; a second click works. 2 in 30 runs
