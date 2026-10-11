@@ -29,6 +29,41 @@ export const PDFJS_WORKER_SRC = '/pdfjs/pdf.worker.min.mjs';
 const assetBase = (p: string) =>
   typeof self === 'undefined' ? p : new URL(p, self.location.origin).href;
 
+/** Set once by `getPdfjs()`: the library and the blob-backed worker it runs on. */
+let pdfjs: typeof PdfjsModule | null = null;
+let workerPort: Worker | null = null;
+let sharedWorker: PdfjsModule.PDFWorker | null = null;
+
+/**
+ * The one `PDFWorker` every document on the page is opened with.
+ *
+ * Why it is handed to `getDocument()` explicitly rather than left to
+ * `GlobalWorkerOptions.workerPort`: a document that finds its worker through the
+ * global port OWNS it. `loadingTask.destroy()` then marks that worker
+ * `_pendingDestroy` until the worker thread has acknowledged the teardown, and
+ * any `getDocument()` in that window throws "PDFWorker.create - the worker is
+ * being destroyed. Please remember to await PDFDocumentLoadingTask.destroy()".
+ * Every preview here used to call `doc.destroy()` without awaiting it, so
+ * opening the next document straight afterwards failed now and then — Crop PDF's
+ * Flatten mode, which opens the file again the moment Crop is clicked, was the
+ * one users could hit.
+ *
+ * A document given `worker` does not own it: destroying the document releases
+ * the document and leaves the worker alone, so there is no window to race with,
+ * whether or not the caller awaits.
+ */
+function getSharedWorker(): PdfjsModule.PDFWorker | undefined {
+  if (!pdfjs || !workerPort) return undefined;
+  if (!sharedWorker || sharedWorker.destroyed) {
+    try {
+      sharedWorker = pdfjs.PDFWorker.create({ port: workerPort });
+    } catch {
+      return undefined;
+    }
+  }
+  return sharedWorker;
+}
+
 // Absolute, not root-relative: pdf.js fetches these from inside its worker, and
 // that worker may be blob:-backed (see createWorkerPort), where a leading-slash
 // path has no valid base to resolve against.
@@ -38,7 +73,17 @@ export const PDFJS_DOC_ASSETS = {
   cMapPacked: true,
   wasmUrl: assetBase('/pdfjs/wasm/'),
   iccUrl: assetBase('/pdfjs/iccs/'),
-} as const;
+  /**
+   * The shared worker (see `getSharedWorker`). A getter, so the object spread at
+   * every `getDocument({ ...PDFJS_DOC_ASSETS, data })` call picks it up once
+   * `getPdfjs()` has resolved. Undefined before that, in the worker pool's own
+   * copy of this module, and when the blob worker could not be created — pdf.js
+   * then falls back to a worker per document.
+   */
+  get worker(): PdfjsModule.PDFWorker | undefined {
+    return getSharedWorker();
+  },
+};
 
 let cached: Promise<typeof PdfjsModule> | null = null;
 
@@ -73,10 +118,14 @@ export function getPdfjs(): Promise<typeof PdfjsModule> {
     cached = import('pdfjs-dist').then(async (lib) => {
       lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
       try {
-        lib.GlobalWorkerOptions.workerPort = await createWorkerPort();
+        workerPort = await createWorkerPort();
+        // Still registered globally, so a call that forgets PDFJS_DOC_ASSETS
+        // renders on WebKit; it just does not get the teardown guarantee above.
+        lib.GlobalWorkerOptions.workerPort = workerPort;
       } catch {
         // Leave workerSrc in place and let pdf.js load the worker its own way.
       }
+      pdfjs = lib;
       return lib;
     });
   }
