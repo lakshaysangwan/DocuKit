@@ -51,6 +51,21 @@ below was finished, verified and shipped on the 11th.
 | `32dbf58` (T4) | Compress PDF no longer turns pages black or garbles images: only an allow-list of image shapes is re-encoded, everything else is left untouched; the original is returned when the result would not be smaller | Clean worktree: 327 Chromium, 300 Firefox/WebKit (16 new image-safety tests on each engine), 22 mobile, 67 unit. Live: synthetic masked-image PDF at High / Medium / Target in Chromium and High in WebKit, and Lakshay's own file at High and Target 200 KB — every page as light as the original |
 | `2e2ae36`, `491dcb4` (T14) | Protect PDF writes the permissions the visitor ticks; the open and permissions passwords are always different (a random one is generated and shown once); new "No password, restrictions only" mode; passwords starting with `@` or `--` work; the screen and copy say permissions are advisory | Clean worktree: 354 Chromium, 357 Firefox/WebKit (28 permission + 7 protect/unlock tests on each of three engines), 22 mobile, 94 unit. Live: seven cases on Chromium and two on WebKit, reading `/P`, pdf.js permissions and the password role from the downloaded files |
 | `99b4cec`…`36a1db1` (T11, 3 commits) | A search field on the homepage over all 20 tools and 15 task pages: jpg/jpeg and image/photo/picture match each other, arrow keys and Enter choose, `/` or Ctrl+K focuses, hidden without JavaScript; about 8.5 KB of script | Clean worktree: 376 Chromium, 400 Firefox/WebKit, 26 mobile, 116 unit. Live: nine checks on Chromium, three on WebKit and Firefox; all 35 result links return 200 |
+| `4610097`, `b25e3ce`, `f19ca59` (T16) | Crop PDF: eight visible drag handles, resize cursors only over handles and edges, corner drag, box move, touch scrolling on the preview, keyboard nudging, a live size readout; one false FAQ line corrected; the flaky Firefox home-search test fixed | Clean worktree: 381 Chromium, 410 Firefox/WebKit, 26 mobile, 9 visual, 116 unit. Live: handle drags and the CropBox of the downloaded file checked on three engines, plus an emulated-touch run |
+
+Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11 and T16
+are done. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
+context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
+- **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
+  file can show "PDFWorker.create - the worker is being destroyed"; a second click works. 2 in 30 runs
+  of `parity/closed-gaps.spec.ts:258`, with or without T16. Likely `CropPreview.tsx` calling
+  `doc.destroy()` without awaiting it while `src/lib/pdf-flatten-crop.ts` opens a document.
+- **Lost clicks in WebKit/Firefox tests:** the "waiting for event download" flakes are clicks landing
+  while the target sits under the sticky header after a smooth scroll (site-wide
+  `scroll-behavior: smooth`). About 4% per run on `tools/crop-pdf.spec.ts`. Worth a harness fix.
+- **Crop copy still false:** "inches" is listed but only mm and pt exist; an FAQ names a "Numeric
+  Input mode"; the how-to names a "Crop & Download" button. Box move is mouse-only.
+- **Homepage search:** add `searchKeywords` to registry entries for synonyms ("join", "esign").
 
 T11 notes: `ux/home-search.spec.ts:311` is flaky on Firefox (the test holds back the island script and
 then waits for `load`, which Firefox sometimes blocks on) — fix with `waitUntil: 'domcontentloaded'`.
