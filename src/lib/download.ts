@@ -12,7 +12,7 @@ export function triggerDownload(buffer: ArrayBuffer, filename: string, mimeType 
 }
 
 export async function createZipAndDownload(
-  files: { name: string; buffer: ArrayBuffer }[],
+  files: { name: string; buffer: ArrayBuffer | Blob }[],
   zipName = 'docukit-output.zip'
 ): Promise<void> {
   const { default: JSZip } = await import('jszip');

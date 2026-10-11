@@ -153,6 +153,59 @@ export async function expectDownload(
 }
 
 /**
+ * Click something that starts several downloads and capture all of them.
+ *
+ * Waits for `count` download events, then keeps listening for a further
+ * second so an unexpected extra download (a stray ZIP, a duplicate) fails the
+ * test instead of slipping past. Returned in arrival order.
+ */
+export async function expectDownloads(
+  page: Page,
+  trigger: () => Promise<void>,
+  count: number,
+  opts: { timeout?: number } = {}
+): Promise<{ bytes: Buffer; name: string }[]> {
+  const downloads: Download[] = [];
+  const onDownload = (d: Download) => { downloads.push(d); };
+  page.on('download', onDownload);
+  try {
+    await trigger();
+    await expect
+      .poll(() => downloads.length, { timeout: opts.timeout ?? 45_000, message: `expected ${count} downloads` })
+      .toBeGreaterThanOrEqual(count);
+    await page.waitForTimeout(1_000);
+    expect(downloads.map((d) => d.suggestedFilename()), 'exactly the expected number of downloads').toHaveLength(count);
+  } finally {
+    page.off('download', onDownload);
+  }
+  const out: { bytes: Buffer; name: string }[] = [];
+  for (const download of downloads) {
+    const bytes = await readFile(await download.path());
+    expect(bytes.length, `${download.suggestedFilename()} should be non-empty`).toBeGreaterThan(0);
+    out.push({ bytes, name: download.suggestedFilename() });
+  }
+  return out;
+}
+
+/** The entries of a ZIP archive, in stored order, with their bytes. */
+export async function readZipEntries(bytes: Buffer): Promise<{ name: string; bytes: Buffer }[]> {
+  const mod = (await import('jszip')) as any;
+  const JSZip = mod.default ?? mod;
+  const zip = await JSZip.loadAsync(bytes);
+  const out: { name: string; bytes: Buffer }[] = [];
+  for (const name of Object.keys(zip.files)) {
+    out.push({ name, bytes: Buffer.from(await zip.files[name].async('uint8array')) });
+  }
+  return out;
+}
+
+/** Pixel size of a PNG, read from its IHDR chunk. */
+export function pngSize(bytes: Buffer): { width: number; height: number } {
+  expect(bytes.subarray(12, 16).toString('latin1'), 'IHDR chunk').toBe('IHDR');
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+/**
  * Assert an <img> locator is not just in the DOM but actually decoded and
  * painted (real pixels). Used to prove that page/thumbnail previews are
  * *visibly* rendered, not blank placeholders.

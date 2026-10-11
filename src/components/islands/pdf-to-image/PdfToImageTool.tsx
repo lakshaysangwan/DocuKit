@@ -2,14 +2,14 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import DropZone from '@/components/islands/shared/DropZone';
 import FileInfoCard from '@/components/islands/shared/FileInfoCard';
-import DownloadButton from '@/components/islands/shared/DownloadButton';
+import MultiFileDownload, { type MultiFile } from '@/components/islands/shared/MultiFileDownload';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import NextStep from '@/components/islands/shared/NextStep';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
 import PageSelectorGrid from '@/components/islands/shared/PageSelectorGrid';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
-import { createZipAndDownload } from '@/lib/download';
+import { pageFileName, stripPdfExtension } from '@/lib/multi-download';
 import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
 import { parsePageRange, formatPageRange } from '@/lib/pdf-page-range';
 import { loadPdfDocument } from '@/lib/pdfjs';
@@ -35,7 +35,7 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
   const [pageMode, setPageMode] = useState<'all' | 'range'>('all');
   const [rangeInput, setRangeInput] = useState('');
   const [status, setStatus] = useState<Status>('idle');
-  const [results, setResults] = useState<Blob[]>([]);
+  const [results, setResults] = useState<MultiFile[]>([]);
   const [convertProgress, setConvertProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -112,7 +112,10 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
     try {
       const doc = await loadPdfDocument(buffer.slice(0));
       const scale = dpi / 72; // 72 is PDF base DPI
-      const blobs: Blob[] = [];
+      // Named here, from the settings that produced them — and by the page's
+      // number in the source document, so pages 1, 3, 5 are not renumbered 1, 2, 3.
+      const base = stripPdfExtension(file.name);
+      const images: MultiFile[] = [];
 
       for (let i = 0; i < pageIndices.length; i++) {
         setConvertProgress(Math.round(((i + 1) / pageIndices.length) * 100));
@@ -133,41 +136,26 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
         // Encode via jSquash so AVIF (and better JPEG/WebP) work in every browser.
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const encoded = await encodeImageData(data, format, quality);
-        blobs.push(new Blob([encoded], { type: formatMime(format) }));
+        const pageNumber = pageIndices[i] + 1;
+        images.push({
+          name: pageFileName(base, pageNumber, pageCount, format),
+          blob: new Blob([encoded], { type: formatMime(format) }),
+          label: `Page ${pageNumber}`,
+          width: canvas.width,
+          height: canvas.height,
+        });
         page.cleanup();
       }
 
       doc.destroy();
-      setResults(blobs);
+      setResults(images);
       setStatus('done');
-      toast.success(`Converted ${blobs.length} page${blobs.length !== 1 ? 's' : ''}`);
+      toast.success(`Converted ${images.length} page${images.length !== 1 ? 's' : ''}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Conversion failed';
       setStatus('error'); setErrorMsg(msg); toast.error(msg);
     }
   }, [buffer, file, pageCount, pageMode, rangeInput, format, dpi, quality]);
-
-  const handleDownload = useCallback(async () => {
-    if (results.length === 0 || !file) return;
-    const base = file.name.replace(/\.pdf$/i, '');
-    const ext = format;
-
-    if (results.length === 1) {
-      const url = URL.createObjectURL(results[0]);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${base}-page1.${ext}`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } else {
-      const files = await Promise.all(
-        results.map(async (blob, i) => ({
-          name: `${base}-page${i + 1}.${ext}`,
-          buffer: await blob.arrayBuffer(),
-        }))
-      );
-      await createZipAndDownload(files, `${base}-images.zip`);
-    }
-  }, [results, file, format]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -264,26 +252,23 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
         <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
       )}
 
-      {/* Actions */}
+      {/* Actions, then the result below them: the Convert button is the first
+          thing in this block and nothing is inserted above it, so it does not
+          move when the images arrive. */}
       {status !== 'processing' && file && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <MultiFileDownload
+          files={results}
+          zipName={`${stripPdfExtension(file.name)}-images.zip`}
+          noun={{ one: 'image', other: 'images' }}
+          listLabel="Converted images"
+          folderStartIn="pictures"
+          preview
+        >
           <button onClick={handleConvert} disabled={!pageCount} data-testid="tool-action"
             className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 disabled:opacity-50 sm:w-auto">
             Convert to {format.toUpperCase()}
           </button>
-          {status === 'done' && results.length > 0 && (
-            <DownloadButton onClick={handleDownload}
-              label={results.length === 1 ? 'Download Image' : `Download ZIP (${results.length} images)`} />
-          )}
-        </div>
-      )}
-
-      {status === 'done' && results.length > 0 && (
-        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
-          <p className="text-sm font-medium text-[var(--color-success)]">
-            {results.length} image{results.length !== 1 ? 's' : ''} ready!
-          </p>
-        </div>
+        </MultiFileDownload>
       )}
 
       {status === 'done' && results.length > 0 && (

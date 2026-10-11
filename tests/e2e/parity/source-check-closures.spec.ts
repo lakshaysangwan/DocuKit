@@ -5,6 +5,8 @@ import {
   addSingleFileAndWait,
   uploadFiles,
   expectDownload,
+  expectDownloads,
+  assertImage,
   assertPdf,
   extractPdfText,
   countPdfPagesStrict,
@@ -258,7 +260,12 @@ test.describe('Source-check closures — visual page selectors', () => {
 
     // The preview is a promise about the export, so check the export keeps it.
     await page.getByTestId('tool-action').click();
-    await expect(page.getByTestId('download-button')).toContainText('2 images', { timeout: 45_000 });
+    await expect(page.getByTestId('download-button')).toHaveText('Download all (2 images)', { timeout: 45_000 });
+    // …down to the files: exactly pages 1 and 3 are delivered, under their own
+    // page numbers, and page 2 is not among them.
+    const files = await expectDownloads(page, () => page.getByTestId('download-button').click(), 2);
+    expect(files.map((f) => f.name).sort()).toEqual(['doc-3page-page-1.png', 'doc-3page-page-3.png']);
+    for (const f of files) assertImage(f.bytes, 'png');
   });
 
   test('pdf-to-image exports nothing when every page is deselected', async ({ page }) => {

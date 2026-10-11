@@ -8,6 +8,16 @@ interface DownloadButtonProps {
   disabled?: boolean;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  /** Shown while onClick is pending. Defaults to "Preparing…". */
+  busyLabel?: string;
+  /**
+   * Shown briefly after onClick resolves. Defaults to "Downloaded!" — pass
+   * something weaker when the click only *starts* downloads the page cannot
+   * confirm (several separate files).
+   */
+  doneLabel?: string;
+  /** Accessible name for the idle state, e.g. including the file name. Must contain `label`. */
+  ariaLabel?: string;
 }
 
 const sizeClasses = {
@@ -29,6 +39,9 @@ export default function DownloadButton({
   disabled = false,
   className,
   size = 'md',
+  busyLabel = 'Preparing…',
+  doneLabel = 'Downloaded!',
+  ariaLabel,
 }: DownloadButtonProps) {
   const [state, setState] = useState<'idle' | 'downloading' | 'done'>('idle');
 
@@ -46,9 +59,9 @@ export default function DownloadButton({
 
   const displayLabel =
     state === 'downloading'
-      ? 'Preparing…'
+      ? busyLabel
       : state === 'done'
-        ? 'Downloaded!'
+        ? doneLabel
         : (label ?? (fileName ? `Download ${fileName}` : 'Download'));
 
   return (
@@ -67,7 +80,7 @@ export default function DownloadButton({
         (disabled || state === 'downloading') && 'cursor-not-allowed opacity-40',
         className
       )}
-      aria-label={displayLabel}
+      aria-label={state === 'idle' && ariaLabel ? ariaLabel : displayLabel}
     >
       {state === 'downloading' ? (
         <svg

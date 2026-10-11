@@ -4,6 +4,7 @@ import {
   PageDiagnostics,
   addSingleFileAndWait,
   expectDownload,
+  readZipEntries,
   assertZip,
   assertImage,
 } from '../helpers/harness';
@@ -22,16 +23,21 @@ test.describe('PDF to Image', () => {
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('all pages -> PNG produces a ZIP of images', async ({ page }) => {
+  test('all pages -> PNG can still be taken as one ZIP of images', async ({ page }) => {
     const diag = new PageDiagnostics(page);
     await page.goto('/pdf-to-image');
     await loadPdf(page, FIXTURE.pdf3page);
     await page.getByTestId('tool-action').click();
-    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    // The primary is now "Download all" (separate files — see
+    // pdf-to-image-downloads.spec.ts); the ZIP is the secondary beside it.
+    await expect(page.getByTestId('download-button')).toHaveText('Download all (3 images)', { timeout: 45_000 });
 
-    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-zip').click());
     assertZip(bytes);
     expect(name).toMatch(/-images\.zip$/);
+    const entries = await readZipEntries(bytes);
+    expect(entries).toHaveLength(3);
+    for (const entry of entries) assertImage(entry.bytes, 'png');
     // The pdf.js worker must be local — no cross-origin request may leak.
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
@@ -47,7 +53,7 @@ test.describe('PDF to Image', () => {
 
     const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertImage(bytes, 'png');
-    expect(name).toMatch(/-page1\.png$/);
+    expect(name).toMatch(/-page-1\.png$/);
   });
 
   test('AVIF format exports a valid AVIF image (jSquash encoder)', async ({ page }) => {
@@ -62,7 +68,7 @@ test.describe('PDF to Image', () => {
 
     const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertImage(bytes, 'avif');
-    expect(name).toMatch(/-page1\.avif$/);
+    expect(name).toMatch(/-page-1\.avif$/);
   });
 
   test('JPEG format exposes a quality slider and exports a JPEG', async ({ page }) => {
@@ -80,6 +86,6 @@ test.describe('PDF to Image', () => {
 
     const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertImage(bytes, 'jpeg');
-    expect(name).toMatch(/\.jpeg$/);
+    expect(name).toMatch(/-page-2\.jpeg$/);
   });
 });

@@ -110,10 +110,13 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   },
   'pdf-to-image': {
     'PNG, JPEG, WebP, AVIF output': P([T('pdf-to-image')], 'PNG, JPEG and AVIF tested; WebP is not'),
-    'Custom DPI up to 600': C(['parity/claims.spec.ts'], '600 DPI yields a markedly larger raster than 72 DPI'),
+    '72, 150, 300 or 600 DPI': P(['parity/claims.spec.ts'], 'the 600 DPI preset yields a markedly larger raster than 72 DPI; 150 and 300 are not measured. Copy corrected: there is no custom DPI field, only these four presets'),
     'Single page, all pages, or page range': C([T('pdf-to-image')]),
     'Page preview before download': C([SOURCED], 'built on the same discarded thumbnails as split; the grid shows which pages will be exported, clicking one removes it, and the export then contains exactly the pages still highlighted'),
-    'ZIP download for multi-page exports': C([T('pdf-to-image')]),
+    'A Download button on every converted image': C([T('pdf-to-image-downloads')], 'each card shows a decoded thumbnail of the output, its name, pixel size and file size, and its button downloads that page only — checked by rendering the downloaded PNG dimensions against the card'),
+    'Download all as separate files, or as one ZIP': C([T('pdf-to-image-downloads'), T('pdf-to-image')], 'three pages give three download events with valid PNG bytes on Chromium, Firefox and WebKit; the ZIP entries are read back; above 10 images the ZIP is the primary. The browser permission prompt for several downloads does not appear under automation, so that step is unproven'),
+    'Save to a folder or share sheet where the browser supports it': P([T('pdf-to-image-downloads')], 'both buttons are shown only when the API is present, and against a stubbed showDirectoryPicker / navigator.share the right files are written or shared, with cancel and write errors reported. The real folder picker and a real phone share sheet cannot be driven by automation'),
+    'Files named by source page number': CU(['src/lib/multi-download.test.ts'], 'pages 1, 3, 5 of a five-page PDF download as -page-1, -page-3, -page-5 (and under those names inside the ZIP); the unit test pins the zero-padding', [T('pdf-to-image-downloads')]),
   },
   'image-to-pdf': {
     'JPEG, PNG, WebP, BMP, TIFF, SVG, HEIC support': P([T('image-to-pdf')], 'JPEG and PNG tested; the rest are not'),
