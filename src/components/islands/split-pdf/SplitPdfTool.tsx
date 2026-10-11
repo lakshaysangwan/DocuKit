@@ -10,7 +10,8 @@ import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload, createZipAndDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
-import { parsePageRange, parseMultiRanges } from '@/lib/pdf-page-range';
+import PageSelectorGrid from '@/components/islands/shared/PageSelectorGrid';
+import { parsePageRange, parseMultiRanges, formatPageRange } from '@/lib/pdf-page-range';
 import type { WorkerResponse } from '@/types/worker-messages';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +38,7 @@ export default function SplitPdfTool({ initialMode = 'extract' }: { initialMode?
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { isRunning, progress, progressLabel, run, cancel } = useWorker();
-  const { pageCount, loadThumbnails } = usePdfThumbnails();
+  const { thumbnails, pageCount, isLoading: thumbsLoading, loadThumbnails } = usePdfThumbnails();
 
   const handleFiles = useCallback(async (newFiles: File[]) => {
     const f = newFiles[0];
@@ -51,7 +52,9 @@ export default function SplitPdfTool({ initialMode = 'extract' }: { initialMode?
     try {
       const buf = await fileToArrayBuffer(f);
       setBuffer(buf);
-      const count = await loadThumbnails(buf, 80);
+      // 200px on the long edge: the grid shows pages 96px tall, so this stays
+      // sharp on a 2x screen. (It was 80 when the images were never displayed.)
+      const count = await loadThumbnails(buf, 200);
       if (count === 0) { setFile(null); setBuffer(null); notifyPdfLoadError(); }
     } catch {
       setFile(null); setBuffer(null); notifyPdfLoadError();
@@ -61,6 +64,32 @@ export default function SplitPdfTool({ initialMode = 'extract' }: { initialMode?
   const handleRemoveFile = useCallback(() => {
     setFile(null); setBuffer(null); setStatus('idle'); setResults([]); setSingleResult(null); setErrorMsg(null);
   }, []);
+
+  // The grid and the text input are two views of the same selection: the set is
+  // always derived from the text, and toggling a thumbnail rewrites the text.
+  // Keeping the text authoritative means keywords like "odd" or "last" survive
+  // until the user actually clicks something.
+  const selectedPages = (() => {
+    if (!pageCount || !rangeInput.trim()) return new Set<number>();
+    try {
+      return new Set(
+        mode === 'ranges'
+          ? parseMultiRanges(rangeInput, pageCount).flat()
+          : parsePageRange(rangeInput, pageCount),
+      );
+    } catch {
+      return new Set<number>();
+    }
+  })();
+
+  const handleTogglePage = useCallback((pageIndex: number) => {
+    setRangeInput((prev) => {
+      const current = new Set(prev.trim() ? parsePageRange(prev, pageCount) : []);
+      if (current.has(pageIndex)) current.delete(pageIndex);
+      else current.add(pageIndex);
+      return formatPageRange([...current]);
+    });
+  }, [pageCount]);
 
   // Compute selected page count for display
   const selectedCount = (() => {
@@ -234,6 +263,21 @@ export default function SplitPdfTool({ initialMode = 'extract' }: { initialMode?
                 <code className="rounded bg-[var(--color-surface)] px-1">even</code>,{' '}
                 <code className="rounded bg-[var(--color-surface)] px-1">last</code>
               </p>
+
+              <div className="mt-4">
+                <PageSelectorGrid
+                  thumbnails={thumbnails}
+                  selected={selectedPages}
+                  isLoading={thumbsLoading}
+                  onToggle={mode === 'ranges' ? undefined : handleTogglePage}
+                  label={mode === 'ranges' ? 'Pages covered by your ranges' : 'Or pick pages here'}
+                  hint={
+                    mode === 'ranges'
+                      ? 'Ranges produce one PDF each, so edit them in the field above.'
+                      : 'Click a page to add or remove it.'
+                  }
+                />
+              </div>
             </div>
           )}
 

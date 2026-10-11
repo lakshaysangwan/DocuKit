@@ -6,11 +6,12 @@ import DownloadButton from '@/components/islands/shared/DownloadButton';
 import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import NextStep from '@/components/islands/shared/NextStep';
 import { usePdfThumbnails } from '@/hooks/use-pdf-thumbnails';
+import PageSelectorGrid from '@/components/islands/shared/PageSelectorGrid';
 import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { createZipAndDownload } from '@/lib/download';
 import { encodeImageData, formatMime, type ImageFormat } from '@/lib/image-codec';
-import { parsePageRange } from '@/lib/pdf-page-range';
+import { parsePageRange, formatPageRange } from '@/lib/pdf-page-range';
 import { loadPdfDocument } from '@/lib/pdfjs';
 import { cn } from '@/lib/utils';
 
@@ -38,7 +39,7 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
   const [convertProgress, setConvertProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const { pageCount, loadThumbnails } = usePdfThumbnails();
+  const { thumbnails, pageCount, isLoading: thumbsLoading, loadThumbnails } = usePdfThumbnails();
 
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;
@@ -48,7 +49,8 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
       setBuffer(buf);
       // loadThumbnails swallows parse/encryption failures and returns 0 — surface
       // that as an actionable error instead of leaving the tool silently empty.
-      const count = await loadThumbnails(buf, 120);
+      // 200px on the long edge keeps the 96px-tall preview sharp on a 2x screen.
+      const count = await loadThumbnails(buf, 200);
       if (count === 0) { setFile(null); setBuffer(null); notifyPdfLoadError(); }
     } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, [loadThumbnails]);
@@ -57,13 +59,48 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
     setFile(null); setBuffer(null); setStatus('idle'); setResults([]); setErrorMsg(null);
   }, []);
 
+  // Which pages the current settings would export — drives the preview grid so
+  // the selection is visible before anything is converted or downloaded.
+  const selectedPages = (() => {
+    if (!pageCount) return new Set<number>();
+    if (pageMode === 'all') {
+      return new Set(Array.from({ length: pageCount }, (_, i) => i));
+    }
+    if (!rangeInput.trim()) return new Set<number>();
+    try {
+      return new Set(parsePageRange(rangeInput, pageCount));
+    } catch {
+      return new Set<number>();
+    }
+  })();
+
+  const handleTogglePage = useCallback((pageIndex: number) => {
+    // Clicking a page implies a custom selection, so switch out of "all pages"
+    // and seed the range from what is currently highlighted.
+    setPageMode('range');
+    setRangeInput((prev) => {
+      const base = pageMode === 'all'
+        ? Array.from({ length: pageCount }, (_, i) => i)
+        : (prev.trim() ? parsePageRange(prev, pageCount) : []);
+      const current = new Set(base);
+      if (current.has(pageIndex)) current.delete(pageIndex);
+      else current.add(pageIndex);
+      return formatPageRange([...current]);
+    });
+  }, [pageMode, pageCount]);
+
   const handleConvert = useCallback(async () => {
     if (!buffer || !file || !pageCount) { toast.error('Upload a PDF first'); return; }
 
+    // An empty custom selection exports nothing, matching what the preview grid
+    // shows — it used to fall through to "all pages" while the grid said zero.
     let pageIndices: number[];
-    if (pageMode === 'range' && rangeInput.trim()) {
+    if (pageMode === 'range') {
       pageIndices = parsePageRange(rangeInput, pageCount);
-      if (pageIndices.length === 0) { toast.error('No valid pages in range'); return; }
+      if (pageIndices.length === 0) {
+        toast.error(rangeInput.trim() ? 'No valid pages in range' : 'Select at least one page to convert');
+        return;
+      }
     } else {
       pageIndices = Array.from({ length: pageCount }, (_, i) => i);
     }
@@ -204,6 +241,17 @@ export default function PdfToImageTool({ initialFormat = 'png' }: { initialForma
               )}
             </div>
           )}
+
+          <PageSelectorGrid
+            thumbnails={thumbnails}
+            selected={selectedPages}
+            isLoading={thumbsLoading}
+            onToggle={handleTogglePage}
+            label="Page preview"
+            hint={pageCount
+              ? `${selectedPages.size} of ${pageCount} page${pageCount !== 1 ? 's' : ''} will be exported — click a page to include or exclude it.`
+              : undefined}
+          />
         </div>
       )}
 
