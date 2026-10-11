@@ -304,6 +304,34 @@ test.describe('Homepage search — the page does not move', () => {
   });
 });
 
+test.describe('Homepage search — before it has loaded', () => {
+  // page.route() holds the island's script back; a service worker's own fetches would slip past it.
+  test.use({ serviceWorkers: 'block' });
+
+  test('text typed into the field early is searched as soon as the search loads', async ({ page }) => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await page.route('**/_astro/ToolSearch.*.js', async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    await page.goto('/');
+    const search = page.getByTestId('tool-search');
+    const input = page.getByRole('combobox', { name: 'Search tools' });
+    await input.click();
+    await input.pressSequentially('merge');
+    // Nothing is listening yet: the text is in the field and that is all.
+    await expect(search).toHaveAttribute('data-hydrated', 'false');
+    await expect(page.getByRole('option')).toHaveCount(0);
+
+    release();
+    await expect(search).toHaveAttribute('data-hydrated', 'true');
+    await expect(input).toHaveValue('merge');
+    await expect(page.getByRole('option').first()).toHaveAttribute('href', '/merge-pdf/');
+  });
+});
+
 test.describe('Homepage search — accessibility', () => {
   const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
@@ -345,7 +373,7 @@ test.describe('Homepage search — accessibility', () => {
 test.describe('Homepage without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
 
-  test('still shows the full tool grid, and no search field that cannot work', async ({ page }) => {
+  test('still shows the full tool grid', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
@@ -364,11 +392,18 @@ test.describe('Homepage without JavaScript', () => {
       await expect(card.getByRole('heading', { level: 3 })).toHaveText(tool.name);
       await expect(card).toContainText(tool.shortDescription);
     }
+  });
 
-    // The field needs JavaScript, so it is removed rather than left inert — and
-    // with it gone the section starts with the grid's own heading, as it always has.
+  // Kept apart from the grid check above: this one rests on the browser applying
+  // `@media (scripting: none)`, so if an engine ever disagrees, the failure says
+  // "the field was left showing", not "the grid is gone".
+  test('removes the search field, which could not work, and the space it took', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
     await expect(page.getByRole('combobox')).toHaveCount(0);
     await expect(page.getByTestId('tool-search')).toBeHidden();
+    // With it gone the section starts with the grid's own heading, as it always has.
     const sectionTop = await documentTop(page, '#tools');
     expect(await documentTop(page, '#tools-heading') - sectionTop).toBeLessThan(8);
   });

@@ -53,8 +53,9 @@ export default function ToolSearch({ index }: ToolSearchProps) {
 
   useEffect(() => {
     setHydrated(true);
-    // Anything typed before this island hydrated is still in the field — React
-    // leaves it there, but the state behind it starts empty.
+    // Anything typed before this island hydrated is still in the field at this
+    // point. Adopt it — otherwise React resets the field to the empty state it
+    // started with and the visitor's text disappears under their fingers.
     const typed = inputRef.current?.value ?? '';
     if (typed !== '') {
       setQuery(typed);
