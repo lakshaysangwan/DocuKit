@@ -11,6 +11,7 @@ import { chromium } from '@playwright/test';
 import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { makeMaskedImagesPdf, makeOnlyMaskedPdf } from './masked-images';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 export const FIXTURES_DIR = path.join(DIR, 'files');
@@ -49,6 +50,12 @@ export const FIXTURE = {
   // Carries an XMP metadata packet and an embedded attachment, so redact's
   // "full metadata strip" can be proven to remove more than the Info dictionary.
   pdfXmp: path.join(FIXTURES_DIR, 'doc-xmp.pdf'),
+  // Images a lossy recompression pass must not damage: a full-page transparent
+  // overlay (the document that came out of Compress PDF black) and one image of
+  // every other awkward kind. See masked-images.ts.
+  pdfMaskedImages: path.join(FIXTURES_DIR, 'doc-masked-images.pdf'),
+  // The overlay alone: every image is masked or is a mask.
+  pdfOnlyMasked: path.join(FIXTURES_DIR, 'doc-only-masked.pdf'),
 } as const;
 
 async function makePdf(pages: number, landscape = false): Promise<Uint8Array> {
@@ -142,6 +149,11 @@ export async function generateFixtures(): Promise<void> {
   await writeFile(FIXTURE.pdfBookmarks, await makeBookmarkedPdf('Alpha'));
   await writeFile(FIXTURE.pdfBookmarks2, await makeBookmarkedPdf('Beta'));
   await writeFile(FIXTURE.pdfXmp, await makeXmpPdf());
+  await writeFile(
+    FIXTURE.pdfMaskedImages,
+    await makeMaskedImagesPdf({ logo: Buffer.from(encoded.jpg, 'base64'), logoMasked: Buffer.from(encoded.jpg2, 'base64') })
+  );
+  await writeFile(FIXTURE.pdfOnlyMasked, await makeOnlyMaskedPdf());
 
   // ── P7 corpus ──────────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfCmyk, await makeCmykPdf());

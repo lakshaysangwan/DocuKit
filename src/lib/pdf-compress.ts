@@ -9,6 +9,7 @@
 import { createCanvas2D } from './canvas-2d';
 import { encodeImageData } from './image-codec';
 import type { CompressPdfOptions } from '../types/worker-messages';
+import type { PDFContext, PDFDict, PDFObject, PDFRawStream, PDFRef } from 'pdf-lib';
 
 export type ProgressFn = (pct: number, label?: string) => void;
 
@@ -31,10 +32,14 @@ export async function compressPdf(
   options: CompressPdfOptions,
   sendProgress: ProgressFn
 ): Promise<CompressResult> {
-  if (options.targetBytes && options.targetBytes > 0) {
-    return compressPdfToTarget(buffer, options.targetBytes, sendProgress);
-  }
-  return compressPdfOnce(buffer, options, sendProgress);
+  const result = options.targetBytes && options.targetBytes > 0
+    ? await compressPdfToTarget(buffer, options.targetBytes, sendProgress)
+    : await compressPdfOnce(buffer, options, sendProgress);
+  // Re-saving a small, already-tight PDF can add a few bytes. Hand back the
+  // original rather than a "compressed" file that is no smaller than the input.
+  return result.buffer.byteLength < buffer.byteLength
+    ? result
+    : { ...result, buffer: buffer.slice(0), imagesRecompressed: 0 };
 }
 
 /**
@@ -87,17 +92,13 @@ async function compressPdfToTarget(
       sendProgress(Math.min(99, Math.round(base + pct / maxPasses)), `Pass ${pass}: ${label ?? 'compressing…'}`));
   };
   const fits = (r: CompressResult) => r.buffer.byteLength <= targetBytes;
-  // Re-saving a small, already-tight PDF can add a few bytes. Hand back the
-  // original rather than a "compressed" file that is bigger than the input.
-  const neverLarger = (r: CompressResult): CompressResult =>
-    r.buffer.byteLength < buffer.byteLength ? r : { ...r, buffer: buffer.slice(0), imagesRecompressed: 0 };
 
   const gentlest = await attempt(0);
-  if (fits(gentlest) || buffer.byteLength <= targetBytes) return neverLarger(gentlest);
+  if (fits(gentlest) || buffer.byteLength <= targetBytes) return gentlest;
 
   const harshest = await attempt(last);
   if (!fits(harshest)) {
-    return neverLarger(harshest.buffer.byteLength <= gentlest.buffer.byteLength ? harshest : gentlest);
+    return harshest.buffer.byteLength <= gentlest.buffer.byteLength ? harshest : gentlest;
   }
 
   // Invariant: step `hi` fits (and `best` is its result); steps below `lo` do not.
@@ -117,7 +118,8 @@ async function compressPdfOnce(
   options: CompressPdfOptions,
   sendProgress: ProgressFn
 ): Promise<CompressResult> {
-  const { PDFDocument, PDFName, PDFRawStream, PDFDict } = await import('pdf-lib');
+  const pdfLib = await import('pdf-lib');
+  const { PDFDocument, PDFName, PDFRawStream } = pdfLib;
 
   sendProgress(5, 'Loading PDF…');
   const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
@@ -152,130 +154,76 @@ async function compressPdfOnce(
     });
   }
 
-  // Re-encode embedded JPEG images at lower quality onto a 2D canvas.
+  // Re-encode embedded images as JPEG — only those on the allow-list in
+  // `planImagePass`; every other image is left exactly as it is.
   if (options.level !== 'low') {
     sendProgress(15, 'Compressing images…');
     const context = doc.context;
+    const planned = planImagePass(pdfLib, context);
+    // Downscale factor: explicit (target-size mode), or derived from the requested DPI.
+    const scale = options.imageScale ?? (options.dpi && options.dpi < 150 ? options.dpi / 150 : 1);
 
-    // Collect image refs: we use untyped access since pdf-lib internals aren't fully typed
-    const allObjects = context.enumerateIndirectObjects();
-    type PdfObj = { dict?: { get(k: unknown): unknown }; contents?: Uint8Array };
-    const imageEntries: Array<{ ref: unknown; obj: PdfObj }> = [];
-
-    for (const [ref, rawObj] of allObjects) {
-      const obj = rawObj as PdfObj;
-      if (!obj.dict || typeof obj.dict.get !== 'function') continue;
-      const subtype = obj.dict.get(PDFName.of('Subtype'));
-      if (subtype && subtype.toString() === '/Image') {
-        imageEntries.push({ ref, obj });
-      }
-    }
-
-    imagesTotal = imageEntries.length;
-    for (let i = 0; i < imageEntries.length; i++) {
-      const { ref, obj } = imageEntries[i];
+    imagesTotal = planned.length;
+    for (let i = 0; i < planned.length; i++) {
+      const { ref, stream, plan } = planned[i];
       sendProgress(
-        15 + Math.round(((i + 1) / imageEntries.length) * 60),
-        `Compressing image ${i + 1}/${imageEntries.length}…`
+        15 + Math.round(((i + 1) / planned.length) * 60),
+        `Compressing image ${i + 1}/${planned.length}…`
       );
+      if (!plan.reencode) continue;
 
+      let bmp: ImageBitmap | undefined;
       try {
-        const dict = obj.dict!;
-        const filter = dict.get(PDFName.of('Filter'));
-        if (!filter) continue;
-        const filterName = filter.toString();
+        const { width, height, channels } = plan;
+        const rawBytes = stream.contents;
+        if (rawBytes.byteLength < 1024) continue;
 
-        const rawBytes = obj.contents;
-        if (!rawBytes || rawBytes.byteLength < 1024) continue;
-
-        const widthObj = dict.get(PDFName.of('Width'));
-        const heightObj = dict.get(PDFName.of('Height'));
-        if (!widthObj || !heightObj) continue;
-
-        const width = Number(widthObj.toString());
-        const height = Number(heightObj.toString());
-        if (width <= 0 || height <= 0 || width > 10000 || height > 10000) continue;
-
-        // Handle both DCTDecode (JPEG) and FlateDecode (raw pixel) images
-        let bmp: ImageBitmap | null = null;
-
-        if (filterName === '/DCTDecode') {
-          if (jpegQuality >= 0.9) continue;
+        if (plan.source === 'jpeg') {
+          // Re-encoding a JPEG at high quality and the same size only costs a
+          // generation of quality; it is worth doing when it is also downsampled.
+          if (jpegQuality >= 0.9 && scale >= 1) continue;
+          // The stream has to be the image its dictionary describes: a baseline
+          // or progressive 8-bit JPEG of that size with that many components.
+          // A CMYK JPEG labelled RGB, say, is not something to guess at.
+          const frame = readJpegFrame(rawBytes);
+          if (!frame || frame.width !== width || frame.height !== height || frame.components !== channels) continue;
           const blob = new Blob([rawBytes as BlobPart], { type: 'image/jpeg' });
-          bmp = await createImageBitmap(blob);
-        } else if (filterName === '/FlateDecode') {
-          // Decompress with DecompressionStream, then reconstruct raw pixels
-          try {
-            const ds = new DecompressionStream('deflate');
-            const writer = ds.writable.getWriter();
-            writer.write(new Uint8Array(rawBytes) as Uint8Array<ArrayBuffer>);
-            writer.close();
-            const reader = ds.readable.getReader();
-            const chunks: Uint8Array[] = [];
-            let done = false;
-            while (!done) {
-              const r = await reader.read();
-              done = r.done;
-              if (r.value) chunks.push(r.value);
-            }
-            const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-            const pixelData = new Uint8Array(totalLen);
-            let offset = 0;
-            for (const c of chunks) { pixelData.set(c, offset); offset += c.length; }
-
-            const bpc = dict.get(PDFName.of('BitsPerComponent'));
-            const bitsPerComp = bpc ? Number(bpc.toString()) : 8;
-            if (bitsPerComp !== 8) continue;
-
-            const colorSpace = dict.get(PDFName.of('ColorSpace'));
-            const csName = colorSpace ? colorSpace.toString() : '/DeviceRGB';
-            const channels = csName.includes('Gray') ? 1 : csName.includes('CMYK') ? 4 : 3;
-
-            if (pixelData.length < width * height * channels) continue;
-
-            const { canvas, ctx } = createCanvas2D(width, height);
-
-            const imageData = ctx.createImageData(width, height);
-            const data = imageData.data;
-            for (let px = 0; px < width * height; px++) {
-              if (channels === 3) {
-                data[px * 4] = pixelData[px * 3];
-                data[px * 4 + 1] = pixelData[px * 3 + 1];
-                data[px * 4 + 2] = pixelData[px * 3 + 2];
-              } else if (channels === 1) {
-                data[px * 4] = data[px * 4 + 1] = data[px * 4 + 2] = pixelData[px];
-              } else if (channels === 4) {
-                const c = pixelData[px * 4] / 255, m = pixelData[px * 4 + 1] / 255;
-                const y = pixelData[px * 4 + 2] / 255, k = pixelData[px * 4 + 3] / 255;
-                data[px * 4] = 255 * (1 - c) * (1 - k);
-                data[px * 4 + 1] = 255 * (1 - m) * (1 - k);
-                data[px * 4 + 2] = 255 * (1 - y) * (1 - k);
-              }
-              data[px * 4 + 3] = 255;
-            }
-            ctx.putImageData(imageData, 0, 0);
-            bmp = await createImageBitmap(canvas);
-          } catch { continue; }
+          // 'none': the PDF's colour space says what the samples mean, so a
+          // profile embedded in the JPEG itself must not be applied on top.
+          bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none' });
         } else {
-          continue; // Skip JBIG2, JPXDecode, etc.
+          const pixelData = await inflate(rawBytes);
+          // Exactly one byte per sample, or this is not the layout we think it is.
+          if (pixelData.length !== width * height * channels) continue;
+
+          const { canvas, ctx } = createCanvas2D(width, height);
+          const imageData = ctx.createImageData(width, height);
+          const data = imageData.data;
+          for (let px = 0; px < width * height; px++) {
+            if (channels === 3) {
+              data[px * 4] = pixelData[px * 3];
+              data[px * 4 + 1] = pixelData[px * 3 + 1];
+              data[px * 4 + 2] = pixelData[px * 3 + 2];
+            } else {
+              data[px * 4] = data[px * 4 + 1] = data[px * 4 + 2] = pixelData[px];
+            }
+            data[px * 4 + 3] = 255;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          bmp = await createImageBitmap(canvas);
         }
 
-        if (!bmp) continue;
-
-        // Optionally downscale: an explicit factor (target-size mode), or one
-        // derived from the requested DPI.
         let targetW = width;
         let targetH = height;
-        const scale = options.imageScale ?? (options.dpi && options.dpi < 150 ? options.dpi / 150 : 1);
         if (scale < 1) {
           targetW = Math.max(1, Math.round(width * scale));
           targetH = Math.max(1, Math.round(height * scale));
         }
 
-        const { canvas, ctx } = createCanvas2D(targetW, targetH);
+        const { ctx } = createCanvas2D(targetW, targetH);
 
         ctx.drawImage(bmp, 0, 0, targetW, targetH);
-        
+
         if (options.grayscale) {
           const imgData = ctx.getImageData(0, 0, targetW, targetH);
           const d = imgData.data;
@@ -298,20 +246,18 @@ async function compressPdfOnce(
         // Only replace if actually smaller
         if (outBuf.byteLength >= rawBytes.byteLength) continue;
 
-        const newDict = PDFDict.withContext(context);
-        newDict.set(PDFName.of('Type'), PDFName.of('XObject'));
-        newDict.set(PDFName.of('Subtype'), PDFName.of('Image'));
-        newDict.set(PDFName.of('Width'), context.obj(targetW));
-        newDict.set(PDFName.of('Height'), context.obj(targetH));
-        newDict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
-        newDict.set(PDFName.of('BitsPerComponent'), context.obj(8));
-        newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
-        newDict.set(PDFName.of('Length'), context.obj(outBuf.byteLength));
-        const replacementStream = PDFRawStream.of(newDict, outBuf);
-        context.assign(ref as any, replacementStream);
+        const newDict = replacementImageDict(pdfLib, context, stream.dict, {
+          width: targetW,
+          height: targetH,
+          sourceChannels: channels,
+          length: outBuf.byteLength,
+        });
+        context.assign(ref, PDFRawStream.of(newDict, outBuf));
         imagesRecompressed++;
       } catch {
         continue;
+      } finally {
+        bmp?.close();
       }
     }
   }
@@ -345,4 +291,222 @@ async function compressPdfOnce(
   }
 
   return { buffer: savedBytes.buffer as ArrayBuffer, imagesTotal, imagesRecompressed };
+}
+
+// ─── Which images may be re-encoded ──────────────────────────────────────────
+
+type PdfLib = typeof import('pdf-lib');
+
+/**
+ * What the lossy pass may do with one image XObject.
+ *
+ * Re-encoding means: decode the samples, optionally resample, write a JPEG. That
+ * is only harmless when the samples are plain 8-bit grey or RGB values that mean
+ * the same thing after the round trip. Anything else — transparency, an inverted
+ * /Decode, palette indices, ink amounts, CMYK, predictor-filtered rows — comes
+ * out visibly wrong, not merely softer. So this is an allow-list: an image is
+ * re-encoded only when every one of these holds, and is otherwise left exactly
+ * as it is, bytes and dictionary both.
+ *
+ *  - it is not used as another image's /SMask or /Mask, and is not a stencil
+ *    (/ImageMask true) — a mask is alpha, not a picture;
+ *  - it has no /SMask and no /Mask of its own (a JPEG has no alpha channel, and
+ *    resampling or JPEG ringing would drag the colour hidden under transparent
+ *    pixels into the visible ones);
+ *  - /Filter is exactly /DCTDecode or /FlateDecode, with no /DecodeParms
+ *    (so no PNG/TIFF predictor, and nothing chained);
+ *  - /BitsPerComponent is 8;
+ *  - /ColorSpace is /DeviceGray, /DeviceRGB, [/CalRGB …] or a three-component
+ *    [/ICCBased …] with the default range;
+ *  - /Decode is absent or the identity mapping.
+ */
+export type ImagePlan =
+  | { reencode: false; reason: string }
+  | { reencode: true; source: 'jpeg' | 'flate'; width: number; height: number; channels: 1 | 3 };
+
+export interface PlannedImage {
+  ref: PDFRef;
+  stream: PDFRawStream;
+  plan: ImagePlan;
+}
+
+const MAX_IMAGE_SIDE = 10000;
+
+/** Every image XObject in the document, with the decision for each. */
+export function planImagePass(lib: PdfLib, context: PDFContext): PlannedImage[] {
+  const { PDFName, PDFRawStream } = lib;
+  const images: Array<{ ref: PDFRef; stream: PDFRawStream }> = [];
+  for (const [ref, obj] of context.enumerateIndirectObjects()) {
+    if (obj instanceof PDFRawStream && obj.dict.lookup(PDFName.of('Subtype')) === PDFName.of('Image')) {
+      images.push({ ref, stream: obj });
+    }
+  }
+
+  // Masks are found before anything is decided: a mask stream is an image
+  // XObject too, and looks exactly like a small grey photo unless you know what
+  // points at it.
+  const masks = new Set<PDFObject>();
+  for (const { stream } of images) {
+    for (const key of ['SMask', 'Mask']) {
+      const target = stream.dict.lookup(PDFName.of(key));
+      if (target instanceof PDFRawStream) masks.add(target);
+    }
+  }
+
+  return images.map(({ ref, stream }) => ({
+    ref,
+    stream,
+    plan: masks.has(stream)
+      ? { reencode: false, reason: 'is the mask of another image' }
+      : planImage(lib, stream.dict),
+  }));
+}
+
+function planImage(lib: PdfLib, dict: PDFDict): ImagePlan {
+  const { PDFName, PDFNumber, PDFBool, PDFArray } = lib;
+  const get = (key: string) => dict.lookup(PDFName.of(key));
+  const skip = (reason: string): ImagePlan => ({ reencode: false, reason });
+  const int = (key: string) => {
+    const value = get(key);
+    return value instanceof PDFNumber && Number.isInteger(value.asNumber()) ? value.asNumber() : undefined;
+  };
+
+  if (get('ImageMask') === PDFBool.True) return skip('is a stencil mask');
+  if (get('SMask') !== undefined) return skip('has a soft mask');
+  if (get('Mask') !== undefined) return skip('has a stencil or colour-key mask');
+
+  const filter = get('Filter');
+  const source = filter === PDFName.of('DCTDecode') ? 'jpeg' : filter === PDFName.of('FlateDecode') ? 'flate' : undefined;
+  if (!source) return skip('filter is not a single DCTDecode or FlateDecode');
+  if (get('DecodeParms') !== undefined || get('DP') !== undefined) return skip('has decode parameters');
+
+  const width = int('Width');
+  const height = int('Height');
+  if (!width || !height || width < 1 || height < 1 || width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE) {
+    return skip('has no usable size');
+  }
+  if (int('BitsPerComponent') !== 8) return skip('is not 8 bits per component');
+
+  const channels = passThroughChannels(lib, get('ColorSpace'));
+  if (!channels) return skip('colour space is not plain grey or RGB');
+
+  const decode = get('Decode');
+  if (decode !== undefined) {
+    const identity =
+      decode instanceof PDFArray &&
+      decode.size() === channels * 2 &&
+      decode.asArray().every((_, i) => {
+        const value = decode.lookup(i);
+        return value instanceof PDFNumber && value.asNumber() === i % 2;
+      });
+    if (!identity) return skip('has a non-identity /Decode');
+  }
+
+  return { reencode: true, source, width, height, channels };
+}
+
+/**
+ * Component count of a colour space whose 8-bit samples can go through a JPEG
+ * round trip unchanged in meaning, or undefined for every other space.
+ */
+function passThroughChannels(lib: PdfLib, space: PDFObject | undefined): 1 | 3 | undefined {
+  const { PDFName, PDFArray, PDFDict, PDFStream, PDFNumber } = lib;
+  if (space === PDFName.of('DeviceRGB')) return 3;
+  if (space === PDFName.of('DeviceGray')) return 1;
+  if (space instanceof PDFArray && space.size() === 2) {
+    const family = space.lookup(0);
+    const params = space.lookup(1);
+    if (family === PDFName.of('CalRGB') && params instanceof PDFDict) return 3;
+    if (family === PDFName.of('ICCBased') && params instanceof PDFStream) {
+      const n = params.dict.lookup(PDFName.of('N'));
+      const defaultRange = params.dict.lookup(PDFName.of('Range')) === undefined;
+      if (n instanceof PDFNumber && n.asNumber() === 3 && defaultRange) return 3;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The dictionary for a re-encoded image: the original with only what the
+ * re-encode changed. Starting from the original rather than from nothing keeps
+ * everything else that affects how the image is shown — /Interpolate, /Intent,
+ * /OC (layer visibility), and the colour space itself, so an ICC-tagged image
+ * stays ICC-tagged.
+ */
+export function replacementImageDict(
+  lib: PdfLib,
+  context: PDFContext,
+  original: PDFDict,
+  out: { width: number; height: number; sourceChannels: 1 | 3; length: number },
+): PDFDict {
+  const { PDFName } = lib;
+  const dict = original.clone(context);
+  // The identity /Decode is sized for the old component count, and decode
+  // parameters belong to the old filter.
+  for (const key of ['Decode', 'DecodeParms', 'DP', 'DL']) dict.delete(PDFName.of(key));
+  dict.set(PDFName.of('Type'), PDFName.of('XObject'));
+  dict.set(PDFName.of('Subtype'), PDFName.of('Image'));
+  dict.set(PDFName.of('Width'), context.obj(out.width));
+  dict.set(PDFName.of('Height'), context.obj(out.height));
+  dict.set(PDFName.of('BitsPerComponent'), context.obj(8));
+  dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+  dict.set(PDFName.of('Length'), context.obj(out.length));
+  // The JPEG we write always has three components. Grey samples become equal
+  // R, G and B, which is the same colour in DeviceRGB; three-component sources
+  // keep the space they came in.
+  if (out.sourceChannels === 1) dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+  return dict;
+}
+
+/**
+ * Size and component count from a JPEG's frame header, or null when it is not a
+ * baseline/progressive 8-bit JPEG (lossless, arithmetic-coded and 12-bit files
+ * are not something a browser will decode).
+ */
+export function readJpegFrame(bytes: Uint8Array): { width: number; height: number; components: number } | null {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 3 < bytes.length) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1];
+    if (marker === 0xff) { i++; continue; } // fill byte
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) { i += 2; continue; } // no payload
+    if (marker === 0xd9 || marker === 0xda) return null; // image data before any frame header
+    const length = (bytes[i + 2] << 8) | bytes[i + 3];
+    if (length < 2) return null;
+    if (marker >= 0xc0 && marker <= 0xc2) {
+      if (i + 9 >= bytes.length || bytes[i + 4] !== 8) return null;
+      return {
+        height: (bytes[i + 5] << 8) | bytes[i + 6],
+        width: (bytes[i + 7] << 8) | bytes[i + 8],
+        components: bytes[i + 9],
+      };
+    }
+    // Any other start-of-frame: lossless, hierarchical or arithmetic coding.
+    if (marker >= 0xc3 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return null;
+    i += 2 + length;
+  }
+  return null;
+}
+
+/** Undo FlateDecode (zlib). */
+async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
+  const ds = new DecompressionStream('deflate');
+  const writer = ds.writable.getWriter();
+  // Not awaited: the readable side has to be drained for these to settle. A
+  // corrupt stream rejects both; the read below is where that is reported.
+  writer.write(new Uint8Array(bytes) as Uint8Array<ArrayBuffer>).catch(() => {});
+  writer.close().catch(() => {});
+  const reader = ds.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (value) { chunks.push(value); total += value.length; }
+    if (done) break;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { out.set(chunk, offset); offset += chunk.length; }
+  return out;
 }
