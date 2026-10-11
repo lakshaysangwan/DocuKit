@@ -50,6 +50,14 @@ below was finished, verified and shipped on the 11th.
 | `f6805f6`…`5ac8727` (T0, 7 commits) | The source-check batch: page thumbnails in Split PDF and PDF to Image; Watermark "Specific pages" and a front/behind layer; a font selector in Add Page Numbers; Image to PDF margins in mm / in / pt; Sign PDF "Place on all pages"; false claims trimmed from the registry | Clean worktree of `5ac8727`: 310 Chromium, 268 Firefox/WebKit, 22 mobile, 9 visual. Live: all six tools run end to end on docukit.uk in Chromium, Split and Sign also in WebKit; Watermark "behind" pixel-checked |
 | `32dbf58` (T4) | Compress PDF no longer turns pages black or garbles images: only an allow-list of image shapes is re-encoded, everything else is left untouched; the original is returned when the result would not be smaller | Clean worktree: 327 Chromium, 300 Firefox/WebKit (16 new image-safety tests on each engine), 22 mobile, 67 unit. Live: synthetic masked-image PDF at High / Medium / Target in Chromium and High in WebKit, and Lakshay's own file at High and Target 200 KB — every page as light as the original |
 | `2e2ae36`, `491dcb4` (T14) | Protect PDF writes the permissions the visitor ticks; the open and permissions passwords are always different (a random one is generated and shown once); new "No password, restrictions only" mode; passwords starting with `@` or `--` work; the screen and copy say permissions are advisory | Clean worktree: 354 Chromium, 357 Firefox/WebKit (28 permission + 7 protect/unlock tests on each of three engines), 22 mobile, 94 unit. Live: seven cases on Chromium and two on WebKit, reading `/P`, pdf.js permissions and the password role from the downloaded files |
+| `99b4cec`…`36a1db1` (T11, 3 commits) | A search field on the homepage over all 20 tools and 15 task pages: jpg/jpeg and image/photo/picture match each other, arrow keys and Enter choose, `/` or Ctrl+K focuses, hidden without JavaScript; about 8.5 KB of script | Clean worktree: 376 Chromium, 400 Firefox/WebKit, 26 mobile, 116 unit. Live: nine checks on Chromium, three on WebKit and Firefox; all 35 result links return 200 |
+
+T11 notes: `ux/home-search.spec.ts:311` is flaky on Firefox (the test holds back the island script and
+then waits for `load`, which Firefox sometimes blocks on) — fix with `waitUntil: 'domcontentloaded'`.
+Result links that stay on screen are prefetched by the site-wide Astro prefetch setting (same-origin
+page GETs, the typed text is never sent); the spec's "typing fetches nothing" comment is true only for
+fast typing. No typo tolerance and no synonyms ("join", "esign"): a `searchKeywords` field on the
+registry entries would add them.
 
 ### The Protect PDF permissions bug (T14), for the record
 
