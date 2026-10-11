@@ -26,3 +26,21 @@ export async function renderPdfPageToDataUrl(
     doc.destroy();
   }
 }
+
+/**
+ * Page count without rendering anything.
+ *
+ * Tools that only need the total (to size a range input, validate a selection)
+ * used to reach for `usePdfThumbnails`, which rasterises and JPEG-encodes every
+ * page on the main thread before handing back `numPages`. pdf.js gives the count
+ * away as soon as the catalog is parsed, so ask it for that and nothing else.
+ */
+export async function getPdfPageCount(buffer: ArrayBuffer): Promise<number> {
+  const pdfjsLib = await getPdfjs();
+  const doc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: buffer.slice(0) }).promise;
+  try {
+    return doc.numPages;
+  } finally {
+    doc.destroy();
+  }
+}

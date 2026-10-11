@@ -11,11 +11,13 @@ import { fileToArrayBuffer } from '@/lib/file-utils';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { triggerDownload } from '@/lib/download';
 import { formatBytes } from '@/lib/utils';
+import { parsePageRange } from '@/lib/pdf-page-range';
+import { getPdfPageCount } from '@/lib/pdf-preview';
 import { cn } from '@/lib/utils';
 import type { WorkerResponse, WatermarkOptions } from '@/types/worker-messages';
 
 type WatermarkType = 'text' | 'image';
-type ApplyTo = 'all' | 'odd' | 'even';
+type ApplyTo = 'all' | 'odd' | 'even' | 'range';
 type Status = 'idle' | 'processing' | 'done' | 'error';
 
 export default function WatermarkPdfTool() {
@@ -29,6 +31,9 @@ export default function WatermarkPdfTool() {
   const [rotation, setRotation] = useState(-45);
   const [placement, setPlacement] = useState<'center' | 'tiled'>('center');
   const [applyTo, setApplyTo] = useState<ApplyTo>('all');
+  const [pageRangeText, setPageRangeText] = useState('');
+  const [pageCount, setPageCount] = useState(0);
+  const [layer, setLayer] = useState<'front' | 'behind'>('front');
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<ArrayBuffer | null>(null);
@@ -38,12 +43,18 @@ export default function WatermarkPdfTool() {
 
   const handleFiles = useCallback(async (files: File[]) => {
     const f = files[0]; if (!f) return;
-    setFile(f); setStatus('idle'); setResult(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
+    // Drop the previous file's count so a range is never checked against it.
+    setFile(f); setStatus('idle'); setResult(null); setPageCount(0);
+    try {
+      const buf = await fileToArrayBuffer(f);
+      setBuffer(buf);
+      setPageCount(await getPdfPageCount(buf));
+    } catch { setFile(null); setBuffer(null); notifyPdfLoadError(); }
   }, []);
 
   const handleRemoveFile = useCallback(() => {
     setFile(null); setBuffer(null); setStatus('idle'); setResult(null); setErrorMsg(null);
+    setPageCount(0); setPageRangeText(''); setApplyTo('all');
   }, []);
 
   const handleImageFiles = useCallback((files: File[]) => {
@@ -58,13 +69,30 @@ export default function WatermarkPdfTool() {
     if (watermarkType === 'text' && !text.trim()) { toast.error('Enter watermark text'); return; }
     if (watermarkType === 'image' && !imageDataUrl) { toast.error('Upload a watermark image'); return; }
 
+    // 'range' is the only mode that can select nothing; the worker would then
+    // return the document untouched, which looks like a silent failure.
+    //
+    // The count is read on demand rather than from state because it lands a beat
+    // after the file does: clicking Apply in that window would otherwise parse
+    // the range against a total of 0, select nothing, and blame the user for it.
+    let pageRange: number[] | undefined;
+    if (applyTo === 'range') {
+      const total = pageCount || (await getPdfPageCount(buffer).catch(() => 0));
+      pageRange = parsePageRange(pageRangeText, total);
+      if (pageRange.length === 0) {
+        toast.error('Enter which pages to watermark, e.g. "1-3, 5"');
+        return;
+      }
+    }
+
     setStatus('processing');
     const opts: WatermarkOptions = {
       type: watermarkType,
       text: watermarkType === 'text' ? text : undefined,
       imageDataUrl: watermarkType === 'image' ? imageDataUrl ?? undefined : undefined,
       fontSize, color, opacity, rotation, placement, applyTo,
-      layer: 'front',
+      pageRange,
+      layer,
     };
     const { port1, port2 } = new MessageChannel();
     const bufCopy = buffer.slice(0);
@@ -75,7 +103,7 @@ export default function WatermarkPdfTool() {
     if (!response) { setStatus('idle'); return; }
     if (response.status === 'error') { setStatus('error'); setErrorMsg(response.message); toast.error(response.message); return; }
     if (response.status === 'success') { setResult(response.result); setStatus('done'); toast.success('Watermark added — ready to download'); }
-  }, [buffer, file, watermarkType, text, imageDataUrl, fontSize, color, opacity, rotation, placement, applyTo, run]);
+  }, [buffer, file, watermarkType, text, imageDataUrl, fontSize, color, opacity, rotation, placement, applyTo, pageRangeText, pageCount, layer, run]);
 
   const handleDownload = useCallback(async () => {
     if (!result || !file) return;
@@ -161,19 +189,58 @@ export default function WatermarkPdfTool() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">Apply to</label>
-                <div className="flex gap-2">
-                  {(['all', 'odd', 'even'] as ApplyTo[]).map((a) => (
+                <label id="wm-apply-label" className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">Apply to</label>
+                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="wm-apply-label">
+                  {(['all', 'odd', 'even', 'range'] as ApplyTo[]).map((a) => (
                     <button key={a} onClick={() => setApplyTo(a)}
+                      data-testid={`wm-apply-${a}`}
+                      aria-pressed={applyTo === a}
                       className={cn('rounded-lg border px-3 py-1.5 text-xs capitalize transition-colors',
                         applyTo === a ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
                       )}>
-                      {a === 'all' ? 'All pages' : `${a} pages`}
+                      {a === 'all' ? 'All pages' : a === 'range' ? 'Specific pages' : `${a} pages`}
                     </button>
                   ))}
                 </div>
               </div>
+              <div>
+                <label id="wm-layer-label" className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">Layer</label>
+                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="wm-layer-label">
+                  {([['front', 'On top'], ['behind', 'Behind content']] as const).map(([v, label]) => (
+                    <button key={v} onClick={() => setLayer(v)}
+                      data-testid={`wm-layer-${v}`}
+                      aria-pressed={layer === v}
+                      className={cn('rounded-lg border px-3 py-1.5 text-xs transition-colors',
+                        layer === v ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
+                      )}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {layer === 'behind' && (
+                  <p className="mt-1.5 max-w-[14rem] text-[11px] leading-snug text-[var(--color-text-muted)]">
+                    Hidden on pages with an opaque background, such as scans.
+                  </p>
+                )}
+              </div>
             </div>
+
+            {applyTo === 'range' && (
+              <div className="mt-4">
+                <label htmlFor="wm-page-range" className="mb-1 block text-xs text-[var(--color-text-secondary)]">
+                  Pages{pageCount > 0 ? ` (1-${pageCount})` : ''}
+                </label>
+                <input
+                  id="wm-page-range"
+                  data-testid="wm-page-range"
+                  type="text"
+                  value={pageRangeText}
+                  onChange={(e) => setPageRangeText(e.target.value)}
+                  placeholder="e.g. 1-3, 5, last"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] sm:w-64"
+                />
+              </div>
+            )}
           </div>
 
           <WatermarkPreview

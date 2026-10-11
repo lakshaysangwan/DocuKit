@@ -409,11 +409,32 @@ async function watermark(
   options: WatermarkOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, StandardFonts, degrees, rgb } = await import('pdf-lib');
+  const { PDFDocument, StandardFonts, degrees, rgb, PDFArray, PDFName } = await import('pdf-lib');
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
   const pages = doc.getPages();
+
+  /**
+   * Move the watermark underneath the page's existing content.
+   *
+   * pdf-lib has no z-order API: every draw call appends to the page's content
+   * stream, so a watermark always lands on top. But `addContentStream` first
+   * normalises /Contents into an array and pushes our stream last, so moving
+   * that last entry to the front paints it before everything else — which is
+   * exactly "behind". pdf-lib wraps each draw in q/Q, so the graphics state the
+   * original content inherits is unchanged.
+   *
+   * Call this once per page, after that page's draw calls — and only if something
+   * was drawn, or the "last entry" is part of the original content instead.
+   */
+  const moveLastContentStreamToBack = (page: (typeof pages)[number]) => {
+    const contents = page.node.get(PDFName.of('Contents'));
+    if (!(contents instanceof PDFArray) || contents.size() < 2) return;
+    const last = contents.get(contents.size() - 1);
+    contents.remove(contents.size() - 1);
+    contents.insert(0, last);
+  };
 
   const targetPages = pages.filter((_, i) => {
     if (options.applyTo === 'all') return true;
@@ -443,8 +464,10 @@ async function watermark(
     const { width, height } = page.getSize();
     const rot = options.rotation ?? -45;
     const [r, g, b] = parseColor(options.color ?? '#000000');
+    let drew = false;
 
     if (options.type === 'text' && options.text) {
+      drew = true;
       const fontSize = options.fontSize ?? 60;
       const textWidth = font.widthOfTextAtSize(options.text, fontSize);
       const textHeight = font.heightAtSize(fontSize);
@@ -477,6 +500,7 @@ async function watermark(
         }
       }
     } else if (options.type === 'image' && embeddedImage) {
+      drew = true;
       const imgW = options.placement === 'tiled' ? 150 : Math.min(width * 0.5, 300);
       const scale = imgW / embeddedImage.width;
       const imgH = embeddedImage.height * scale;
@@ -499,6 +523,8 @@ async function watermark(
         }
       }
     }
+
+    if (drew && options.layer === 'behind') moveLastContentStreamToBack(page);
   }
 
   sendProgress(95, 'Saving…');
