@@ -71,9 +71,26 @@ or leaving the tool. WebKit is 4–7% slower to the last thumbnail of a 48-page 
 clicks (Firefox in the gate, WebKit in the live check: 8 in 40 same-tab reloads of Crop PDF) are the
 Crop button moving between pointer-down and pointer-up as the page settles (y 877 → 72); a second
 click works. The workspace's fixed action bar is the structural fix.
+| `d4b561d`…`9e57f41` (W2, 8 commits) | The shared tool workspace (`src/components/islands/workspace/`: frame, single action slot, page viewer, rail, movable boxes, `use-history`) and Sign PDF rebuilt in it: drop the PDF first, create the signature beside the page, drag / corner-resize / remove / duplicate / copy to all pages, undo and redo, mm fields, initials and date, the signed file shown after signing with Before/After and "Make changes"; stamps land exactly where shown on rotated and offset pages; Sign copy rewritten | Clean worktree: 435 Chromium, 513 Firefox/WebKit, 30 mobile, 9 visual (no baseline changed), 527 unit. Live: full flow on three engines; shown vs in-file position within 0.0001 of the page on plain, `/Rotate 90` and offset-CropBox fixtures; phone emulation; Merge, Split and Compress unchanged |
+
+W2 notes: the component contract as shipped, and how a tool adopts the workspace, is in the W2 task
+report — the short version: keep the `File`, `usePdfDocument(file)`, `useToolRun()`, return
+`<ToolWorkspace toolId active empty title prompt fileBar stage rail controls result action />` with
+`PageViewer` / `PageRail` / `ActionBar`, call `run.invalidate()` on every input change, add the tool to
+`tests/e2e/workspace/migrated.ts`. Differences from the design's section 3.2: `title` is a prop; no
+floating overlay toolbar (selection actions are a docked bar in the viewer footer); `PageViewer` has
+no `zoom` / `compareDoc` props; `WorkspaceFileBar` takes one `file`; not built yet: `PageGrid` /
+`PageCard`, `PagePreviewDialog`, `CompareView`, `OutputPagePreview`, `ImageStage`. Left out of Sign: a
+pages popover at 1024–1279px, zoom buttons on phones, dropping a new PDF onto an open workspace, stamp
+rotation and opacity. Found: the four signature font files (`public/fonts/*.woff2`) contain no Latin
+letters, so typed signatures were always drawn in a fallback font — script-font fallbacks added, real
+fix is new font files; pages that leave two graphics states open made appended content land half-size
+and shifted — fixed for Sign (`src/lib/pdf/content-balance.ts`), still present in Watermark and Page
+Numbers. `tools/sign-pdf.spec.ts:102` is flaky on WebKit (mouse moves fired faster than
+`signature_pad`'s 16 ms throttle) — pace the moves ≥20 ms.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15 and W1 are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1 and W2 are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
