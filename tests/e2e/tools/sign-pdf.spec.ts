@@ -8,6 +8,7 @@ import {
   stampViewRect,
   addTypedSignature,
   addUploadedSignature,
+  drawStroke,
 } from '../helpers/sign';
 
 /**
@@ -110,12 +111,12 @@ test.describe('Sign PDF', () => {
     const x0 = box.x + box.width * 0.2;
     const y0 = box.y + box.height * 0.5;
     await expect(async () => {
-      await page.mouse.move(x0, y0);
-      await page.mouse.down();
-      await page.mouse.move(x0 + 50, y0 - 10, { steps: 6 });
-      await page.mouse.move(x0 + 110, y0 + 10, { steps: 6 });
-      await page.mouse.move(x0 + 160, y0 - 5, { steps: 6 });
-      await page.mouse.up();
+      await drawStroke(page, [
+        [x0, y0],
+        [x0 + 50, y0 - 10],
+        [x0 + 110, y0 + 10],
+        [x0 + 160, y0 - 5],
+      ]);
       await expect(page.getByTestId('use-signature')).toBeEnabled({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
 

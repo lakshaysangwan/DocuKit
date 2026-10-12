@@ -32,6 +32,32 @@ export async function addTypedSignature(page: Page, name = 'Ada Lovelace') {
   await expect(page.getByTestId('overlay-item').first()).toBeVisible();
 }
 
+/**
+ * Draw one stroke through `points` (viewport coordinates) the way a hand does:
+ * a mouse move at a time, 20 ms apart.
+ *
+ * The signature pad takes at most one move every 16 ms and drops the ones in
+ * between. Playwright's `mouse.move(…, { steps })` fires its moves with no gap,
+ * so on a fast engine most of a stroke could be thrown away and the "ink" came
+ * out a fraction of the width that was drawn — which is how a test of the
+ * drawn signature's shape failed now and then on WebKit.
+ */
+export async function drawStroke(page: Page, points: [number, number][], stepsPerSegment = 6) {
+  const PACE_MS = 20;
+  let [x, y] = points[0];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (const [toX, toY] of points.slice(1)) {
+    for (let step = 1; step <= stepsPerSegment; step++) {
+      await page.waitForTimeout(PACE_MS);
+      await page.mouse.move(x + ((toX - x) * step) / stepsPerSegment, y + ((toY - y) * step) / stepsPerSegment);
+    }
+    [x, y] = [toX, toY];
+  }
+  await page.waitForTimeout(PACE_MS);
+  await page.mouse.up();
+}
+
 /** Upload a picture as the signature; it goes onto the current page at once. */
 export async function addUploadedSignature(page: Page, image: string) {
   await page.getByTestId('signature-mode-upload').click();
