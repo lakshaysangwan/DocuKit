@@ -383,7 +383,7 @@ export function OverlayBox({
           >
             <span
               aria-hidden="true"
-              className="block size-3.5 rounded-[3px] border-2 border-white bg-[var(--color-primary)] shadow-[0_0_0_1px_rgba(0,0,0,0.6)] transition-transform group-hover:scale-125"
+              className="block size-3.5 rounded-[3px] border-2 border-white bg-[var(--color-primary)] shadow-[0_0_0_1px_rgba(0,0,0,0.6)] transition-transform group-hover:scale-125 motion-reduce:transition-none"
             />
           </button>
         ))}
