@@ -9,6 +9,8 @@ interface DropZoneProps {
   multiple?: boolean;
   onFiles: (files: File[]) => void;
   hint?: string;
+  /** What to drop, in place of "Drop your file(s) here": "Drop the PDF you want to sign". */
+  prompt?: string;
   className?: string;
   children?: React.ReactNode;
   /** Render a slim "add more" bar instead of the full drop target.
@@ -30,6 +32,7 @@ export default function DropZone({
   multiple = true,
   onFiles,
   hint,
+  prompt,
   className,
   children,
   compact = false,
@@ -115,7 +118,7 @@ export default function DropZone({
           </div>
           <div>
             <p className="text-sm text-[var(--color-text-primary)]">
-              Drop your file{multiple ? 's' : ''} here, or{' '}
+              {prompt ?? `Drop your file${multiple ? 's' : ''} here`}, or{' '}
               <span className="font-medium text-[var(--color-primary)]">browse</span>
             </p>
             {hint && (

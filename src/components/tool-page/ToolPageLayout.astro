@@ -86,8 +86,11 @@ const howToSchema = JSON.stringify({
       category={tool.category}
     />
 
-    <!-- React Island — the interactive tool component -->
-    <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <!-- React Island — the interactive tool component. `tool-shell` does nothing
+         until a tool's workspace is active (data-ws="active"), when global.css
+         widens this column for it; before upload, and for every tool without a
+         workspace, the column is the same 72rem it has always been. -->
+    <div class="tool-shell mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <slot />
     </div>
 

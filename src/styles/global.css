@@ -280,3 +280,148 @@ details[open] > .faq-answer {
 .faq-answer-inner {
   overflow: hidden;
 }
+
+/* ── Tool workspace ───────────────────────────────────────────────────────────
+   Once a file is accepted, a migrated tool swaps its narrow column for a frame
+   the height of the viewport: the document on the left, the controls on the
+   right, one action slot. Everything here is opt-in — it applies only inside an
+   element carrying data-ws="active", which only <ToolWorkspace> sets — so a tool
+   that has not been migrated, and every tool before a file is added, is laid out
+   exactly as before. See docs/design/tool-workspace.md, section 2. */
+
+/* Widen the page column for the frame. `:has()` needs no JavaScript outside the
+   island; the html[data-ws] form is the same switch for engines without it
+   (<ToolWorkspace> sets both). */
+.tool-shell:has([data-ws="active"]),
+html[data-ws="active"] .tool-shell {
+  max-width: min(1760px, 100%);
+}
+
+.ws-frame {
+  /* The sticky site header is 61px and html has scroll-padding-top: 4.5rem, so a
+     frame scrolled to the top starts 72px down; 8px of air is left underneath. */
+  --ws-height: calc(100dvh - 5rem);
+  --ws-action-height: 5rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: max(var(--ws-height), 30rem);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  /* clip, not hidden: `hidden` would make the frame a scroll container and stop
+     the action bar sticking to the viewport on small screens. */
+  overflow: clip;
+  scroll-margin-top: 4.5rem;
+}
+
+.ws-bar,
+.ws-prompt {
+  flex: none;
+}
+
+/* The document pane. Below 1024px the frame is as tall as it needs to be and the
+   document keeps at least 40% of the viewport (55% on tablets) whatever is open
+   underneath it. Its content is positioned absolutely, so the page being shown
+   never changes the size of the pane. */
+.ws-stage {
+  position: relative;
+  flex: 1 0 40dvh;
+  min-width: 0;
+  background: var(--color-background);
+  border-block: 1px solid var(--color-border);
+}
+
+.ws-rail {
+  display: none;
+}
+
+/* Controls. On a phone they are the "Options" panel: closed until asked for, and
+   never more than 60% of the viewport, so the document stays on screen. */
+.ws-options {
+  display: none;
+  flex: none;
+  max-height: 60dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Opening the panel scrolls it into view above the pinned action bar. */
+  scroll-margin-bottom: calc(var(--ws-action-height) + 0.5rem);
+}
+.ws-frame[data-options="open"] .ws-options {
+  display: block;
+}
+
+/* One slot, one height, always on screen. */
+.ws-action {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex: none;
+  height: var(--ws-action-height);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+@media (min-width: 768px) {
+  .ws-stage {
+    flex-basis: 55dvh;
+  }
+  /* Tablet: stacked, with the controls always open underneath. */
+  .ws-options,
+  .ws-frame[data-options] .ws-options {
+    display: block;
+    max-height: 45dvh;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ws-frame {
+    --ws-action-height: 7rem;
+    display: grid;
+    height: max(var(--ws-height), 34rem);
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-rows: auto auto minmax(0, 1fr) var(--ws-action-height);
+    grid-template-areas:
+      "bar    bar"
+      "prompt options"
+      "stage  options"
+      "stage  action";
+  }
+  .ws-bar { grid-area: bar; }
+  .ws-prompt { grid-area: prompt; }
+  .ws-stage {
+    grid-area: stage;
+    border-bottom: 0;
+  }
+  .ws-options,
+  .ws-frame[data-options] .ws-options {
+    grid-area: options;
+    max-height: none;
+    border-left: 1px solid var(--color-border);
+  }
+  .ws-action {
+    grid-area: action;
+    position: static;
+    border-left: 1px solid var(--color-border);
+  }
+}
+
+@media (min-width: 1280px) {
+  .ws-frame {
+    grid-template-columns: 104px minmax(0, 1fr) 380px;
+    grid-template-areas:
+      "bar  bar    bar"
+      "rail prompt options"
+      "rail stage  options"
+      "rail stage  action";
+  }
+  .ws-rail {
+    display: block;
+    grid-area: rail;
+    min-height: 0;
+    border-right: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-background);
+  }
+}
