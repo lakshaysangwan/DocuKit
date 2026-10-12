@@ -156,7 +156,10 @@ export default function ActionBar({
 
         {phase === 'done' && (
           <>
-            <p data-testid="result-summary" className="min-w-0 flex-1 truncate font-medium text-[var(--color-success)]">
+            <p
+              data-testid="result-summary"
+              className="min-w-0 flex-1 truncate font-medium text-[var(--color-success)] lg:line-clamp-2 lg:whitespace-normal lg:text-xs"
+            >
               {summary ?? 'Ready to download'}
             </p>
             {onEditAgain && (
@@ -188,7 +191,7 @@ export default function ActionBar({
             aria-expanded={workspace.optionsOpen}
             aria-controls={workspace.optionsId}
             data-testid="options-toggle"
-            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] md:hidden"
+            className="inline-flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] md:hidden"
           >
             <SlidersHorizontal className="size-4" aria-hidden="true" />
             Options
@@ -206,7 +209,7 @@ export default function ActionBar({
               onClick={download.onDownload}
               label={download.label}
               ariaLabel={download.ariaLabel}
-              className="h-11 w-full min-w-0 py-0"
+              className="h-11 w-full min-w-0 whitespace-nowrap px-3 py-0"
             />
           ) : (
             <button

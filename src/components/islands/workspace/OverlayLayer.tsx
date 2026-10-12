@@ -32,7 +32,8 @@ import { cn } from '@/lib/utils';
  * rectangle goes straight to `viewRectToPdfDraw` when the file is written.
  *
  * Conventions (shared with the Crop preview, which the owner approved):
- * handles are 14px squares with a 28px hit area (44px for a finger); the resize
+ * handles are 14px squares with a 28px hit area (44px for a finger), placed
+ * just outside the corners so they never cover what is in the box; the resize
  * cursors appear only over handles and `move` only over the box; pointer events
  * with capture, so a drag survives leaving the element; `touch-action: none` on
  * the box and its handles only, so a finger anywhere else still scrolls.
@@ -124,21 +125,16 @@ export interface OverlayBoxProps {
 }
 
 /**
- * Where each handle's hit area sits. The visible square is centred on the
- * corner, but the hit area grows OUTWARDS from it rather than around it: a
- * signature is often only a few pixels tall on a phone, and four hit areas
- * centred on its corners would cover the whole box and leave nothing to drag
- * it by.
+ * Where each handle sits: OUTSIDE its corner, touching it, with the hit area
+ * growing outwards from there. A signature is often only a few pixels tall on a
+ * small screen; handles centred on its corners would cover the signature, and
+ * their hit areas would cover the whole box and leave nothing to drag it by.
  */
 const HANDLE_POSITION: Record<Corner, string> = {
-  'top-left':
-    'left-0 top-0 -translate-x-[calc(100%-7px)] -translate-y-[calc(100%-7px)] items-end justify-end cursor-nwse-resize',
-  'top-right':
-    'left-full top-0 translate-x-[-7px] -translate-y-[calc(100%-7px)] items-end justify-start cursor-nesw-resize',
-  'bottom-right':
-    'left-full top-full translate-x-[-7px] translate-y-[-7px] items-start justify-start cursor-nwse-resize',
-  'bottom-left':
-    'left-0 top-full -translate-x-[calc(100%-7px)] translate-y-[-7px] items-start justify-end cursor-nesw-resize',
+  'top-left': 'left-0 top-0 -translate-x-full -translate-y-full items-end justify-end cursor-nwse-resize',
+  'top-right': 'left-full top-0 -translate-y-full items-end justify-start cursor-nesw-resize',
+  'bottom-right': 'left-full top-full items-start justify-start cursor-nwse-resize',
+  'bottom-left': 'left-0 top-full -translate-x-full items-start justify-end cursor-nesw-resize',
 };
 
 const HANDLE_LABEL: Record<Corner, string> = {
@@ -347,7 +343,8 @@ export function OverlayBox({
           data-testid="overlay-hint"
           aria-hidden="true"
           className={cn(
-            'pointer-events-none absolute left-0 z-10 whitespace-nowrap rounded bg-[var(--color-text-primary)] px-1.5 py-0.5 text-[11px] font-medium leading-4 text-[var(--color-background)]',
+            // Fixed colours: it sits on the page, which is white in both themes.
+            'pointer-events-none absolute left-0 z-10 whitespace-nowrap rounded bg-neutral-900 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-white',
             hintBelow ? 'top-full mt-3' : 'bottom-full mb-3',
           )}
         >

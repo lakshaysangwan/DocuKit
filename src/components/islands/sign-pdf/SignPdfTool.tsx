@@ -790,8 +790,16 @@ export default function SignPdfTool() {
   const heading = 'text-sm font-semibold text-[var(--color-text-primary)]';
 
   const controls = (
-    <div className="flex flex-col gap-5 p-3 sm:p-4" inert={!editing}>
-      <section className="flex flex-col gap-3" aria-labelledby="sign-your-signature">
+    // Stacked tablet layout: the sections sit side by side, so the controls stay
+    // short and the page above them stays large.
+    <div
+      className="flex flex-col gap-5 p-3 sm:p-4 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start md:max-lg:gap-x-6"
+      inert={!editing}
+    >
+      <section
+        className={cn('flex flex-col gap-3', (creatorOpen || !state.signature) && 'md:max-lg:col-span-2')}
+        aria-labelledby="sign-your-signature"
+      >
         <h3 id="sign-your-signature" className={heading}>
           Your signature
         </h3>

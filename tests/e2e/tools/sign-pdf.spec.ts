@@ -119,20 +119,25 @@ test.describe('Sign PDF', () => {
       await expect(page.getByTestId('use-signature')).toBeEnabled({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
 
+    const padBitmap = await pad.evaluate((c: HTMLCanvasElement) => ({ width: c.width, height: c.height }));
     await page.getByTestId('use-signature').click();
     await expect(page.getByTestId('overlay-item')).toHaveCount(1);
 
-    // The image is the squiggle, not the whole pad (which is about 2:1), and
-    // the box on the page has the squiggle's shape.
-    const aspect = await page
+    // The image is the squiggle, not the whole pad: well under the pad's bitmap
+    // in both directions, and much wider than tall where the pad is about 2:1.
+    const image = await page
       .getByTestId('stamp-image')
-      .evaluate((img: HTMLImageElement) => img.naturalWidth / img.naturalHeight);
-    const padAspect = box.width / box.height;
-    expect(padAspect).toBeLessThan(3);
-    expect(aspect).toBeGreaterThan(4.5);
-    expect(aspect).toBeLessThan(10);
-    const shown = await page.getByTestId('overlay-item').boundingBox();
-    expect(shown!.width / shown!.height).toBeCloseTo(aspect, 0);
+      .evaluate((img: HTMLImageElement) => ({ width: img.naturalWidth, height: img.naturalHeight }));
+    expect(image.width).toBeGreaterThan(padBitmap.width * 0.3);
+    expect(image.width).toBeLessThan(padBitmap.width * 0.75);
+    expect(image.height).toBeLessThan(padBitmap.height * 0.4);
+    const aspect = image.width / image.height;
+    expect(box.width / box.height).toBeLessThan(3);
+    expect(aspect).toBeGreaterThan(4);
+
+    // The box on the page has the squiggle's shape — nothing is stretched.
+    const shown = (await page.getByTestId('overlay-item').boundingBox())!;
+    expect(Math.abs(shown.width / shown.height / aspect - 1)).toBeLessThan(0.08);
 
     const bytes = await signAndDownload(page);
     expect((await readDrawnImages(bytes, 0)).length).toBe(1);
