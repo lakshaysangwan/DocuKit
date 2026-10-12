@@ -312,7 +312,6 @@ html[data-ws="active"] .tool-shell {
   /* clip, not hidden: `hidden` would make the frame a scroll container and stop
      the action bar sticking to the viewport on small screens. */
   overflow: clip;
-  scroll-margin-top: 4.5rem;
 }
 
 .ws-bar,
@@ -320,10 +319,10 @@ html[data-ws="active"] .tool-shell {
   flex: none;
 }
 
-/* The document pane. Below 1024px the frame is as tall as it needs to be and the
-   document keeps at least 40% of the viewport (55% on tablets) whatever is open
-   underneath it. Its content is positioned absolutely, so the page being shown
-   never changes the size of the pane. */
+/* The document pane. On a phone the frame is as tall as it needs to be and the
+   document keeps at least 40% of the viewport whatever is open underneath it.
+   Its content is positioned absolutely, so the page being shown never changes
+   the size of the pane. */
 .ws-stage {
   position: relative;
   flex: 1 0 40dvh;
@@ -363,14 +362,27 @@ html[data-ws="active"] .tool-shell {
 }
 
 @media (min-width: 768px) {
-  .ws-stage {
-    flex-basis: 55dvh;
+  /* Tablet: stacked, everything on screen at once. The frame is the height of
+     the viewport; the controls are always open underneath the document, take
+     what they need up to 45% of the viewport and scroll inside themselves; the
+     document has the rest, and never less than 40%. */
+  .ws-frame {
+    height: max(var(--ws-height), 34rem);
+    min-height: 0;
   }
-  /* Tablet: stacked, with the controls always open underneath. */
+  .ws-stage {
+    flex: 1 1 0;
+    min-height: 40dvh;
+  }
   .ws-options,
   .ws-frame[data-options] .ws-options {
     display: block;
+    flex: 0 1 auto;
+    min-height: 0;
     max-height: 45dvh;
+  }
+  .ws-action {
+    position: static;
   }
 }
 
@@ -378,8 +390,6 @@ html[data-ws="active"] .tool-shell {
   .ws-frame {
     --ws-action-height: 7rem;
     display: grid;
-    height: max(var(--ws-height), 34rem);
-    min-height: 0;
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-rows: auto auto minmax(0, 1fr) var(--ws-action-height);
     grid-template-areas:
@@ -392,6 +402,7 @@ html[data-ws="active"] .tool-shell {
   .ws-prompt { grid-area: prompt; }
   .ws-stage {
     grid-area: stage;
+    min-height: 0;
     border-bottom: 0;
   }
   .ws-options,
@@ -402,7 +413,6 @@ html[data-ws="active"] .tool-shell {
   }
   .ws-action {
     grid-area: action;
-    position: static;
     border-left: 1px solid var(--color-border);
   }
 }

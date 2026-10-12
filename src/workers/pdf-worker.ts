@@ -312,6 +312,10 @@ async function signVisual(
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
 
+  // One embedded image per distinct picture: a signature copied to every page
+  // of a 200-page file is stored once and drawn 200 times, not stored 200 times.
+  const embedded = new Map<string, Awaited<ReturnType<typeof doc.embedPng>>>();
+
   const total = options.annotations.length;
   for (let i = 0; i < total; i++) {
     const ann = options.annotations[i];
@@ -321,16 +325,20 @@ async function signVisual(
     sendProgress(10 + Math.round(((i + 1) / total) * 80), `Applying annotation ${i + 1}/${total}…`);
 
     if (ann.imageDataUrl && (ann.type === 'signature' || ann.type === 'initials')) {
-      // Convert base64 data URL to bytes
-      const base64 = ann.imageDataUrl.split(',')[1];
-      const binaryStr = atob(base64);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let j = 0; j < binaryStr.length; j++) bytes[j] = binaryStr.charCodeAt(j);
+      let image = embedded.get(ann.imageDataUrl);
+      if (!image) {
+        // Convert base64 data URL to bytes
+        const base64 = ann.imageDataUrl.split(',')[1];
+        const binaryStr = atob(base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let j = 0; j < binaryStr.length; j++) bytes[j] = binaryStr.charCodeAt(j);
 
-      const isPng = ann.imageDataUrl.startsWith('data:image/png');
-      const image = isPng
-        ? await doc.embedPng(bytes)
-        : await doc.embedJpg(bytes);
+        const isPng = ann.imageDataUrl.startsWith('data:image/png');
+        image = isPng
+          ? await doc.embedPng(bytes)
+          : await doc.embedJpg(bytes);
+        embedded.set(ann.imageDataUrl, image);
+      }
 
       page.drawImage(image, {
         x: ann.x,

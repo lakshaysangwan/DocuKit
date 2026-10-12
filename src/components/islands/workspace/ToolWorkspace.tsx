@@ -140,11 +140,16 @@ export default function ToolWorkspace({
     };
   }, [active]);
 
-  // On a phone, opening the options brings the panel fully above the action bar.
+  // On a phone, opening the options brings the panel fully above the action
+  // bar, and closing them puts the frame — now shorter — back under the header.
+  const wasOpen = useRef(open);
   useEffect(() => {
-    if (!active || !open) return;
+    const changed = wasOpen.current !== open;
+    wasOpen.current = open;
+    if (!active) return;
     if (typeof matchMedia !== 'function' || !matchMedia(PHONE).matches) return;
-    optionsRef.current?.scrollIntoView({ block: 'nearest' });
+    if (open) optionsRef.current?.scrollIntoView({ block: 'nearest' });
+    else if (changed) frameRef.current?.scrollIntoView({ block: 'start' });
   }, [active, open]);
 
   const context = useMemo<WorkspaceContextValue>(

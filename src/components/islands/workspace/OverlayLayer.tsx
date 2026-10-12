@@ -123,11 +123,22 @@ export interface OverlayBoxProps {
   children?: ReactNode;
 }
 
+/**
+ * Where each handle's hit area sits. The visible square is centred on the
+ * corner, but the hit area grows OUTWARDS from it rather than around it: a
+ * signature is often only a few pixels tall on a phone, and four hit areas
+ * centred on its corners would cover the whole box and leave nothing to drag
+ * it by.
+ */
 const HANDLE_POSITION: Record<Corner, string> = {
-  'top-left': 'left-0 top-0 cursor-nwse-resize',
-  'top-right': 'left-full top-0 cursor-nesw-resize',
-  'bottom-right': 'left-full top-full cursor-nwse-resize',
-  'bottom-left': 'left-0 top-full cursor-nesw-resize',
+  'top-left':
+    'left-0 top-0 -translate-x-[calc(100%-7px)] -translate-y-[calc(100%-7px)] items-end justify-end cursor-nwse-resize',
+  'top-right':
+    'left-full top-0 translate-x-[-7px] -translate-y-[calc(100%-7px)] items-end justify-start cursor-nesw-resize',
+  'bottom-right':
+    'left-full top-full translate-x-[-7px] translate-y-[-7px] items-start justify-start cursor-nwse-resize',
+  'bottom-left':
+    'left-0 top-full -translate-x-[calc(100%-7px)] translate-y-[-7px] items-start justify-end cursor-nesw-resize',
 };
 
 const HANDLE_LABEL: Record<Corner, string> = {
@@ -187,7 +198,12 @@ export function OverlayBox({
     e.stopPropagation();
     onSelect();
     // Capture, so the drag keeps following a finger, pen or mouse that leaves the box.
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // A pointer the browser no longer tracks cannot be captured; the drag
+      // still works while it stays over the box.
+    }
     drag.current = {
       pointerId: e.pointerId,
       target,
@@ -293,13 +309,15 @@ export function OverlayBox({
       data-testid="overlay-item"
       data-kind={kind}
       data-selected={selected ? 'true' : 'false'}
+      // The frame is an outline, not a border: an outline takes no room, so the
+      // content fills exactly the rectangle that will be written to the file.
       className={cn(
-        'absolute touch-none outline-none',
+        'absolute touch-none rounded-none outline-offset-0 outline-[var(--color-primary)]',
         !disabled && 'cursor-move',
         selected
-          ? 'z-10 border-2 border-[var(--color-primary)] shadow-[0_0_0_1px_rgba(255,255,255,0.9)]'
-          : 'border border-dashed border-[var(--color-primary)]/70',
-        'focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.9),0_0_0_4px_color-mix(in_srgb,var(--color-primary)_45%,transparent)]',
+          ? 'z-10 outline-2 outline-solid shadow-[0_0_0_3px_rgba(255,255,255,0.9)]'
+          : 'outline-1 outline-dashed',
+        'focus-visible:shadow-[0_0_0_3px_rgba(255,255,255,0.9),0_0_0_6px_color-mix(in_srgb,var(--color-primary)_45%,transparent)]',
       )}
       style={{
         left: percent(rect.x),
@@ -317,6 +335,11 @@ export function OverlayBox({
       onKeyDown={onKeyDown}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* The grab area: the box itself, but never smaller than a fingertip. */}
+      <span
+        aria-hidden="true"
+        className="absolute left-1/2 top-1/2 size-full min-h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+      />
       {children}
 
       {selected && hint && (
@@ -342,7 +365,7 @@ export function OverlayBox({
             aria-label={HANDLE_LABEL[corner]}
             data-testid={`overlay-handle-${corner}`}
             className={cn(
-              'group absolute flex size-7 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center pointer-coarse:size-11',
+              'group absolute z-20 flex size-7 touch-none pointer-coarse:size-11',
               HANDLE_POSITION[corner],
             )}
             onPointerDown={(e) => begin(e, corner)}
