@@ -16,6 +16,13 @@ interface DropZoneProps {
   /** Render a slim "add more" bar instead of the full drop target.
    *  Use once files are already queued so the big empty box isn't wasted space. */
   compact?: boolean;
+  /** In the compact bar, what there is to add: "Add images". Defaults to
+   *  "Add more files" (or "Add a different file"). */
+  compactLabel?: string;
+  /** Show the "Files added" confirmation although the files did not arrive
+   *  through this box — they came from another dropzone or an "Add" button.
+   *  The owner sets it for the same 1.5s the box itself would show it. */
+  showAccepted?: boolean;
 }
 
 const stateClasses: Record<DropZoneState, string> = {
@@ -36,6 +43,8 @@ export default function DropZone({
   className,
   children,
   compact = false,
+  compactLabel,
+  showAccepted = false,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Marks the island as interactive once React has mounted and wired up the
@@ -43,13 +52,15 @@ export default function DropZone({
   // they don't fire a change event the (not-yet-hydrated) handler would drop.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
-  const { dropState, onDragEnter, onDragLeave, onDragOver, onDrop, onInputChange } = useFileDrop({
+  const { dropState: ownState, onDragEnter, onDragLeave, onDragOver, onDrop, onInputChange } = useFileDrop({
     accept,
     maxFiles,
     maxSize,
     multiple,
     onFiles,
   });
+
+  const dropState: DropZoneState = ownState === 'idle' && showAccepted ? 'accepted' : ownState;
 
   const acceptString = accept.join(',');
 
@@ -103,7 +114,7 @@ export default function DropZone({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
           </svg>
           <span>
-            Add {multiple ? 'more files' : 'a different file'}, or{' '}
+            {compactLabel ?? `Add ${multiple ? 'more files' : 'a different file'}`}, or{' '}
             <span className="font-medium text-[var(--color-primary)]">browse</span>
           </span>
         </div>

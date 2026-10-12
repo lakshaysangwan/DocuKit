@@ -6,6 +6,7 @@ import {
   layoutImagePage,
   orientPage,
   pageSizeFor,
+  standardPageMm,
 } from './images-to-pdf-layout';
 import { PINNED_LAYOUTS } from './images-to-pdf-layout.pinned';
 import type { ImagesToPdfOptions } from '../types/worker-messages';
@@ -102,8 +103,10 @@ describe('page helpers', () => {
   });
 
   it('formats the physical size in millimetres', () => {
-    expect(formatPageMm(...PAGE_SIZES.a4)).toBe('210 × 297 mm');
-    expect(formatPageMm(...PAGE_SIZES.letter)).toBe('216 × 279 mm');
-    expect(formatPageMm(...PAGE_SIZES.legal)).toBe('216 × 356 mm');
+    expect(standardPageMm('a4')).toBe('210 × 297 mm');
+    expect(standardPageMm('letter')).toBe('216 × 279 mm');
+    expect(standardPageMm('legal')).toBe('216 × 356 mm');
+    // "Fit Image": pixels become points, so a 1200 × 800 photo is a very large sheet.
+    expect(formatPageMm(1200, 800)).toBe('423 × 282 mm');
   });
 });

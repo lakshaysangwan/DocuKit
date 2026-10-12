@@ -426,6 +426,16 @@ html[data-ws="active"] .tool-shell {
       "rail stage  options"
       "rail stage  action";
   }
+  /* A tool with no thumbnail rail (its document pane is already a grid of
+     pages) gives that column to the document. */
+  .ws-frame[data-rail="none"] {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-areas:
+      "bar    bar"
+      "prompt options"
+      "stage  options"
+      "stage  action";
+  }
   .ws-rail {
     display: block;
     grid-area: rail;

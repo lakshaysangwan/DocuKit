@@ -72,7 +72,7 @@ export interface ToolWorkspaceProps {
   fileBar: ReactNode;
   /** The document pane. Give it something that fills its box, e.g. `<PageViewer>`. */
   stage: ReactNode;
-  /** Page thumbnails; shown from 1280px up. */
+  /** Page thumbnails; shown from 1280px up. Without one the document has that column too. */
   rail?: ReactNode;
   /** The options. */
   controls: ReactNode;
@@ -182,6 +182,7 @@ export default function ToolWorkspace({
         data-ws="active"
         data-tool={toolId}
         data-options={open ? 'open' : 'closed'}
+        data-rail={rail ? undefined : 'none'}
         aria-labelledby={headingId}
       >
         <div className="ws-bar flex min-h-11 items-center gap-3 px-3 py-1.5 sm:px-4">

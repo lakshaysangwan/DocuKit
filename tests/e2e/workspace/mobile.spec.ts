@@ -1,6 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { openSign, readDrawnImages, signAndDownload, stampViewRect, expectSameRect } from '../helpers/sign';
+import { expectDownload } from '../helpers/harness';
+import { openImages, previewPages, readOutputPages, expectPreviewMatchesFile } from '../helpers/image-to-pdf';
 import { MIGRATED } from './migrated';
 
 /**
@@ -88,6 +90,63 @@ for (const tool of MIGRATED) {
     });
   });
 }
+
+test.describe('Image to PDF on a phone', () => {
+  test('pages two across, more images from the top bar, options without losing the pages', async ({ page }) => {
+    await openImages(page, [FIXTURE.jpg, FIXTURE.jpg2]);
+
+    // Two pages side by side, both on screen, each with its buttons in reach.
+    const cards = page.getByTestId('file-card');
+    const [first, second] = [(await cards.nth(0).boundingBox())!, (await cards.nth(1).boundingBox())!];
+    expect(Math.abs(first.y - second.y)).toBeLessThan(2);
+    expect(second.x).toBeGreaterThan(first.x + first.width - 1);
+    await expect(page.getByTestId('grid-size-m')).toHaveAttribute('aria-pressed', 'true');
+    for (const id of ['page-reorder', 'page-open', 'file-remove']) {
+      const button = (await cards.first().getByTestId(id).boundingBox())!;
+      expect(Math.min(button.width, button.height), `${id} is big enough to tap`).toBeGreaterThanOrEqual(28);
+    }
+    await expect(page.getByTestId('step-prompt')).toContainText('Drag a page by its handle to move it');
+
+    // The options are closed, so adding images is in the top bar.
+    await expect(page.getByTestId('ws-controls')).toBeHidden();
+    await expect(page.getByTestId('add-files')).toBeVisible();
+    await page.getByTestId('add-files-input').setInputFiles(FIXTURE.png);
+    await expect(page.getByTestId('output-page')).toHaveCount(3);
+    await expect(page.getByTestId('file-info')).toContainText('3 images');
+    expectPhoneLayout(await layout(page), 'three images');
+
+    // Options open under the pages; a change there shows in the pages above.
+    await page.getByTestId('options-toggle').tap();
+    await expect(page.getByTestId('ws-controls')).toBeVisible();
+    await page.getByTestId('i2p-size-fit').tap();
+    await expect(page.getByTestId('page-grid-caption')).toHaveText('Fit Image · each page is the size of its image');
+    expect((await previewPages(page)).map((p) => [p.pageW, p.pageH])).toEqual([[1200, 800], [900, 1200], [800, 800]]);
+    expectPhoneLayout(await layout(page), 'options open');
+
+    // One tap makes the PDF, and it is what the pages showed.
+    const shown = await previewPages(page);
+    await page.getByTestId('tool-action').tap();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').tap());
+    expectPreviewMatchesFile(shown, await readOutputPages(bytes));
+    expectPhoneLayout(await layout(page), 'done');
+  });
+
+  test('a page opens large and closes again with a tap', async ({ page }) => {
+    await openImages(page, [FIXTURE.jpg, FIXTURE.jpg2]);
+    await page.getByTestId('page-open').first().tap();
+    const dialog = page.getByTestId('page-preview-dialog');
+    await expect(dialog).toBeVisible();
+    const box = (await dialog.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    expect((await dialog.getByTestId('output-page').boundingBox())!.width).toBeGreaterThan(250);
+    await page.getByTestId('page-preview-next').tap();
+    await expect(page.getByTestId('page-preview-title')).toHaveText('Page 2 of 2 · photo-2.jpg');
+    await page.getByTestId('page-preview-close').tap();
+    await expect(dialog).toHaveCount(0);
+  });
+});
 
 test.describe('Sign PDF on a phone', () => {
   test('sign with taps alone: make the signature, place it, resize it with the buttons', async ({ page }) => {

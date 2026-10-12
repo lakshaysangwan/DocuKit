@@ -39,6 +39,16 @@ export async function encodeImageData(
 }
 
 /**
+ * Decode a HEIC/HEIF image with libheif (heic-to), for browsers that cannot.
+ * The /csp build is deliberate: the default one evaluates a string as script,
+ * which our Content-Security-Policy (no 'unsafe-eval') blocks.
+ */
+export async function decodeHeic(blob: Blob): Promise<ImageBitmap> {
+  const { heicTo } = await import('heic-to/csp');
+  return heicTo({ blob, type: 'bitmap' });
+}
+
+/**
  * Decode an encoded image (any format the browser's `createImageBitmap`
  * understands) into ImageData. Optionally composite onto a solid background
  * (used when converting a transparent PNG to an opaque format like JPEG).
@@ -53,11 +63,8 @@ export async function bufferToImageData(
     // Handles JPEG/PNG/WebP/GIF/BMP and (in modern browsers) AVIF natively.
     bitmap = await createImageBitmap(blob);
   } catch {
-    // HEIC/HEIF: the browser can't decode it, so fall back to libheif (heic-to).
-    // The /csp build is deliberate: the default one evaluates a string as
-    // script, which our Content-Security-Policy (no 'unsafe-eval') blocks.
-    const { heicTo } = await import('heic-to/csp');
-    bitmap = await heicTo({ blob, type: 'bitmap' });
+    // HEIC/HEIF: the browser can't decode it, so fall back to libheif.
+    bitmap = await decodeHeic(blob);
   }
   const { canvas, ctx } = createCanvas2D(bitmap.width, bitmap.height);
   if (background) {

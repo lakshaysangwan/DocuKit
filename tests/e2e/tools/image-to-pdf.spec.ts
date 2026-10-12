@@ -8,12 +8,19 @@ import {
   countPdfPages,
 } from '../helpers/harness';
 
+/**
+ * Image to PDF, end to end. What the preview shows against what the file holds
+ * is in image-to-pdf-preview.spec.ts; this file is the plain flow.
+ */
 test.describe('Image to PDF', () => {
   test('page loads with correct H1 and dropzone', async ({ page }) => {
     const diag = new PageDiagnostics(page);
     await page.goto('/image-to-pdf');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Convert Images to PDF');
     await expect(page.getByTestId('dropzone')).toBeVisible();
+    // Before an image is added there is only the dropzone: no workspace, no options.
+    await expect(page.getByTestId('workspace')).toHaveCount(0);
+    await expect(page.getByTestId('dropzone')).toContainText('JPEG, PNG, WebP, GIF, BMP, HEIC');
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 
@@ -22,13 +29,21 @@ test.describe('Image to PDF', () => {
     await page.goto('/image-to-pdf');
     await addFilesAndWait(page, [FIXTURE.jpg, FIXTURE.png], 2);
 
+    // The workspace opens on the pages the PDF will have.
+    await expect(page.getByTestId('workspace')).toHaveAttribute('data-tool', 'image-to-pdf');
+    await expect(page.getByTestId('output-page')).toHaveCount(2);
+    await expect(page.getByTestId('file-info')).toContainText('2 images');
+
     // Defaults: A4 page size, center placement.
+    await expect(page.getByTestId('i2p-size-a4')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('i2p-placement-center')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('tool-action')).toHaveText('Create PDF (2 pages)');
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
 
     const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertPdf(bytes);
-    expect(name).toMatch(/\.pdf$/);
+    expect(name).toBe('images.pdf');
     expect(countPdfPages(bytes)).toBe(2);
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
@@ -42,6 +57,10 @@ test.describe('Image to PDF', () => {
     // spinbuttons disappear (the label text also appears in page copy, so we
     // assert on the controls, not the text).
     await expect(page.getByRole('spinbutton')).toHaveCount(0);
+    // The margins are hidden, not gone, and the tool says so.
+    await expect(page.getByTestId('i2p-size-note')).toHaveText(
+      'Each page takes the size of its image, with the margins still applied around it.',
+    );
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });

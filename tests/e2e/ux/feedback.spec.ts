@@ -11,7 +11,11 @@ import { addFilesAndWait } from '../helpers/harness';
  */
 
 test.describe('P5.1 — toast is distinct from the persistent result panel', () => {
-  test('image-to-pdf: toast confirms, panel persists — different text', async ({ page }) => {
+  // Image to PDF lives in the tool workspace, which confirms a result in place:
+  // the panel states it, the step prompt (a live region) announces it, and the
+  // download takes the action's place. There is no toast — it would sit on top
+  // of the download button it is announcing — so there is nothing to duplicate.
+  test('image-to-pdf: the result is confirmed in place, in three different sentences, with no toast', async ({ page }) => {
     await page.goto('/image-to-pdf');
     await addFilesAndWait(page, [FIXTURE.jpg, FIXTURE.png], 2);
     await page.getByTestId('tool-action').click();
@@ -19,10 +23,13 @@ test.describe('P5.1 — toast is distinct from the persistent result panel', () 
     // Persistent panel headline lives inside the main content region.
     await expect(page.locator('#main-content').getByText('PDF created!')).toBeVisible({ timeout: 45_000 });
 
-    // The transient toast is a different, action-oriented confirmation.
-    const toast = page.locator('[data-sonner-toast]');
-    await expect(toast).toContainText('PDF ready to download');
-    await expect(toast).not.toContainText('PDF created!');
+    const prompt = page.getByTestId('step-prompt');
+    await expect(prompt).toHaveAttribute('role', 'status');
+    await expect(prompt).toHaveText('Your PDF is ready. Download it, or make changes.');
+    await expect(page.getByTestId('result-summary')).toContainText('images.pdf');
+    await expect(prompt).not.toContainText('PDF created!');
+
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
   });
 
   // P5.5 — the success panel offers a consistent in-flow cross-tool next step.

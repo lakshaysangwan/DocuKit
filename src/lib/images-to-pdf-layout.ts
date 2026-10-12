@@ -151,3 +151,9 @@ export function pointsToMm(points: number): number {
 export function formatPageMm(pageW: number, pageH: number): string {
   return `${pointsToMm(pageW)} × ${pointsToMm(pageH)} mm`;
 }
+
+/** "210 × 297 mm" for one of the fixed page sizes. */
+export function standardPageMm(size: StandardPageSize): string {
+  const [width, height] = PAGE_SIZES[size];
+  return formatPageMm(width, height);
+}

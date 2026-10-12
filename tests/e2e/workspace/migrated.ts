@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { openSign, addTypedSignature } from '../helpers/sign';
+import { openImages } from '../helpers/image-to-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -33,5 +34,13 @@ export const MIGRATED: MigratedTool[] = [
     name: 'Sign PDF',
     enter: (page) => openSign(page, FIXTURE.pdf3page),
     makeReady: (page) => addTypedSignature(page),
+  },
+  {
+    // A "build a document" tool: several files in, one PDF out. Its document
+    // pane is a grid of the output pages, and its action is available as soon
+    // as the images have been read — so there is no `makeReady`.
+    slug: 'image-to-pdf',
+    name: 'Image to PDF',
+    enter: (page) => openImages(page, [FIXTURE.jpg, FIXTURE.jpg2, FIXTURE.png]),
   },
 ];

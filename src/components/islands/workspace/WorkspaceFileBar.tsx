@@ -1,10 +1,24 @@
 import { useRef } from 'react';
-import { FileText, X } from 'lucide-react';
+import { FileText, Files, X } from 'lucide-react';
 import { useFileDrop } from '@/hooks/use-file-drop';
 import { formatBytes, isLargeFile } from '@/lib/utils';
 
 interface WorkspaceFileBarProps {
-  file: File;
+  /** The one file the tool works on. Give this or `files`. */
+  file?: File;
+  /**
+   * Several files that become one document. The bar then shows how many there
+   * are and their total size instead of a name.
+   */
+  files?: File[];
+  /** With `files`: what one of them is called — "image". Defaults to "file". */
+  noun?: string;
+  /**
+   * With `files`: offer "Add images". The button is shown on phones, where the
+   * options (and the dropzone in them) are closed; the input is always there
+   * and is the first file input in the workspace.
+   */
+  onAdd?: (files: File[]) => void;
   /** Extra facts after the size: "3 pages". */
   extra?: string;
   /** Leave the workspace and go back to the dropzone. */
@@ -14,7 +28,7 @@ interface WorkspaceFileBarProps {
    * type and size checks as the dropzone.
    */
   onReplace?: (files: File[]) => void;
-  /** MIME types "Change file" accepts. Required with `onReplace`. */
+  /** MIME types "Change file" / "Add" accepts. Required with `onReplace` or `onAdd`. */
   accept?: string[];
   disabled?: boolean;
 }
@@ -24,11 +38,17 @@ interface WorkspaceFileBarProps {
  * choose a different file, or remove this one. One slim row, so the document
  * keeps the height.
  *
- * Test ids: `file-info` (with `data-filename`), `change-file`, `remove-file`,
- * `large-file-warning`.
+ * With `files` it is the same row for a document made of many: "4 images ·
+ * 2.3 MB", add more, remove them all.
+ *
+ * Test ids: `file-info` (with `data-filename`, or `data-count` for many),
+ * `change-file`, `add-files`, `remove-file`, `large-file-warning`.
  */
 export default function WorkspaceFileBar({
   file,
+  files,
+  noun = 'file',
+  onAdd,
   extra,
   onRemove,
   onReplace,
@@ -38,10 +58,77 @@ export default function WorkspaceFileBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const { onInputChange } = useFileDrop({
     accept,
-    multiple: false,
-    onFiles: (files) => onReplace?.(files),
+    multiple: files !== undefined,
+    onFiles: (chosen) => (files !== undefined ? onAdd?.(chosen) : onReplace?.(chosen)),
   });
-  const large = isLargeFile(file.size);
+  const size = files ? files.reduce((sum, f) => sum + f.size, 0) : (file?.size ?? 0);
+  const large = isLargeFile(size);
+
+  if (files) {
+    const nouns = `${noun}s`;
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 items-center gap-2 text-sm">
+          <div data-testid="file-info" data-count={files.length} className="flex min-w-0 items-center gap-2">
+            <Files className="size-4 shrink-0 text-[var(--color-primary)]" aria-hidden="true" />
+            <span className="shrink-0 font-medium text-[var(--color-text-primary)]">
+              {files.length} {files.length === 1 ? noun : nouns}
+            </span>
+            <span className="truncate text-[var(--color-text-secondary)] max-sm:hidden">
+              {formatBytes(size)}
+              {extra ? ` · ${extra}` : ''}
+            </span>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {onAdd && (
+              <>
+                {/* The first file input in the workspace: adds to the document. */}
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={accept.join(',')}
+                  multiple
+                  className="sr-only"
+                  onChange={onInputChange}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  data-testid="add-files-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={disabled}
+                  data-testid="add-files"
+                  className="h-8 rounded-lg border border-[var(--color-border)] px-2.5 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] disabled:opacity-50 md:hidden"
+                >
+                  Add {nouns}
+                </button>
+              </>
+            )}
+            {onRemove && (
+              <button
+                type="button"
+                onClick={onRemove}
+                disabled={disabled}
+                aria-label={`Remove all ${nouns}`}
+                data-testid="remove-file"
+                className="h-8 rounded-lg border border-[var(--color-border)] px-2.5 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] disabled:opacity-50"
+              >
+                Remove all
+              </button>
+            )}
+          </div>
+        </div>
+        {large && (
+          <p data-testid="large-file-warning" role="status" className="text-xs text-[var(--color-text-secondary)]">
+            Large files ({formatBytes(size)} in all). Everything runs in your browser, so this may take a while and use
+            significant memory — keep this tab open.
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (!file) return null;
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
