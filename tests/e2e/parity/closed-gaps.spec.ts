@@ -14,6 +14,7 @@ import {
   readPdfMetadataArtifacts,
   readPdfCropBoxes,
 } from '../helpers/harness';
+import { openSign, addTypedSignature } from '../helpers/sign';
 
 /**
  * The copy-drift closures.
@@ -391,30 +392,20 @@ test.describe('Copy-drift closures — crop, redact, unlock, sign', () => {
   test('sign places a date stamp and initials alongside the signature', async ({ page }) => {
     test.setTimeout(120_000);
 
-    await page.goto('/sign-pdf');
-    // Retry the tab click until the panel switches — the island hydrates on idle
-    // and a pre-hydration click is silently lost (same as tools/sign-pdf.spec.ts).
-    await expect(async () => {
-      await page.getByRole('button', { name: 'type', exact: true }).click();
-      await expect(page.getByPlaceholder('Type your name')).toBeVisible({ timeout: 1500 });
-    }).toPass({ timeout: 15_000 });
-    await page.getByPlaceholder('Type your name').fill('Ada Lovelace');
-    await page.getByRole('button', { name: /Use this signature/ }).click();
-
-    await uploadFiles(page, FIXTURE.pdf3page);
-    await expect(page.getByText('Step 3: Place signature on page(s)')).toBeVisible({ timeout: 30_000 });
-
-    await page.locator('button[title="Place on page 1"]').click();
+    // The PDF first; the signature goes onto the page as soon as it is made.
+    await openSign(page, FIXTURE.pdf3page);
+    await addTypedSignature(page, 'Ada Lovelace');
     await expect(page.getByTestId('placed-count')).toHaveText('1 stamp placed');
 
+    // "Add to this page": each button drops its stamp on the current page.
     await page.getByTestId('stamp-date').click();
-    await page.locator('button[title="Place on page 1"]').click();
     await expect(page.getByTestId('placed-count')).toHaveText('2 stamps placed');
 
-    await page.getByTestId('stamp-initials').click();
     await page.getByTestId('initials-input').fill('AL');
-    await page.locator('button[title="Place on page 1"]').click();
+    await page.getByTestId('stamp-initials').click();
     await expect(page.getByTestId('placed-count')).toHaveText('3 stamps placed');
+    await expect(page.locator('[data-testid="overlay-item"][data-kind="initials"]')).toBeVisible();
+    await expect(page.locator('[data-testid="overlay-item"][data-kind="date"]')).toBeVisible();
 
     await page.getByTestId('tool-action').click();
     const { bytes } = await expectDownload(

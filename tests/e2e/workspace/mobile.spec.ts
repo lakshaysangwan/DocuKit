@@ -1,0 +1,197 @@
+import { test, expect, type Page } from '@playwright/test';
+import { FIXTURE } from '../fixtures/generate';
+import { openSign, readDrawnImages, signAndDownload, stampViewRect, expectSameRect } from '../helpers/sign';
+import { MIGRATED } from './migrated';
+
+/**
+ * The workspace on a phone (375 × 667, touch).
+ *
+ * Runs in the `mobile` project only. After a file is added there must be no
+ * sideways scroll, the document must keep at least 40% of the screen, and the
+ * action bar must be on it. Options open as a panel that pushes nothing off the
+ * screen that the visitor needs: the document stays visible above it.
+ */
+test.use({ viewport: { width: 375, height: 667 } });
+
+interface Layout {
+  overflowX: number;
+  viewport: { width: number; height: number };
+  stage: DOMRect | null;
+  action: DOMRect | null;
+  controls: DOMRect | null;
+}
+
+async function layout(page: Page): Promise<Layout> {
+  return page.evaluate(() => {
+    const rect = (id: string) => {
+      const el = document.querySelector(`[data-testid="${id}"]`);
+      return el ? (el.getBoundingClientRect().toJSON() as DOMRect) : null;
+    };
+    return {
+      overflowX: document.documentElement.scrollWidth - window.innerWidth,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      stage: rect('ws-stage'),
+      action: rect('action-bar'),
+      controls: rect('ws-controls'),
+    };
+  });
+}
+
+/** How much of a box is on screen, in pixels of height. */
+const visibleHeight = (r: DOMRect, viewportHeight: number) =>
+  Math.max(0, Math.min(r.bottom, viewportHeight) - Math.max(r.top, 0));
+
+function expectPhoneLayout(l: Layout, when: string) {
+  expect(l.overflowX, `${when}: no horizontal overflow`).toBeLessThanOrEqual(0);
+  expect(l.stage, `${when}: stage`).not.toBeNull();
+  expect(l.action, `${when}: action bar`).not.toBeNull();
+  // The document pane is at least 40% of the screen tall…
+  expect(l.stage!.height, `${when}: stage height`).toBeGreaterThanOrEqual(l.viewport.height * 0.4 - 1);
+  // …and it is really on screen, not merely that tall somewhere above the fold.
+  expect(visibleHeight(l.stage!, l.viewport.height), `${when}: stage on screen`).toBeGreaterThanOrEqual(
+    l.viewport.height * 0.25,
+  );
+  // The action bar is wholly inside the viewport.
+  expect(l.action!.top, `${when}: action bar top`).toBeGreaterThanOrEqual(0);
+  expect(l.action!.bottom, `${when}: action bar bottom`).toBeLessThanOrEqual(l.viewport.height + 0.5);
+  expect(l.action!.left, `${when}: action bar left`).toBeGreaterThanOrEqual(0);
+  expect(l.action!.right, `${when}: action bar right`).toBeLessThanOrEqual(l.viewport.width + 0.5);
+}
+
+for (const tool of MIGRATED) {
+  test.describe(`Workspace on a phone — ${tool.name}`, () => {
+    test('after upload: no sideways scroll, the document keeps its share, the action bar is on screen', async ({ page }) => {
+      await tool.enter(page);
+      expectPhoneLayout(await layout(page), 'after upload');
+
+      // "Options" is a real toggle, and neither position hides the document or the action.
+      const toggle = page.getByTestId('options-toggle');
+      await expect(toggle).toBeVisible();
+      const wasOpen = (await toggle.getAttribute('aria-expanded')) === 'true';
+      await toggle.tap();
+      await expect(toggle).toHaveAttribute('aria-expanded', wasOpen ? 'false' : 'true');
+      expectPhoneLayout(await layout(page), 'options toggled');
+      await toggle.tap();
+      await expect(toggle).toHaveAttribute('aria-expanded', wasOpen ? 'true' : 'false');
+      expectPhoneLayout(await layout(page), 'options toggled back');
+    });
+
+    test('the action is one tap away once the tool is ready', async ({ page }) => {
+      await tool.enter(page);
+      await tool.makeReady?.(page);
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      expectPhoneLayout(await layout(page), 'ready');
+      await action.tap();
+      await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+      expectPhoneLayout(await layout(page), 'done');
+    });
+  });
+}
+
+test.describe('Sign PDF on a phone', () => {
+  test('sign with taps alone: make the signature, place it, resize it with the buttons', async ({ page }) => {
+    await openSign(page, FIXTURE.pdf1page);
+
+    // The options open by themselves with the signature maker, and the page is still there above.
+    await expect(page.getByTestId('options-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('signature-creator')).toBeVisible();
+    await expect(page.getByTestId('step-prompt')).toHaveText('Create your signature below.');
+    const withPanel = await layout(page);
+    expectPhoneLayout(withPanel, 'signature maker open');
+    // The whole panel is above the action bar, button included.
+    expect(withPanel.controls!.bottom).toBeLessThanOrEqual(withPanel.action!.top + 1);
+
+    await page.getByTestId('signature-mode-type').tap();
+    await page.getByLabel('Signature text').fill('Ada Lovelace');
+    await page.getByTestId('use-signature').tap();
+
+    // The panel closes and the stamp is on the page, selected, on screen.
+    await expect(page.getByTestId('options-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('ws-controls')).toBeHidden();
+    const stamp = page.getByTestId('overlay-item');
+    await expect(stamp).toBeVisible();
+    await expect(stamp).toBeInViewport();
+    await expect(page.getByTestId('step-prompt')).toHaveText(
+      'Drag your signature into place, or tap the spot where it should go.',
+    );
+    expectPhoneLayout(await layout(page), 'stamp placed');
+
+    // Corner handles are finger-sized.
+    const handle = (await page.getByTestId('overlay-handle-bottom-right').boundingBox())!;
+    expect(handle.width).toBeGreaterThanOrEqual(44);
+    expect(handle.height).toBeGreaterThanOrEqual(44);
+
+    // Tap where it should go: no drag needed.
+    const layer = page.getByTestId('overlay-layer');
+    const size = (await layer.boundingBox())!;
+    await layer.tap({ position: { x: size.width * 0.5, y: size.height * 0.45 } });
+    const placed = await stampViewRect(page);
+    expect(placed.x + placed.width / 2).toBeCloseTo(0.5, 1);
+    expect(placed.y + placed.height / 2).toBeCloseTo(0.45, 1);
+
+    // "Larger" twice, "Smaller" once: 1.1× overall, with no precise drag.
+    await page.getByTestId('stamp-larger').tap();
+    await page.getByTestId('stamp-larger').tap();
+    await page.getByTestId('stamp-smaller').tap();
+    const resized = await stampViewRect(page);
+    expect(resized.width / placed.width).toBeCloseTo(1.1, 2);
+    expectPhoneLayout(await layout(page), 'after resizing');
+
+    // And the file has it exactly there.
+    const bytes = await signAndDownload(page);
+    const [image] = await readDrawnImages(bytes, 0);
+    expectSameRect(image.rect, resized, 0.004, 'image in the file');
+    expectPhoneLayout(await layout(page), 'done');
+  });
+
+  test('a finger can drag the stamp', async ({ page }) => {
+    await openSign(page, FIXTURE.pdf1page);
+    await page.getByTestId('signature-mode-type').tap();
+    await page.getByLabel('Signature text').fill('Ada Lovelace');
+    await page.getByTestId('use-signature').tap();
+    const stamp = page.getByTestId('overlay-item');
+    await expect(stamp).toBeInViewport();
+    const before = await stampViewRect(page);
+
+    // Touch pointer events, as a finger sends them: down on the stamp, move, up.
+    const box = (await stamp.boundingBox())!;
+    const canvas = (await page.getByTestId('page-canvas').boundingBox())!;
+    const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const [dx, dy] = [30, -50];
+    await stamp.evaluate(
+      (el, { start, dx, dy }) => {
+        const fire = (type: string, x: number, y: number) =>
+          el.dispatchEvent(
+            new PointerEvent(type, {
+              pointerId: 7,
+              pointerType: 'touch',
+              isPrimary: true,
+              button: 0,
+              buttons: type === 'pointerup' ? 0 : 1,
+              clientX: x,
+              clientY: y,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+        fire('pointerdown', start.x, start.y);
+        for (let i = 1; i <= 5; i++) fire('pointermove', start.x + (dx * i) / 5, start.y + (dy * i) / 5);
+        fire('pointerup', start.x + dx, start.y + dy);
+      },
+      { start, dx, dy },
+    );
+
+    const after = await stampViewRect(page);
+    expectSameRect(
+      after,
+      { ...before, x: before.x + dx / canvas.width, y: before.y + dy / canvas.height },
+      0.004,
+      'stamp after the drag',
+    );
+    // The stamp itself does not hand the gesture to the browser's scrolling.
+    expect(await stamp.evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
+    // The page around it still does.
+    expect(await page.getByTestId('page-viewer').evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+  });
+});

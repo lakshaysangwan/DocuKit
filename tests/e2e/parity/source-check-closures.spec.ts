@@ -3,7 +3,6 @@ import { FIXTURE } from '../fixtures/generate';
 import {
   addFilesAndWait,
   addSingleFileAndWait,
-  uploadFiles,
   expectDownload,
   expectDownloads,
   assertImage,
@@ -13,6 +12,7 @@ import {
   findPdfContentStreamIndex,
   readPdfContentStreams,
 } from '../helpers/harness';
+import { openSign, addTypedSignature } from '../helpers/sign';
 
 /**
  * The source-check closures.
@@ -170,22 +170,13 @@ test.describe('Source-check closures — image to PDF', () => {
 
 test.describe('Source-check closures — sign', () => {
   test('places a stamp on every page in one action', async ({ page }) => {
-    await page.goto('/sign-pdf');
+    await openSign(page, FIXTURE.pdf5page);
+    // The signature lands on page 1, selected…
+    await addTypedSignature(page, 'Ada Lovelace');
+    await expect(page.getByTestId('placed-count')).toHaveText('1 stamp placed');
 
-    // Same hydration dance as sign-pdf.spec.ts: the island hydrates on idle and
-    // there is no dropzone to gate on until the signature exists.
-    await expect(async () => {
-      await page.getByRole('button', { name: 'type', exact: true }).click();
-      await expect(page.getByPlaceholder('Type your name')).toBeVisible({ timeout: 1500 });
-    }).toPass({ timeout: 15_000 });
-    await page.getByPlaceholder('Type your name').fill('Ada Lovelace');
-    await page.getByRole('button', { name: /Use this signature/ }).click();
-
-    await expect(page.getByText('Step 2: Upload your PDF')).toBeVisible();
-    await uploadFiles(page, FIXTURE.pdf5page);
-    await expect(page.getByText('Step 3: Place signature on page(s)')).toBeVisible({ timeout: 20_000 });
-
-    // One click, five stamps. The bullet says "batch", so one-per-click is not it.
+    // …and one click copies it to the other four. One-per-click would not be "all pages".
+    await expect(page.getByTestId('place-all-pages')).toHaveText('Copy to all pages');
     await page.getByTestId('place-all-pages').click();
     await expect(page.getByTestId('placed-count')).toHaveText('5 stamps placed');
 

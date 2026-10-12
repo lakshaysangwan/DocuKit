@@ -8,6 +8,12 @@ import { defineConfig, devices } from '@playwright/test';
  * (COOP/COEP headers), which the Astro dev server already sets in
  * astro.config.mjs. So we run the tests against `astro dev`.
  */
+/**
+ * Specs that only make sense on a phone: everything under a `mobile/` folder,
+ * and the tool workspace's own phone spec, which lives beside its desktop one.
+ */
+const MOBILE_ONLY = ['**/mobile/**', '**/workspace/mobile.spec.ts'];
+
 export default defineConfig({
   testDir: './tests/e2e',
   globalSetup: './tests/e2e/global-setup.ts',
@@ -53,7 +59,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       // The full functional/a11y suite runs on desktop; mobile-only specs are
       // exercised by the `mobile` project below.
-      testIgnore: '**/mobile/**',
+      testIgnore: MOBILE_ONLY,
     },
     {
       // P6.3 — cross-browser parity. Docukit leans on OffscreenCanvas, WASM
@@ -62,12 +68,12 @@ export default defineConfig({
       // rather than on a smoke subset.
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: '**/mobile/**',
+      testIgnore: MOBILE_ONLY,
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
-      testIgnore: '**/mobile/**',
+      testIgnore: MOBILE_ONLY,
     },
     {
       // P5.4 — phone-viewport pass: layout/rendering smoke on a real mobile
@@ -75,7 +81,7 @@ export default defineConfig({
       // suite isn't re-run on mobile.
       name: 'mobile',
       use: { ...devices['Pixel 5'] },
-      testMatch: '**/mobile/**',
+      testMatch: MOBILE_ONLY,
     },
   ],
   // Skipped when pointing at an already-running server (see E2E_BASE_URL).

@@ -12,6 +12,7 @@ import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeMaskedImagesPdf, makeOnlyMaskedPdf } from './masked-images';
+import { makeCropOffsetPdf, makeMarkerPng, makeRotatedPdf, makeUnbalancedPdf } from './sign-fixtures';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 export const FIXTURES_DIR = path.join(DIR, 'files');
@@ -59,6 +60,15 @@ export const FIXTURE = {
   pdfMaskedImages: path.join(FIXTURES_DIR, 'doc-masked-images.pdf'),
   // The overlay alone: every image is masked or is a mask.
   pdfOnlyMasked: path.join(FIXTURES_DIR, 'doc-only-masked.pdf'),
+  // Pages a place-on-page tool gets wrong if it assumes an upright page that
+  // starts at 0,0: a /Rotate 90 scan, a CropBox with an offset origin, and a
+  // content stream that leaves the coordinate system transformed. See
+  // sign-fixtures.ts.
+  pdfRotate90: path.join(FIXTURES_DIR, 'doc-rotate90.pdf'),
+  pdfCropOffset: path.join(FIXTURES_DIR, 'doc-crop-offset.pdf'),
+  pdfUnbalanced: path.join(FIXTURES_DIR, 'doc-unbalanced-cm.pdf'),
+  // A four-coloured image: shows where a stamp landed and which way up.
+  signMarker: path.join(FIXTURES_DIR, 'sign-marker.png'),
 } as const;
 
 async function makePdf(pages: number, landscape = false): Promise<Uint8Array> {
@@ -158,6 +168,12 @@ export async function generateFixtures(): Promise<void> {
     await makeMaskedImagesPdf({ logo: Buffer.from(encoded.jpg, 'base64'), logoMasked: Buffer.from(encoded.jpg2, 'base64') })
   );
   await writeFile(FIXTURE.pdfOnlyMasked, await makeOnlyMaskedPdf());
+
+  // ── Place-on-page geometry ─────────────────────────────────────────────────
+  await writeFile(FIXTURE.pdfRotate90, await makeRotatedPdf());
+  await writeFile(FIXTURE.pdfCropOffset, await makeCropOffsetPdf());
+  await writeFile(FIXTURE.pdfUnbalanced, await makeUnbalancedPdf());
+  await writeFile(FIXTURE.signMarker, makeMarkerPng());
 
   // ── P7 corpus ──────────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfCmyk, await makeCmykPdf());

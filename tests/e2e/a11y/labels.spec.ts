@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { uploadFiles, addSingleFileAndWait, addFilesAndWait, unlabelledFormControls } from '../helpers/harness';
+import { openSign, addTypedSignature } from '../helpers/sign';
 
 /**
  * P4.1 — form-label audit (WCAG 2.1 AA, 1.3.1 / 4.1.2).
@@ -145,14 +146,18 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
     await assertAllLabelled(page);
   });
 
-  test('sign-pdf — typed signature', async ({ page }) => {
-    await page.goto('/sign-pdf');
-    // The signature island hydrates on idle with no dropzone to gate on, so retry
-    // the tab click until the panel switches (a pre-hydration click is lost).
-    await expect(async () => {
-      await page.getByRole('button', { name: 'type', exact: true }).click();
-      await expect(page.getByLabel('Signature text')).toBeVisible({ timeout: 1500 });
-    }).toPass({ timeout: 15_000 });
+  test('sign-pdf — typed signature, initials and position fields', async ({ page }) => {
+    await openSign(page, FIXTURE.pdf3page);
+    await page.getByTestId('signature-mode-type').click();
+    await expect(page.getByLabel('Signature text')).toBeVisible();
+    await assertAllLabelled(page);
+
+    // With a stamp on the page: the initials field and the three millimetre fields.
+    await addTypedSignature(page);
+    await expect(page.getByLabel('Initials to use')).toBeVisible();
+    await expect(page.getByLabel('From left (mm)')).toBeVisible();
+    await expect(page.getByLabel('From top (mm)')).toBeVisible();
+    await expect(page.getByLabel('Width (mm)')).toBeVisible();
     await assertAllLabelled(page);
   });
 });
