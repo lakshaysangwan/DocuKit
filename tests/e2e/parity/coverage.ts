@@ -44,6 +44,7 @@ const VISUAL = 'visual/operation-visibility.spec.ts';
 const CLOSED = 'parity/closed-gaps.spec.ts';
 const SOURCED = 'parity/source-check-closures.spec.ts';
 const SIGN_PLACEMENT = 'tools/sign-pdf-placement.spec.ts';
+const I2P_PREVIEW = 'tools/image-to-pdf-preview.spec.ts';
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -121,9 +122,11 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Files named by source page number': CU(['src/lib/multi-download.test.ts'], 'pages 1, 3, 5 of a five-page PDF download as -page-1, -page-3, -page-5 (and under those names inside the ZIP); the unit test pins the zero-padding', [T('pdf-to-image-downloads')]),
   },
   'image-to-pdf': {
-    'JPEG, PNG, WebP, BMP, TIFF, SVG, HEIC support': P([T('image-to-pdf')], 'JPEG and PNG tested; the rest are not'),
-    'Multi-image drag-and-drop reorder': U("SOURCE CHECK — implemented at handleReorder + arrayMove wired to FileList onReorder; needs a test."),
-    'Fit Image, A4, Letter, Legal, custom page sizes': P([T('image-to-pdf')], 'Fit Image, A4 and Letter tested; Legal and custom are not'),
+    'JPEG, PNG, WebP, GIF, BMP and HEIC images': C([I2P_PREVIEW], 'each format goes in and the page is read back out of the downloaded PDF: an upright JPEG is found inside it byte for byte; WebP, BMP, GIF and HEIC arrive as a JPEG stream of the right pixel size (BMP and GIF are also rendered and the picture checked); a GIF with transparency arrives as a PNG with an alpha mask'),
+    'Every page shown as it will be saved, before you create the PDF': CU(['src/lib/images-to-pdf-layout.test.ts'], 'for six option combinations over four mixed images, each previewed page’s size and draw rectangle equal the MediaBox and the image’s cm matrix in the downloaded file to a hundredth of a point, and the page is drawn on screen where those numbers say; typing a margin moves the preview before anything is clicked. The unit test pins the shared layout function to the numbers the tool produced before it had a preview', [I2P_PREVIEW]),
+    'Reorder pages by dragging or with the keyboard': C([I2P_PREVIEW, 'a11y/keyboard.spec.ts'], 'a mouse drag and the keyboard handle each change the order on screen and the order of the pages in the downloaded PDF; every keyboard move is announced by file name and position'),
+    'Fit Image, A4, Letter and Legal page sizes': C([I2P_PREVIEW], 'each size is chosen and the MediaBox of every page in the downloaded PDF is read back: 595.28 × 841.89, 612 × 792, 612 × 1008, and the image’s own pixel size for Fit Image'),
+    'Sideways phone photos turned upright': C([I2P_PREVIEW], 'a JPEG stored a quarter turn round with EXIF orientation 6 goes in; the PDF page is rendered with pdf.js and each colour of the test picture is found in its own corner. Orientations other than 6 take the same code path but are not separately tested'),
     'Margin controls in mm or inches': C([SOURCED], 'built: mm/in/pt selector converts rather than reinterpreting the number (10 mm becomes 0.39 in and back to 10 mm without drift), and a 1.5 in margin positions the image 108 pt in from the page edge in the output'),
   },
   'watermark-pdf': {
