@@ -34,7 +34,7 @@ const SAVED_KEY = 'docukit-signature';
  */
 export const SIGNATURE_FONTS = [
   { name: 'Flowing', web: 'Dancing Script', stack: '"Dancing Script", "Segoe Script", "Snell Roundhand", "Apple Chancery", cursive' },
-  { name: 'Casual', web: 'Caveat', stack: '"Caveat", "Ink Free", "Bradley Hand", "Segoe Print", "Chalkboard SE", cursive' },
+  { name: 'Casual', web: 'Caveat', stack: '"Caveat", "Segoe Print", "Bradley Hand", "Chalkboard SE", cursive' },
   { name: 'Brush', web: 'Pacifico', stack: '"Pacifico", "Brush Script MT", "Lucida Handwriting", "Savoye LET", cursive' },
   { name: 'Formal', web: 'Sacramento', stack: '"Sacramento", "Lucida Handwriting", "Zapfino", "Segoe Script", cursive' },
 ] as const;

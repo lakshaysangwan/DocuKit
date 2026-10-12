@@ -43,6 +43,7 @@ const GUARD = 'guards/no-external-requests.spec.ts';
 const VISUAL = 'visual/operation-visibility.spec.ts';
 const CLOSED = 'parity/closed-gaps.spec.ts';
 const SOURCED = 'parity/source-check-closures.spec.ts';
+const SIGN_PLACEMENT = 'tools/sign-pdf-placement.spec.ts';
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -79,11 +80,12 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Zoom control: 80 / 120 / 160px thumbnails': C(['parity/claims.spec.ts'], 'copy corrected to the sizes the control actually offers (S/M/L)'),
   },
   'sign-pdf': {
-    'Draw, type, or upload signature': P([T('sign-pdf')], 'typed and uploaded are tested; freehand draw is not'),
-    '4 handwriting font options': U("SOURCE CHECK — implemented at SIGNATURE_FONTS (Dancing Script, Caveat, Pacifico, Sacramento); needs a test."),
-    'Drag-and-drop placement with resize/rotate': P([T('sign-pdf')], 'placement tested; resize and rotate are not'),
-    'Date stamp and initials support': C([CLOSED], 'a date stamp and initials can be placed alongside the signature; the date is drawn as real text and read back out of the output'),
-    'Multi-page batch placement': C([SOURCED], 'built: one click stamps all five pages of the fixture, and every page of the output carries the signature image'),
+    'Draw, type, or upload signature': C([T('sign-pdf')], 'all three are driven end to end: a freehand stroke on the pad, a typed name and an uploaded picture each end up as an image in the downloaded file, trimmed to the ink and with its own proportions'),
+    'See the signature on the page: drag to move, pull a corner to resize': C([SIGN_PLACEMENT, 'workspace/mobile.spec.ts'], 'a mouse drag and a corner pull each change the box on screen and the image in the downloaded file by the same amount; the shape is kept. A finger drag is covered by workspace/mobile.spec.ts with synthetic touch pointer events'),
+    'Placed exactly where shown, on rotated and cropped pages too': CU(['src/lib/pdf/page-geometry.integration.test.ts'], 'a stamp set to a known rectangle is read back from the output content stream and mapped to the displayed page by pdf.js on a plain, a /Rotate 90 and an offset-CropBox fixture, to 0.4% of the page, and its four colours are found at that spot in the rendered output; the mapping itself is pixel-tested against a second renderer in the unit suite', [SIGN_PLACEMENT]),
+    'Date stamp and initials support': C([CLOSED, SIGN_PLACEMENT], 'a date stamp and initials are added beside the signature; the date is real text read back out of the output, and both land in the boxes that were shown, on a /Rotate 90 page'),
+    'Copy a stamp to every page in one click': C([SOURCED, SIGN_PLACEMENT], 'one click puts the stamp on all five pages of the fixture; on a three-page file every page has it at the same view position and the image is stored once'),
+    'Undo, redo and remove any stamp': C([SIGN_PLACEMENT], 'Remove, the Undo and Redo buttons and Ctrl+Z / Ctrl+Shift+Z are each followed through to the downloaded file, which has the date but not the removed signature'),
   },
   'digital-signature-pdf': {
     'PKCS#7 / PAdES standard digital signatures': C([T('digital-signature')], 'the signature is cryptographically verified in the harness'),
