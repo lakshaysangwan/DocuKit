@@ -9,6 +9,7 @@
  */
 
 import { compressPdf } from '../lib/pdf-compress';
+import { layoutImagePage } from '../lib/images-to-pdf-layout';
 import { countUnclosedGraphicsStates } from '../lib/pdf/content-balance';
 import type {
   WorkerRequest,
@@ -695,13 +696,6 @@ async function imagesToPdf(
   sendProgress(5, 'Creating PDF…');
   const doc = await PDFDocument.create();
 
-  // Standard page sizes in points [width, height]
-  const PAGE_SIZES: Record<string, [number, number]> = {
-    a4: [595.28, 841.89],
-    letter: [612, 792],
-    legal: [612, 1008],
-  };
-
   const total = buffers.length;
 
   for (let i = 0; i < total; i++) {
@@ -717,60 +711,16 @@ async function imagesToPdf(
       image = await doc.embedJpg(bytes);
     }
 
-    const imgW = image.width;
-    const imgH = image.height;
-
-    let pageW: number;
-    let pageH: number;
-
-    if (options.pageSize === 'fit') {
-      pageW = imgW;
-      pageH = imgH;
-    } else if (options.pageSize === 'custom' && options.customWidth && options.customHeight) {
-      pageW = options.customWidth;
-      pageH = options.customHeight;
-    } else {
-      [pageW, pageH] = PAGE_SIZES[options.pageSize] ?? PAGE_SIZES.a4;
-    }
-
+    // The geometry is shared with the on-screen preview, so the two cannot disagree.
+    const { pageW, pageH, draw } = layoutImagePage(image, options);
     const page = doc.addPage([pageW, pageH]);
-
-    const { top, right, bottom, left } = options.margins;
-    const availW = pageW - left - right;
-    const availH = pageH - top - bottom;
-
-    let drawX = left;
-    let drawY = bottom;
-    let drawW = availW;
-    let drawH = availH;
-
-    if (options.placement === 'center') {
-      const scale = Math.min(availW / imgW, availH / imgH);
-      drawW = imgW * scale;
-      drawH = imgH * scale;
-      drawX = left + (availW - drawW) / 2;
-      drawY = bottom + (availH - drawH) / 2;
-    } else if (options.placement === 'fit') {
-      const scale = Math.min(availW / imgW, availH / imgH);
-      drawW = imgW * scale;
-      drawH = imgH * scale;
-      drawX = left + (availW - drawW) / 2;
-      drawY = bottom + (availH - drawH) / 2;
-    } else if (options.placement === 'cover') {
-      const scale = Math.max(availW / imgW, availH / imgH);
-      drawW = imgW * scale;
-      drawH = imgH * scale;
-      drawX = left + (availW - drawW) / 2;
-      drawY = bottom + (availH - drawH) / 2;
-    }
-    // 'stretch' uses full availW/availH as-is
 
     if (options.backgroundColor) {
       const [r, g, b] = parseColor(options.backgroundColor);
       page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) });
     }
 
-    page.drawImage(image, { x: drawX, y: drawY, width: drawW, height: drawH });
+    page.drawImage(image, { x: draw.x, y: draw.y, width: draw.w, height: draw.h });
   }
 
   sendProgress(95, 'Saving…');
