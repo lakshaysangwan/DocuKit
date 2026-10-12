@@ -9,6 +9,7 @@
  */
 
 import { compressPdf } from '../lib/pdf-compress';
+import { countUnclosedGraphicsStates } from '../lib/pdf/content-balance';
 import type {
   WorkerRequest,
   WorkerResponse,
@@ -29,6 +30,9 @@ import type {
 function toUint8Array(buf: ArrayBuffer): Uint8Array {
   return new Uint8Array(buf);
 }
+
+/** Separates content streams when they are read as one. */
+const NEWLINE = new Uint8Array([10]);
 
 function parseColor(hex: string): [number, number, number] {
   const clean = hex.replace('#', '');
@@ -306,11 +310,46 @@ async function signVisual(
   options: SignVisualOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, StandardFonts, degrees, rgb } = await import('pdf-lib');
+  const { PDFDocument, PDFArray, PDFRawStream, StandardFonts, decodePDFRawStream, degrees, popGraphicsState, rgb } =
+    await import('pdf-lib');
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
+
+  /**
+   * Graphics states the page's own content opens and never closes. pdf-lib
+   * isolates existing content in one q…Q, which is enough for a well-formed
+   * page; a page that leaves two or more open would have our stamps drawn in
+   * whatever coordinate system it left behind (see lib/pdf/content-balance.ts).
+   */
+  const unclosedStates = (page: ReturnType<typeof doc.getPage>): number => {
+    try {
+      const contents = page.node.Contents();
+      const streams = contents instanceof PDFArray
+        ? contents.asArray().map((entry) => doc.context.lookup(entry))
+        : [contents];
+      const parts: Uint8Array[] = [];
+      let length = 0;
+      for (const stream of streams) {
+        if (!(stream instanceof PDFRawStream)) continue;
+        const decoded = decodePDFRawStream(stream).decode();
+        parts.push(decoded, NEWLINE);
+        length += decoded.length + 1;
+      }
+      const content = new Uint8Array(length);
+      let offset = 0;
+      for (const part of parts) {
+        content.set(part, offset);
+        offset += part.length;
+      }
+      return countUnclosedGraphicsStates(content);
+    } catch {
+      // A stream that cannot be decoded cannot be counted; leave the page as it is.
+      return 0;
+    }
+  };
+  const repaired = new Set<number>();
 
   // One embedded image per distinct picture: a signature copied to every page
   // of a 200-page file is stored once and drawn 200 times, not stored 200 times.
@@ -321,6 +360,13 @@ async function signVisual(
     const ann = options.annotations[i];
     const page = doc.getPage(ann.pageIndex);
     const opacity = ann.opacity ?? 1;
+
+    // Once per page, before the first stamp: close what the page left open.
+    if (!repaired.has(ann.pageIndex)) {
+      repaired.add(ann.pageIndex);
+      const open = unclosedStates(page);
+      if (open > 0) page.pushOperators(...Array.from({ length: open }, () => popGraphicsState()));
+    }
 
     sendProgress(10 + Math.round(((i + 1) / total) * 80), `Applying annotation ${i + 1}/${total}…`);
 

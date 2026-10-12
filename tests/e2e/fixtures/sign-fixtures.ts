@@ -101,16 +101,20 @@ export async function makeCropOffsetPdf(): Promise<Uint8Array> {
 
 /**
  * A page whose content stream changes the coordinate system and never restores
- * it: no `q`/`Q` around a `cm` that halves and shifts everything. Anything
- * appended to the page inherits that transform unless the writer isolates the
- * existing content first — in which case a stamp is drawn at half size, 150pt
- * right and 200pt up from where it was shown.
+ * it: it saves the graphics state twice (`q`), scaling and shifting each time,
+ * and closes neither. pdf-lib's own `q … Q` around existing content undoes only
+ * the innermost, so a stamp appended naively is drawn at half size, 150pt right
+ * and 200pt up from where it was shown. The writer has to close the states the
+ * page left open first.
  */
 export async function makeUnbalancedPdf(): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const page = doc.addPage([612, 792]);
   const content = [
+    'q',
     '0.5 0 0 0.5 150 200 cm',
+    'q',
+    '0.5 0 0 0.5 0 0 cm',
     '0.85 0.85 0.85 rg',
     '0 0 400 300 re f',
     '0 0 0 RG 2 w',
