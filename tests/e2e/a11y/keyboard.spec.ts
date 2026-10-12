@@ -14,6 +14,20 @@ const cardNames = (page: Page) =>
     els.map((e) => e.getAttribute('data-filename'))
   );
 
+/**
+ * Resolves once the keyboard drag that Space just started can take arrow keys.
+ *
+ * dnd-kit's KeyboardSensor starts listening for them in a `setTimeout` after the
+ * pick-up, but the pick-up is announced straight away. Playwright can see the
+ * announcement and send the next key before that timer has run — browsers
+ * dispatch input ahead of timers — and the arrow key is then dropped, which made
+ * this test fail about four runs in ten. A timer queued now runs after the
+ * sensor's, so waiting for it is waiting for the listener. (Nobody presses two
+ * keys a few milliseconds apart; this is a test-only race.)
+ */
+const keyboardDragReady = (page: Page) =>
+  page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+
 test.describe('P4.3 — keyboard drag-and-drop reorder', () => {
   test('reorders files with the keyboard and announces the move', async ({ page }) => {
     await page.goto('/image-to-pdf');
@@ -30,6 +44,7 @@ test.describe('P4.3 — keyboard drag-and-drop reorder', () => {
 
     await page.keyboard.press('Space');
     await expect(page.getByText(/photo\.jpg moved to position 1 of 2/)).toBeAttached();
+    await keyboardDragReady(page);
 
     await page.keyboard.press('ArrowRight');
     await expect(page.getByText(/photo\.jpg moved to position 2 of 2/)).toBeAttached();
