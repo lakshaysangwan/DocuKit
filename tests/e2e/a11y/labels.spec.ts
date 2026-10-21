@@ -135,7 +135,6 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
   test('merge-pdf — per-file page ranges', async ({ page }) => {
     await page.goto('/merge-pdf');
     await addFilesAndWait(page, [FIXTURE.pdf1page, FIXTURE.pdf3page], 2);
-    await page.getByText('Choose pages per file (optional)').click();
     await expect(page.getByTestId('page-range-input').first()).toBeVisible();
     await assertAllLabelled(page);
   });

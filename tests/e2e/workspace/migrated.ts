@@ -3,6 +3,7 @@ import { FIXTURE } from '../fixtures/generate';
 import { openSign, addTypedSignature } from '../helpers/sign';
 import { openImages } from '../helpers/image-to-pdf';
 import { openEdit, addObject } from '../helpers/edit-pdf';
+import { openMerge } from '../helpers/merge-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -53,5 +54,13 @@ export const MIGRATED: MigratedTool[] = [
     makeReady: async (page) => {
       await addObject(page, 'text');
     },
+  },
+  {
+    // "Build a document" like Image to PDF, from PDFs: the document pane is every
+    // page of the merged PDF in output order; the files are rows in the controls.
+    // Two files are enough to merge, so there is no `makeReady`.
+    slug: 'merge-pdf',
+    name: 'Merge PDF',
+    enter: (page) => openMerge(page, [FIXTURE.pdf3page, FIXTURE.pdf5page], 8),
   },
 ];

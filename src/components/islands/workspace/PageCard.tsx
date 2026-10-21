@@ -8,6 +8,14 @@ export interface PageCardProps {
   id: string;
   /** The file this page comes from. Names the card's buttons and its `data-filename`. */
   name: string;
+  /** What the buttons call this page, when the file name alone is not enough: "A · page 2 (a.pdf)". */
+  itemLabel?: string;
+  /** Drawn in the button row, between the handle and the buttons: a tag saying where the page is from. */
+  badge?: ReactNode;
+  /** The remove button's verb: "Remove" (the default), "Leave out". */
+  removeVerb?: string;
+  /** The card's test id. Defaults to `file-card`. */
+  testId?: string;
   /** Zero-based position, and how many pages there are: "Page 2 of 5". */
   index: number;
   total: number;
@@ -49,11 +57,15 @@ const animateLayoutChanges: AnimateLayoutChanges = (args) => !(args.isSorting ||
  * to pick up, arrows to move, Space to drop, Esc to cancel.
  *
  * Test ids: `file-card` (with `data-filename`), `page-thumb`, `page-label`,
- * `page-reorder`, `page-open`, `file-remove`.
+ * `page-detail`, `page-reorder`, `page-open`, `file-remove`.
  */
 export default function PageCard({
   id,
   name,
+  itemLabel = name,
+  badge,
+  removeVerb = 'Remove',
+  testId = 'file-card',
   index,
   total,
   aspect,
@@ -81,7 +93,7 @@ export default function PageCard({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      data-testid="file-card"
+      data-testid={testId}
       data-filename={name}
       data-page-id={id}
       data-dragging={isDragging ? 'true' : undefined}
@@ -97,7 +109,7 @@ export default function PageCard({
           <button
             type="button"
             data-testid="page-reorder"
-            aria-label={`Reorder ${name}`}
+            aria-label={`Reorder ${itemLabel}`}
             className={cn(cardButton, buttonSize, 'cursor-grab touch-none active:cursor-grabbing')}
             {...attributes}
             {...listeners}
@@ -108,13 +120,14 @@ export default function PageCard({
         ) : (
           <span aria-hidden="true" />
         )}
+        {badge}
         <div className={cn('flex', compact ? 'gap-0.5' : 'gap-1')}>
           {onOpen && (
             <button
               type="button"
               onClick={onOpen}
               data-testid="page-open"
-              aria-label={`View page ${index + 1} larger: ${name}`}
+              aria-label={`View page ${index + 1} larger: ${itemLabel}`}
               className={cn(cardButton, buttonSize)}
             >
               <ZoomIn className="size-4" aria-hidden="true" />
@@ -126,7 +139,7 @@ export default function PageCard({
               onClick={onRemove}
               disabled={disabled}
               data-testid="file-remove"
-              aria-label={`Remove ${name}`}
+              aria-label={`${removeVerb} ${itemLabel}`}
               className={cn(cardButton, buttonSize, 'hover:text-[var(--color-error)]')}
             >
               <X className="size-4" aria-hidden="true" />
@@ -156,7 +169,9 @@ export default function PageCard({
           {name}
         </p>
         {detail !== undefined && (
-          <p className="min-h-4 truncate text-[11px] leading-4 text-[var(--color-text-secondary)]">{detail}</p>
+          <p data-testid="page-detail" className="min-h-4 truncate text-[11px] leading-4 text-[var(--color-text-secondary)]">
+            {detail}
+          </p>
         )}
       </div>
     </div>

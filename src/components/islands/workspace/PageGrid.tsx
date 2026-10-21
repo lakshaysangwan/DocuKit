@@ -27,6 +27,20 @@ export interface PageGridProps<T extends { id: string }> {
   getAspect: (item: T, index: number) => number;
   /** Draw the page. It gets a box of the page's proportions; fill its width. */
   renderPage: (item: T, index: number, view: PageGridView) => ReactNode;
+  /**
+   * What a page is called on its buttons and in reorder announcements, when the
+   * file name alone does not say which page it is: "A · page 2 (a.pdf)".
+   * Defaults to `getName`.
+   */
+  getItemLabel?: (item: T, index: number) => string;
+  /** A tag drawn in each card's button row, saying where the page comes from. */
+  renderBadge?: (item: T, index: number) => ReactNode;
+  /** The remove button's verb. Defaults to "Remove". */
+  removeVerb?: string;
+  /** Each card's test id. Defaults to `file-card`. */
+  cardTestId?: string;
+  /** More controls in the toolbar, left of the size buttons ("Reset order"). */
+  toolbarExtra?: ReactNode;
   /** A line under the name on each card, and under the title when enlarged. */
   getDetail?: (item: T, index: number) => string | undefined;
   size: PageGridSize;
@@ -78,6 +92,11 @@ export default function PageGrid<T extends { id: string }>({
   getAspect,
   renderPage,
   getDetail,
+  getItemLabel,
+  renderBadge,
+  removeVerb,
+  cardTestId,
+  toolbarExtra,
   size,
   onSizeChange,
   caption,
@@ -112,8 +131,9 @@ export default function PageGrid<T extends { id: string }>({
   // Announcements name the real file and its 1-based position, so reordering
   // with the keyboard is narrated in the visitor's terms.
   const nameOf = (id: string | number) => {
-    const item = items.find((i) => i.id === String(id));
-    return item ? getName(item) : 'page';
+    const index = items.findIndex((i) => i.id === String(id));
+    if (index === -1) return 'page';
+    return getItemLabel ? getItemLabel(items[index], index) : getName(items[index]);
   };
   const positionOf = (id: string | number) => items.findIndex((i) => i.id === String(id)) + 1;
   type Ids = { active: { id: string | number }; over: { id: string | number } | null };
@@ -146,6 +166,7 @@ export default function PageGrid<T extends { id: string }>({
         <p data-testid="page-grid-caption" className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-secondary)]">
           {caption}
         </p>
+        {toolbarExtra}
         <div role="group" aria-label="Size of the pages on screen" className="flex shrink-0 gap-1">
           {SIZES.map((option) => (
             <button
@@ -192,6 +213,10 @@ export default function PageGrid<T extends { id: string }>({
                   <PageCard
                     id={item.id}
                     name={getName(item)}
+                    itemLabel={getItemLabel?.(item, index)}
+                    badge={renderBadge?.(item, index)}
+                    removeVerb={removeVerb}
+                    testId={cardTestId}
                     index={index}
                     total={items.length}
                     aspect={getAspect(item, index)}

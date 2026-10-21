@@ -38,7 +38,6 @@ test.describe('Copy-drift closures — merge', () => {
 
     await page.goto('/merge-pdf');
     await addFilesAndWait(page, [FIXTURE.pdf3page, FIXTURE.pdf3page], 2);
-    await page.locator('details[data-testid="merge-options"] summary').click();
     await page.getByTestId('insert-blank-pages').check();
 
     await page.getByTestId('tool-action').click();
@@ -53,7 +52,6 @@ test.describe('Copy-drift closures — merge', () => {
 
     await page.goto('/merge-pdf');
     await addFilesAndWait(page, [FIXTURE.pdfBookmarks, FIXTURE.pdfBookmarks2], 2);
-    await page.locator('details[data-testid="merge-options"] summary').click();
     await page.getByTestId('preserve-bookmarks').check();
 
     await page.getByTestId('tool-action').click();

@@ -22,14 +22,14 @@ const SCREENS = path.join(DIR, '..', '..', '..', 'test-results', 'screens');
 const shot = (name: string) => path.join(SCREENS, `${name}.png`);
 
 test.describe('UX: operation visibility', () => {
-  test('Merge — every uploaded file shows a rendered page thumbnail', async ({ page }) => {
+  test('Merge — every page of every uploaded file shows a rendered thumbnail', async ({ page }) => {
     await page.goto('/merge-pdf');
     await uploadFiles(page, [FIXTURE.pdf3page, FIXTURE.pdf5page]);
-    const cards = page.getByTestId('file-card');
-    await expect(cards).toHaveCount(2);
-    // Both cards must show a real (decoded) thumbnail image.
-    await expectImageRendered(cards.nth(0).locator('img'));
-    await expectImageRendered(cards.nth(1).locator('img'));
+    await expect(page.getByTestId('file-row')).toHaveCount(2);
+    const cards = page.getByTestId('merge-page');
+    await expect(cards).toHaveCount(8, { timeout: 20_000 });
+    // Every page must show a real (decoded) thumbnail image.
+    for (let i = 0; i < 8; i++) await expectImageRendered(cards.nth(i).locator('img'));
     await page.screenshot({ path: shot('merge-thumbnails'), fullPage: false });
   });
 

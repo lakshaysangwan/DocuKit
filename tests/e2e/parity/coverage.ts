@@ -50,12 +50,14 @@ const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
   'merge-pdf': {
-    'Drag-and-drop file reorder': C(['a11y/keyboard.spec.ts'], 'reorder proven via the keyboard equivalent of the drag interaction'),
-    'Per-file page selection': C([T('merge-pdf')]),
+    'Every page shown in the order it will be merged': C([T('merge-pdf-pages'), VISUAL], 'every page of every file is a rendered thumbnail; the grid order is compared with the page order of the downloaded file'),
+    'Drag pages to reorder, even between files': C([T('merge-pdf-pages')], 'pages of two files interleaved by mouse drag; the downloaded file has exactly that order, on the fast path and on the bookmark path'),
+    'Drag-and-drop file reorder': C([T('merge-pdf-pages')], 'a file moved with the keyboard equivalent of the drag (handle, Space, arrow, Space); the pages regroup by file and the download follows'),
+    'Per-file page selection': C([T('merge-pdf'), T('merge-pdf-pages')], "a typed range replaces that file's pages in place; an unreadable range changes nothing and says why"),
     'Preserve bookmarks & internal links': C([CLOSED], 'opt-in MuPDF graft path; the merged outline keeps its nesting and both bookmarks and links are rebased onto the new page numbers'),
     'Optional blank page between documents': C([CLOSED], 'a blank lands between the two documents and not after the last one'),
     'Password-protected PDF support': C([CLOSED], 'an encrypted input is detected, decrypted with its password and merged; a wrong password names the file instead of merging garbage'),
-    'Up to 50 files, 200MB per file': U("The 50-file cap is real (DropZone maxFiles={50}); the 200MB figure is not enforced (no maxSize passed) and not verified — large-input work is P6.2, deferred."),
+    'Up to 50 files at once': U('The 50-file cap is enforced (MAX_FILES in MergePdfTool and DropZone maxFiles) but no test adds 51 files.'),
   },
   'split-pdf': {
     '5 split modes': C([T('split-pdf')], 'extract, remove, by-range, extract-each and every-N all tested'),

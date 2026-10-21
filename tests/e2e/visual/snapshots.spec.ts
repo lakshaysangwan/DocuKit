@@ -73,10 +73,11 @@ test.describe('P7 — visual regression: preview surfaces', () => {
     await expect(canvas).toHaveScreenshot('editor-canvas.png', shot);
   });
 
-  test('merge file-card thumbnail', async ({ page }) => {
+  test('merge page thumbnail', async ({ page }) => {
     await page.goto('/merge-pdf');
     await addFilesAndWait(page, [FIXTURE.pdf3page], 1);
-    const img = page.getByTestId('file-card').first().locator('img');
+    // The first page of the merged PDF, in the "Pages in the merged PDF" grid.
+    const img = page.getByTestId('merge-page').first().locator('img');
     await expectImageRendered(img);
     await expect(img).toHaveScreenshot('merge-thumbnail.png', shot);
   });
@@ -112,10 +113,10 @@ test.describe('P8 — visual regression: control surfaces', () => {
   test("merge options panel", async ({ page }) => {
     await page.goto("/merge-pdf");
     await addFilesAndWait(page, [FIXTURE.pdf3page, FIXTURE.pdf3page], 2);
-    const details = page.locator("details[data-testid='merge-options']");
-    await details.locator("summary").click();
+    // The options are always open in the workspace's controls pane now.
+    const options = page.getByTestId("merge-options");
     await expect(page.getByTestId("insert-blank-pages")).toBeVisible();
-    await expect(details).toHaveScreenshot("merge-options.png", shot);
+    await expect(options).toHaveScreenshot("merge-options.png", shot);
   });
 
   test("crop mode toggle", async ({ page }) => {

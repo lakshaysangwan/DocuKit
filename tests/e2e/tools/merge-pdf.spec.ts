@@ -18,12 +18,13 @@ test.describe('Merge PDF', () => {
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('shows a preview card per uploaded file', async ({ page }) => {
+  test('shows a row per uploaded file and every page of both', async ({ page }) => {
     await page.goto('/merge-pdf');
     await uploadFiles(page, [FIXTURE.pdf3page, FIXTURE.pdf5page]);
-    await expect(page.getByTestId('file-card')).toHaveCount(2);
-    // Thumbnails should render (img with a data URL) within a reasonable time.
-    await expect(page.getByTestId('file-card').first().locator('img')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('file-row')).toHaveCount(2);
+    // Every page of the merged PDF, as a rendered thumbnail.
+    await expect(page.getByTestId('merge-page')).toHaveCount(8, { timeout: 20_000 });
+    await expect(page.getByTestId('merge-page').first().locator('img')).toBeVisible({ timeout: 20_000 });
   });
 
   test('merge button disabled with <2 files, enabled with 2+', async ({ page }) => {
@@ -58,11 +59,10 @@ test.describe('Merge PDF', () => {
   test('per-file page selection: only chosen pages are merged', async ({ page }) => {
     await page.goto('/merge-pdf');
     await addFilesAndWait(page, [FIXTURE.pdf3page, FIXTURE.pdf5page], 2);
-    // Wait for page counts to load (thumbnails resolve pageCount).
-    await expect(page.getByTestId('file-card').first().locator('img')).toBeVisible({ timeout: 20_000 });
+    // Wait for page counts to load: the range fields open once each file is read.
+    await expect(page.getByTestId('merge-page')).toHaveCount(8, { timeout: 20_000 });
 
     // Take only page 1 from the first file; leave the second file as all pages.
-    await page.getByTestId('page-select').locator('summary').click();
     await page.getByTestId('page-range-input').first().fill('1');
 
     await page.getByTestId('tool-action').click();
@@ -76,16 +76,19 @@ test.describe('Merge PDF', () => {
   test('remove button drops a file from the queue', async ({ page }) => {
     await page.goto('/merge-pdf');
     await uploadFiles(page, [FIXTURE.pdf3page, FIXTURE.pdf5page]);
-    await expect(page.getByTestId('file-card')).toHaveCount(2);
-    await page.getByTestId('file-card').first().hover();
-    await page.getByTestId('file-remove').first().click();
-    await expect(page.getByTestId('file-card')).toHaveCount(1);
+    await expect(page.getByTestId('file-row')).toHaveCount(2);
+    await page.getByTestId('file-row').first().getByTestId('file-remove').click();
+    await expect(page.getByTestId('file-row')).toHaveCount(1);
+    // Its pages leave the grid with it.
+    await expect(page.getByTestId('merge-page')).toHaveCount(5, { timeout: 20_000 });
   });
 
-  test('clear all empties the queue', async ({ page }) => {
+  test('remove all empties the queue', async ({ page }) => {
     await page.goto('/merge-pdf');
     await uploadFiles(page, [FIXTURE.pdf3page, FIXTURE.pdf5page]);
-    await page.getByRole('button', { name: 'Clear all' }).click();
-    await expect(page.getByTestId('file-card')).toHaveCount(0);
+    await expect(page.getByTestId('file-row')).toHaveCount(2);
+    await page.getByRole('button', { name: 'Remove all PDFs' }).click();
+    await expect(page.getByTestId('file-row')).toHaveCount(0);
+    await expect(page.getByTestId('dropzone')).toBeVisible();
   });
 });
