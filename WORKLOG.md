@@ -120,9 +120,18 @@ included" tag is truncated. PDF to Image still uses the old `PageSelectorGrid`. 
 now start up to ~10 minutes after a push (both T1 and T2); allow 15 minutes before calling a deploy
 stuck. Live-run specs that assert "no console errors" fail on production only because the CSP blocks
 the Cloudflare Web Analytics beacon — switching Web Analytics off (Lakshay's to-do) fixes that.
+| `1451f7f`, `f1db66c`, `217d009` (T12) | Compress PDF in the workspace with a quality preview: a live one-page Original / Compressed preview while choosing a level (desktop; a "Preview quality" button on phones and engines without OffscreenCanvas), `CompareView` of any page of the real output at Fit / 100% / 200% after a run, facts lines from the compressor's real per-image outcomes, a gross-corruption check on the shown page plus up to six others that demotes the download to "Download anyway", Target-size "what it took" and harsh-end warning; copy corrected ("Five settings", no "Compress & Download", percentage ranges removed) | Clean worktree: 559 Chromium, 760 Firefox/WebKit, 44 mobile, 9 visual, 782 unit. Live: preview, image-safety and compress specs against docukit.uk on three engines (corruption warning fires on a stubbed black encoder), phone "Preview quality" path |
+
+T12 notes: new shared `workspace/CompareView.tsx` (Compress Image can adopt it; `BeforeAfterSlider`
+stays until then), `doc-handle.renderPage` gained `format: 'png'` and `pixels`, worker op
+`compress-probe`. KB stays 1024 bytes site-wide. Open: a preview can differ from the run when an
+image on the previewed page is the soft mask of an image on another page; "Strip embedded fonts"
+still loses text (now labelled so); the probe copies the whole file to the worker on each page
+change; not tried on real Safari/iOS or a real 200-page scan.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge) and T2 (Split) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split) and T12 (Compress
+PDF preview) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
