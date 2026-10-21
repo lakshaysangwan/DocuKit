@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { FIXTURE } from '../fixtures/generate';
 import { makeMarkerBmp, makeMarkerGif, makeSidewaysJpeg } from '../fixtures/image-fixtures';
 import { uploadBuffer } from '../helpers/harness';
@@ -211,9 +212,16 @@ test.describe('Image to PDF — the preview follows the options', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openImages(page, MIXED);
     const width = async () => (await page.getByTestId('file-card').first().boundingBox())!.width;
-    const large = await width();
-    await page.getByTestId('grid-size-m').click();
+    // Medium to start with at this width: all four pages on screen, none cut off.
+    await expect(page.getByTestId('grid-size-m')).toHaveAttribute('aria-pressed', 'true');
+    const stage = (await page.getByTestId('ws-stage').boundingBox())!;
+    for (const card of await page.getByTestId('file-card').all()) {
+      const box = (await card.boundingBox())!;
+      expect(box.y + box.height, 'the whole card is inside the document pane').toBeLessThanOrEqual(stage.y + stage.height);
+    }
     const medium = await width();
+    await page.getByTestId('grid-size-l').click();
+    const large = await width();
     await page.getByTestId('grid-size-s').click();
     const small = await width();
     expect(medium).toBeLessThan(large);
@@ -239,11 +247,21 @@ test.describe('Image to PDF — order and removal', () => {
     // Take the first page by the picture itself and drop it on the third.
     const from = (await page.getByTestId('page-thumb').nth(0).boundingBox())!;
     const to = (await page.getByTestId('page-thumb').nth(2).boundingBox())!;
-    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    // Moved at a hand's pace: the drop target is worked out a render after each
+    // move, so moves fired with no gap can be dropped on a stale target.
+    const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+    const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+    await page.mouse.move(start.x, start.y);
     await page.mouse.down();
-    await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2, { steps: 4 });
-    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    for (let step = 1; step <= 16; step++) {
+      await page.waitForTimeout(20);
+      await page.mouse.move(start.x + ((end.x - start.x) * step) / 16, start.y + ((end.y - start.y) * step) / 16);
+    }
+    await expect(page.getByText(/photo\.jpg moved to position 3 of 3/)).toBeAttached();
     await page.mouse.up();
+    // dnd-kit swallows every click for 50 ms after a drag ends, so that letting
+    // go is not also a click; a test clicking Create PDF sooner loses the click.
+    await page.waitForTimeout(100);
 
     await expect.poll(() => cardNames(page)).toEqual(['photo-2.jpg', 'graphic.png', 'photo.jpg']);
     // A drag is not a click: the page was not opened large.
@@ -442,6 +460,16 @@ test.describe('Image to PDF — viewing a page large', () => {
     expect(box.width).toBeGreaterThan((await card.boundingBox())!.width * 1.15);
     expect(box.height, 'the page takes most of the screen').toBeGreaterThan(page.viewportSize()!.height * 0.8);
     expect(box.width / box.height).toBeCloseTo(595.28 / 841.89, 2);
+
+    // Focus is inside the dialog, and the dialog has no serious accessibility faults.
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(
+      axe.violations
+        .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+        .map((v) => `${v.id}: ${v.nodes[0]?.target}`),
+      'axe with the page open large',
+    ).toEqual([]);
 
     // Previous is unavailable on the first page; Next goes on.
     await expect(page.getByTestId('page-preview-prev')).toHaveAttribute('aria-disabled', 'true');

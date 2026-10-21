@@ -148,8 +148,9 @@ export default function ImageToPdfTool() {
     (files: File[]) => {
       if (files.length === 0) return;
       const batch: Item[] = files.map((file) => ({ id: generateId(), file, status: 'reading' }));
-      // A phone has room for two pages across; anything wider starts large.
-      if (alive.current.size === 0) setGridSize(window.matchMedia('(max-width: 767px)').matches ? 'm' : 'l');
+      // Start at the largest size at which a whole page fits in the document
+      // pane without scrolling: large on a big desktop, medium below that.
+      if (alive.current.size === 0) setGridSize(window.matchMedia('(min-width: 1536px)').matches ? 'l' : 'm');
       for (const item of batch) alive.current.add(item.id);
       invalidate();
       setItems((prev) => [...prev, ...batch]);
