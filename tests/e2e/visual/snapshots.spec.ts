@@ -62,14 +62,14 @@ test.describe('P7 — visual regression: preview surfaces', () => {
 
   test('editor canvas', async ({ page }) => {
     await page.goto('/edit-pdf');
-    // edit-pdf goes straight to the canvas — it renders no file-info card.
+    // edit-pdf opens the workspace with the first page large.
     await uploadFiles(page, FIXTURE.pdf3page);
-    const canvas = page.getByTestId('editor-canvas');
+    const canvas = page.locator('[data-testid="page-canvas"][data-rendered="true"]');
     await expect(canvas).toBeVisible({ timeout: 30_000 });
-    // Let the page background finish painting onto the Fabric canvas. (This is a
-    // wrapper element, not the <canvas> itself, so there are no width/height
-    // properties to poll on.)
-    await page.waitForTimeout(800);
+    // A text box and a rectangle on the page, the rectangle selected with its handles.
+    await page.getByTestId('add-text').click();
+    await page.getByTestId('add-rect').click();
+    await expect(page.getByTestId('overlay-item')).toHaveCount(2);
     await expect(canvas).toHaveScreenshot('editor-canvas.png', shot);
   });
 

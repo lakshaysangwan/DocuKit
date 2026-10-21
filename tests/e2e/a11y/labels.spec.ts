@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { uploadFiles, addSingleFileAndWait, addFilesAndWait, unlabelledFormControls } from '../helpers/harness';
 import { openSign, addTypedSignature } from '../helpers/sign';
+import { openEdit, addObject } from '../helpers/edit-pdf';
 
 /**
  * P4.1 — form-label audit (WCAG 2.1 AA, 1.3.1 / 4.1.2).
@@ -158,6 +159,26 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
     await expect(page.getByLabel('From left (mm)')).toBeVisible();
     await expect(page.getByLabel('From top (mm)')).toBeVisible();
     await expect(page.getByLabel('Width (mm)')).toBeVisible();
+    await assertAllLabelled(page);
+  });
+
+  test('edit-pdf — palette, text, line, stamp and size fields', async ({ page }) => {
+    await openEdit(page, FIXTURE.pdf3page);
+    await assertAllLabelled(page);
+
+    await addObject(page, 'text');
+    for (const label of ['Text', 'Font size (pt)', 'Colour', 'Width', 'Height', 'From left', 'From top', 'Keep proportions']) {
+      await expect(page.getByLabel(label, { exact: true })).toBeVisible();
+    }
+    await assertAllLabelled(page);
+
+    await addObject(page, 'arrow');
+    await expect(page.getByLabel('Direction')).toBeVisible();
+    await expect(page.getByLabel('Line width (pt)')).toBeVisible();
+    await assertAllLabelled(page);
+
+    await addObject(page, 'stamp');
+    await expect(page.getByLabel('Stamp wording')).toBeVisible();
     await assertAllLabelled(page);
   });
 });

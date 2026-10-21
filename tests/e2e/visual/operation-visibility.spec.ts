@@ -48,15 +48,13 @@ test.describe('UX: operation visibility', () => {
   test('Edit — adding a text annotation visibly changes the canvas', async ({ page }) => {
     await page.goto('/edit-pdf');
     await uploadFiles(page, FIXTURE.pdf3page);
-    const canvas = page.getByTestId('editor-canvas');
+    const canvas = page.locator('[data-testid="page-canvas"][data-rendered="true"]');
     await expect(canvas).toBeVisible({ timeout: 30_000 });
-    // Let the page background render onto the Fabric canvas first.
-    await page.waitForTimeout(800);
 
     const before = await canvas.screenshot({ path: shot('edit-before') });
-    // Add a text object — it should appear (and be selected) on the canvas.
-    await page.locator('button[title="Text Box (T)"]').click();
-    await page.waitForTimeout(800);
+    // Add a text object — it should appear (and be selected) on the page.
+    await page.getByTestId('add-text').click();
+    await expect(page.getByTestId('overlay-item')).toHaveCount(1);
     const after = await canvas.screenshot({ path: shot('edit-after') });
 
     // The canvas pixels must change — proof the added annotation is visible.

@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import {
   addSingleFileAndWait,
-  uploadFiles,
   expectDownload,
   assertPdf,
   countPdfPages,
 } from '../helpers/harness';
+import { addObject, openEdit, setField } from '../helpers/edit-pdf';
 
 /**
  * Phase 7 — proving advertised claims that previously had no coverage.
@@ -122,119 +122,34 @@ test.describe('P7 claims — PDF tools', () => {
 });
 
 test.describe('P7 claims — PDF editor', () => {
-  // The Fabric surface renders ~1100x1430 CSS px inside its wrapper. At the
-  // default 1280x720 viewport most of it sits below the fold, and mouse
-  // coordinates taken from its bounding box land outside the viewport entirely,
-  // so drags silently do nothing. Give these tests room to see the whole page.
-  test.use({ viewport: { width: 1400, height: 1500 } });
   /**
-   * The [data-testid="editor-canvas"] element is a wrapper: inside it Fabric
-   * renders at native PDF dimensions and is scaled with a CSS transform. Mouse
-   * coordinates therefore have to come from Fabric's own interaction surface
-   * (.upper-canvas), while screenshots come from the wrapper.
+   * Each item in the Edit PDF palette must visibly change the page — a button
+   * that adds nothing would still "exist" without doing anything. Where each
+   * one lands in the saved file, and at what size, is proven in
+   * tools/edit-pdf.spec.ts; this only checks it shows.
    */
-  const openEditor = async (page: import('@playwright/test').Page) => {
-    await page.goto('/edit-pdf');
-    await uploadFiles(page, FIXTURE.pdf3page);
-    const wrapper = page.getByTestId('editor-canvas');
-    await expect(wrapper).toBeVisible({ timeout: 30_000 });
-    // Fabric's interaction surface is the second <canvas> in the wrapper; the
-    // first is the rendered PDF background. Neither carries a class here.
-    const surface = page.locator('[data-testid="editor-canvas"] canvas').last();
-    await expect(surface).toBeVisible({ timeout: 30_000 });
-    await page.waitForTimeout(800);
-    return { wrapper, surface };
-  };
-
-  /** Drag across the middle of Fabric's interaction surface. */
-  const dragAcross = async (page: import('@playwright/test').Page, surface: import('@playwright/test').Locator) => {
-    await surface.scrollIntoViewIfNeeded();
-    const box = (await surface.boundingBox())!;
-    // Stay in the upper band of the canvas so the points remain on-screen.
-    await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.10);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.60, box.y + box.height * 0.25, { steps: 12 });
-    await page.mouse.up();
-    await page.waitForTimeout(700);
-  };
-
-  // Each tool must visibly change the canvas — a toolbar button that selects a
-  // mode but draws nothing would still "exist" without doing anything.
-  for (const [claim, title] of [
-    ['rectangle', 'Rectangle (R)'],
-    ['ellipse', 'Ellipse (E)'],
-    ['line', 'Line (L)'],
-    ['arrow', 'Arrow (A)'],
-  ] as const) {
-    test(`edit: shape tool "${claim}" draws on the canvas`, async ({ page }) => {
-      const { wrapper, surface } = await openEditor(page);
-      const before = await wrapper.screenshot();
-      await page.locator(`button[title="${title}"]`).click();
-      await dragAcross(page, surface);
-      const after = await wrapper.screenshot();
-      expect(Buffer.compare(before, after), `${claim} should mark the canvas`).not.toBe(0);
+  for (const kind of ['rect', 'ellipse', 'line', 'arrow', 'highlight', 'whiteout', 'stamp', 'draw'] as const) {
+    test(`edit: "${kind}" marks the page`, async ({ page }) => {
+      await openEdit(page, FIXTURE.pdf3page);
+      const canvas = page.getByTestId('page-canvas');
+      // Whiteout is white on a white page: put it over the text so it shows.
+      const before = await canvas.screenshot();
+      await addObject(page, kind);
+      if (kind === 'whiteout') await setField(page, 'object-y', 30);
+      // Deselect, so the selection frame is not what changed the pixels.
+      await page.getByTestId('overlay-layer').click({ position: { x: 3, y: 3 } });
+      expect(Buffer.compare(before, await canvas.screenshot()), `${kind} should mark the page`).not.toBe(0);
     });
   }
 
-  test('edit: freehand draw marks the canvas', async ({ page }) => {
-    const { wrapper, surface } = await openEditor(page);
-    const before = await wrapper.screenshot();
-    await page.locator('button[title="Freehand Draw (D)"]').click();
-    await surface.scrollIntoViewIfNeeded();
-    const box = (await surface.boundingBox())!;
-    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.10);
-    await page.mouse.down();
-    for (let i = 1; i <= 10; i++) {
-      await page.mouse.move(box.x + box.width * (0.3 + i * 0.03), box.y + box.height * (0.10 + i * 0.008));
-    }
-    await page.mouse.up();
-    await page.waitForTimeout(600);
-    expect(Buffer.compare(before, await wrapper.screenshot())).not.toBe(0);
-  });
-
-  for (const [claim, title] of [
-    ['highlight', 'Highlight (H)'],
-    ['whiteout', 'Whiteout (W)'],
-  ] as const) {
-    test(`edit: ${claim} tool marks the canvas`, async ({ page }) => {
-      const { wrapper, surface } = await openEditor(page);
-      const before = await wrapper.screenshot();
-      await page.locator(`button[title="${title}"]`).click();
-      await dragAcross(page, surface);
-      expect(Buffer.compare(before, await wrapper.screenshot())).not.toBe(0);
-    });
-  }
-
-  test('edit: stamp tool places a stamp', async ({ page }) => {
-    const { wrapper, surface } = await openEditor(page);
-    const before = await wrapper.screenshot();
-    await page.locator('button[title="Stamp (S)"]').click();
-    await surface.scrollIntoViewIfNeeded();
-    const box = (await surface.boundingBox())!;
-    await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.15);
-    await page.waitForTimeout(600);
-    expect(Buffer.compare(before, await wrapper.screenshot())).not.toBe(0);
-  });
-
-  test('edit: undo removes the last annotation and redo restores it', async ({ page }) => {
-    const { wrapper, surface } = await openEditor(page);
-    const clean = await wrapper.screenshot();
-
-    // Draw a rectangle rather than dropping a text box: the drag path is proven
-    // above to mark the canvas, so a failure here is undo's, not the tool's.
-    await page.locator('button[title="Rectangle (R)"]').click();
-    await dragAcross(page, surface);
-    const drawn = await wrapper.screenshot();
-    expect(Buffer.compare(clean, drawn), 'rectangle should appear').not.toBe(0);
-
-    await page.locator('button[title="Undo (Ctrl+Z)"]').click();
-    await page.waitForTimeout(800);
-    const undone = await wrapper.screenshot();
-    expect(Buffer.compare(drawn, undone), 'undo should change the canvas').not.toBe(0);
-
-    await page.locator('button[title="Redo (Ctrl+Shift+Z)"]').click();
-    await page.waitForTimeout(800);
-    expect(Buffer.compare(undone, await wrapper.screenshot()), 'redo should change it back').not.toBe(0);
+  test('edit: undo removes the last addition and redo restores it', async ({ page }) => {
+    await openEdit(page, FIXTURE.pdf3page);
+    await addObject(page, 'rect');
+    await expect(page.getByTestId('overlay-item')).toHaveCount(1);
+    await page.getByTestId('undo').click();
+    await expect(page.getByTestId('overlay-item')).toHaveCount(0);
+    await page.getByTestId('redo').click();
+    await expect(page.getByTestId('overlay-item')).toHaveCount(1);
   });
 });
 

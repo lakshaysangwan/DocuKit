@@ -38,8 +38,8 @@ test('PDF→Image converts using only local resources', async ({ page, baseURL }
 test('Edit PDF renders pages using only local resources', async ({ page, baseURL }) => {
   const external = attachOriginWatcher(page, baseURL!);
   await page.goto('/edit-pdf');
-  // edit-pdf swaps the dropzone out for the editor once the PDF loads.
+  // edit-pdf opens the workspace and draws the first page once the PDF loads.
   await uploadFiles(page, FIXTURE.pdf3page);
-  await expect(page.getByTestId('editor-canvas')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
   expect(external, `unexpected cross-origin requests:\n${external.join('\n')}`).toEqual([]);
 });

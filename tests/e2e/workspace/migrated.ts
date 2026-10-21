@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { openSign, addTypedSignature } from '../helpers/sign';
 import { openImages } from '../helpers/image-to-pdf';
+import { openEdit, addObject } from '../helpers/edit-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -42,5 +43,15 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'image-to-pdf',
     name: 'Image to PDF',
     enter: (page) => openImages(page, [FIXTURE.jpg, FIXTURE.jpg2, FIXTURE.png]),
+  },
+  {
+    // A place-on-page tool like Sign: the page large, a palette of things to
+    // add in the controls pane. Saving needs at least one thing on a page.
+    slug: 'edit-pdf',
+    name: 'Edit PDF',
+    enter: (page) => openEdit(page, FIXTURE.pdf3page),
+    makeReady: async (page) => {
+      await addObject(page, 'text');
+    },
   },
 ];

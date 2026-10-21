@@ -3,6 +3,7 @@ import { FIXTURE } from '../fixtures/generate';
 import { openSign, readDrawnImages, signAndDownload, stampViewRect, expectSameRect } from '../helpers/sign';
 import { expectDownload } from '../helpers/harness';
 import { openImages, previewPages, readOutputPages, expectPreviewMatchesFile } from '../helpers/image-to-pdf';
+import { openEdit, objectViewRect, readDrawnObjects, selectedObject } from '../helpers/edit-pdf';
 import { MIGRATED } from './migrated';
 
 /**
@@ -252,5 +253,54 @@ test.describe('Sign PDF on a phone', () => {
     expect(await stamp.evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
     // The page around it still does.
     expect(await page.getByTestId('page-viewer').evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+  });
+});
+
+test.describe('Edit PDF on a phone', () => {
+  test('add, resize with taps and the fields, save: the file has the size shown', async ({ page }) => {
+    await openEdit(page, FIXTURE.pdf1page);
+    await expect(page.getByTestId('options-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('step-prompt')).toHaveText('Choose what to add to this page below.');
+    expectPhoneLayout(await layout(page), 'palette open');
+
+    // A tap adds a picture-free shape; the panel closes so the shape is what is seen.
+    await page.getByTestId('add-rect').tap();
+    await expect(page.getByTestId('options-toggle')).toHaveAttribute('aria-expanded', 'false');
+    const item = selectedObject(page);
+    await expect(item).toBeInViewport();
+    await expect(page.getByTestId('step-prompt')).toHaveText(
+      'Drag to move it, pull a corner to resize it, or use Smaller and Larger.',
+    );
+    const handle = (await page.getByTestId('overlay-handle-bottom-right').boundingBox())!;
+    expect(Math.min(handle.width, handle.height)).toBeGreaterThanOrEqual(44);
+
+    // "Larger" twice, "Smaller" once: 1.1× overall, with no drag at all.
+    const start = await objectViewRect(item);
+    await page.getByTestId('object-larger').tap();
+    await page.getByTestId('object-larger').tap();
+    await page.getByTestId('object-smaller').tap();
+    const resized = await objectViewRect(item);
+    expect(resized.width / start.width).toBeCloseTo(1.1, 2);
+    expectPhoneLayout(await layout(page), 'after resizing');
+
+    // A second object sized exactly with the fields.
+    await page.getByTestId('options-toggle').tap();
+    await page.getByTestId('add-text').tap();
+    await page.getByTestId('options-toggle').tap();
+    await page.getByTestId('font-size').fill('28');
+    await page.getByTestId('object-y').fill('150');
+    await page.getByTestId('object-y').blur();
+    const text = await objectViewRect(selectedObject(page));
+    expectPhoneLayout(await layout(page), 'fields used');
+
+    await page.getByTestId('tool-action').tap();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').tap());
+    const drawn = await readDrawnObjects(bytes);
+    expect(drawn).toHaveLength(2);
+    expectSameRect(drawn[0].rect, resized, 0.005, 'rectangle in the file');
+    expectSameRect(drawn[1].rect, text, 0.005, 'text in the file');
+    expect(drawn[1].fontSize).toBe(28);
+    expectPhoneLayout(await layout(page), 'done');
   });
 });
