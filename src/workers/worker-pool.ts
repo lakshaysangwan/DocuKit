@@ -206,6 +206,9 @@ class WorkerPool {
             outputSize: out.buffer.byteLength,
             imagesTotal: out.imagesTotal,
             imagesRecompressed: out.imagesRecompressed,
+            applied: out.applied,
+            images: out.images,
+            returnedOriginal: out.returnedOriginal,
           },
         };
       } else {

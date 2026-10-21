@@ -18,6 +18,11 @@ interface DownloadButtonProps {
   doneLabel?: string;
   /** Accessible name for the idle state, e.g. including the file name. Must contain `label`. */
   ariaLabel?: string;
+  /**
+   * `'outline'` demotes the download — for a result the visitor has been warned
+   * about, so the warning, not the button, is what stands out.
+   */
+  variant?: 'primary' | 'outline';
 }
 
 const sizeClasses = {
@@ -42,6 +47,7 @@ export default function DownloadButton({
   busyLabel = 'Preparing…',
   doneLabel = 'Downloaded!',
   ariaLabel,
+  variant = 'primary',
 }: DownloadButtonProps) {
   const [state, setState] = useState<'idle' | 'downloading' | 'done'>('idle');
 
@@ -70,13 +76,16 @@ export default function DownloadButton({
       disabled={disabled || state === 'downloading'}
       data-testid="download-button"
       data-state={state}
+      data-variant={variant}
       className={cn(
         'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]',
         sizeClasses[size],
         state === 'done'
           ? 'bg-[var(--color-success)] text-white'
-          : 'bg-[var(--color-text-primary)] text-[var(--color-background)] hover:opacity-80',
+          : variant === 'outline'
+            ? 'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-background)]'
+            : 'bg-[var(--color-text-primary)] text-[var(--color-background)] hover:opacity-80',
         (disabled || state === 'downloading') && 'cursor-not-allowed opacity-40',
         className
       )}

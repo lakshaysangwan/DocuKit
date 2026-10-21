@@ -222,6 +222,50 @@ describe('compressPdf', () => {
     });
   }
 
+  it('reports, from the same plan, why each image a page draws was left alone', async () => {
+    const input = await makeMaskedImagesPdf();
+    const result = await compressPdf(toArrayBuffer(input), { level: 'high', dpi: 72, jpegQuality: 50, report: true }, noProgress);
+    expect(result.applied).toEqual({ lossless: false, jpegQuality: 50, imageScale: 72 / 150, grayscale: false, stripFonts: false });
+
+    const { planned, byName } = await plansByName(input, 0);
+    const images = result.images!;
+    // Only images some page draws: masks are reached through their image, not a page.
+    expect(images.length).toBeLessThan(planned.length);
+    const page0 = images.filter((i) => i.pages.includes(0));
+    const page1 = images.filter((i) => i.pages.includes(1));
+    expect(page0.length + page1.length).toBe(images.length);
+    expect(page1).toHaveLength(SWEEP_TILES.length);
+
+    // The overlay, which carries masks, is 'masked' — the same decision the plan made.
+    const overlay = byName(OVERLAY_PAGE.names.overlay);
+    expect(overlay.plan.reencode).toBe(false);
+    const overlayOutcome = page0.find((i) => i.bytesBefore === overlay.stream.contents.byteLength && i.reason === 'masked');
+    expect(overlayOutcome).toBeDefined();
+    expect(overlayOutcome!.bytesAfter).toBe(overlayOutcome!.bytesBefore);
+
+    // Every tile the plan refuses is reported kept, with a reason; nothing here can
+    // be re-encoded (no canvas in Node), so the rest are 'failed', never 'recompressed'.
+    for (const image of images) {
+      expect(image.action).toBe('kept');
+      expect(image.reason).toBeDefined();
+    }
+    const unsafe = SWEEP_TILES.filter((t) => t.expect === 'untouched').length;
+    expect(page1.filter((i) => i.reason === 'masked' || i.reason === 'unsupported').length).toBe(unsafe);
+  });
+
+  it('Low reports no image work, and Target size says which step it took', async () => {
+    const input = await makeOnlyMaskedPdf();
+    const low = await compressPdf(toArrayBuffer(input), { level: 'low', report: true }, noProgress);
+    expect(low.applied.lossless).toBe(true);
+    expect(low.images!.every((i) => i.action === 'kept')).toBe(true);
+
+    // Out of reach: the harshest step is tried and the smaller of it and the lossless step returned.
+    const target = await compressPdf(toArrayBuffer(input), { level: 'custom', targetBytes: 1024, report: true }, noProgress);
+    expect(target.applied.ladderSteps).toBe(12);
+    expect([0, 11]).toContain(target.applied.ladderStep);
+    expect(target.applied.targetBytes).toBe(1024);
+  });
+
   it('hands back the original when re-saving would not make the file smaller', async () => {
     // No Info dictionary: compressing adds one (to blank the metadata), so the
     // re-saved file is larger than this already-minimal input.

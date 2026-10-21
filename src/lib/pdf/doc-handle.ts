@@ -190,14 +190,23 @@ export interface RenderPageOptions {
   signal?: AbortSignal;
   /** Queue position. Defaults to `PRIORITY_VISIBLE`; use `PRIORITY_NEAR` to pre-render. */
   priority?: number;
+  /**
+   * `'png'` for a lossless raster — where the page is looked at for quality, so
+   * the display adds no compression of its own. Defaults to `'jpeg'`.
+   */
+  format?: 'jpeg' | 'png';
+  /** Also hand back the raster's pixels. They are copied, so keep such renders small. */
+  pixels?: boolean;
 }
 
 export interface RenderedPage {
-  /** `blob:` URL of a JPEG, for `<img src>`. Owned by the handle. */
+  /** `blob:` URL of a JPEG (or PNG), for `<img src>`. Owned by the handle. */
   url: string;
   /** Actual raster size; smaller than `cssWidth × dpr` when the budget applied. */
   widthPx: number;
   heightPx: number;
+  /** With `pixels: true`: the raster itself, as drawn. */
+  imageData?: ImageData;
 }
 
 export interface RequestThumbOptions {
@@ -308,12 +317,20 @@ function releaseScratch(): void {
   scratch.height = 0;
 }
 
-function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+/** How a raster is encoded for its URL. */
+interface RasterEncoding {
+  type: 'image/jpeg' | 'image/png';
+  quality?: number;
+  /** Called with the pixels before encoding, when wanted. */
+  onPixels?: (pixels: ImageData) => void;
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, encoding: RasterEncoding): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('The page could not be encoded.'))),
-      'image/jpeg',
-      quality,
+      encoding.type,
+      encoding.quality,
     );
   });
 }
@@ -390,7 +407,7 @@ class Handle implements PdfDocHandle {
   private async raster(
     pageIndex: number,
     size: { widthPx: number; heightPx: number; scale: number },
-    quality: number,
+    encoding: RasterEncoding,
     signal: AbortSignal,
   ): Promise<string> {
     const page = await this.page(pageIndex);
@@ -411,7 +428,8 @@ class Handle implements PdfDocHandle {
       }
       if (signal.aborted || this.closed) throw new RenderCancelledError();
 
-      const blob = await canvasToJpeg(canvas, quality);
+      if (encoding.onPixels) encoding.onPixels(ctx.getImageData(0, 0, size.widthPx, size.heightPx));
+      const blob = await canvasToBlob(canvas, encoding);
       // Checked again after the encode: a URL created now would outlive destroy().
       if (signal.aborted || this.closed) throw new RenderCancelledError();
       const url = URL.createObjectURL(blob);
@@ -461,13 +479,18 @@ class Handle implements PdfDocHandle {
       options.cssWidth * dpr,
       options.pixelBudget ?? defaultPixelBudget(),
     );
+    let imageData: ImageData | undefined;
+    const encoding: RasterEncoding =
+      options.format === 'png' ? { type: 'image/png' } : { type: 'image/jpeg', quality: PAGE_JPEG_QUALITY };
+    if (options.pixels) encoding.onPixels = (pixels) => (imageData = pixels);
     const task = this.enqueue(
-      (signal) => this.raster(pageIndex, size, PAGE_JPEG_QUALITY, signal),
+      (signal) => this.raster(pageIndex, size, encoding, signal),
       options.priority ?? PRIORITY_VISIBLE,
       options.signal,
     );
     try {
-      return { url: await task.promise, widthPx: size.widthPx, heightPx: size.heightPx };
+      const url = await task.promise;
+      return { url, widthPx: size.widthPx, heightPx: size.heightPx, imageData };
     } catch (err) {
       // "Closed" is the more useful answer than "cancelled" when both are true.
       if (this.closed && !options.signal?.aborted) throw new PdfClosedError();
@@ -509,7 +532,7 @@ class Handle implements PdfDocHandle {
       const geom = await this.geometry(pageIndex);
       const scale = longEdgePx / Math.max(geom.widthPt, geom.heightPt);
       const size = fitToPixelBudget(geom.widthPt, geom.heightPt, geom.widthPt * scale);
-      return this.raster(pageIndex, size, THUMB_JPEG_QUALITY, signal);
+      return this.raster(pageIndex, size, { type: 'image/jpeg', quality: THUMB_JPEG_QUALITY }, signal);
     }, priority);
 
     const promise = task.promise.then(

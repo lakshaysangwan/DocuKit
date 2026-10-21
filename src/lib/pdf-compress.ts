@@ -8,7 +8,13 @@
  */
 import { createCanvas2D } from './canvas-2d';
 import { encodeImageData } from './image-codec';
-import type { CompressPdfOptions } from '../types/worker-messages';
+import { imagePages, pageImageRefs } from './pdf-page-images';
+import type {
+  CompressApplied,
+  CompressImageOutcome,
+  CompressPdfOptions,
+  ImageKeptReason,
+} from '../types/worker-messages';
 import type { PDFContext, PDFDict, PDFObject, PDFRawStream, PDFRef } from 'pdf-lib';
 
 export type ProgressFn = (pct: number, label?: string) => void;
@@ -25,6 +31,12 @@ export interface CompressResult {
   buffer: ArrayBuffer;
   imagesTotal: number;
   imagesRecompressed: number;
+  /** The settings the pass that produced `buffer` used. */
+  applied: CompressApplied;
+  /** With `options.report`: what happened to each image a page draws. */
+  images?: CompressImageOutcome[];
+  /** The output was not smaller, so these are the original bytes. */
+  returnedOriginal?: boolean;
 }
 
 export async function compressPdf(
@@ -33,20 +45,33 @@ export async function compressPdf(
   sendProgress: ProgressFn
 ): Promise<CompressResult> {
   const result = options.targetBytes && options.targetBytes > 0
-    ? await compressPdfToTarget(buffer, options.targetBytes, sendProgress)
+    ? await compressPdfToTarget(buffer, options.targetBytes, sendProgress, !!options.report)
     : await compressPdfOnce(buffer, options, sendProgress);
   // Re-saving a small, already-tight PDF can add a few bytes. Hand back the
   // original rather than a "compressed" file that is no smaller than the input.
-  return result.buffer.byteLength < buffer.byteLength
-    ? result
-    : { ...result, buffer: buffer.slice(0), imagesRecompressed: 0 };
+  if (result.buffer.byteLength < buffer.byteLength) return result;
+  return {
+    ...result,
+    buffer: buffer.slice(0),
+    imagesRecompressed: 0,
+    returnedOriginal: true,
+    // Every image is as it was in the original, whatever the pass did to it.
+    images: result.images?.map((image) => ({
+      ...image,
+      action: 'kept' as const,
+      reason: image.action === 'recompressed' ? ('not-smaller' as const) : image.reason,
+      outWidth: image.width,
+      outHeight: image.height,
+      bytesAfter: image.bytesBefore,
+    })),
+  };
 }
 
 /**
  * Settings tried in target-size mode, gentlest first. Index 0 is the lossless
  * structural pass; each later step trades more image quality for size.
  */
-const TARGET_LADDER: CompressPdfOptions[] = [
+export const TARGET_LADDER: CompressPdfOptions[] = [
   { level: 'low' },
   // Quality first: lowering JPEG quality costs less visibly than discarding pixels.
   { level: 'custom', jpegQuality: 85, imageScale: 1 },
@@ -80,6 +105,7 @@ async function compressPdfToTarget(
   buffer: ArrayBuffer,
   targetBytes: number,
   sendProgress: ProgressFn,
+  report: boolean,
 ): Promise<CompressResult> {
   const last = TARGET_LADDER.length - 1;
   // 2 fixed passes + ceil(log2(last - 1)) bisection passes.
@@ -88,8 +114,10 @@ async function compressPdfToTarget(
   const attempt = async (step: number): Promise<CompressResult> => {
     const base = (pass / maxPasses) * 100;
     pass++;
-    return compressPdfOnce(buffer, TARGET_LADDER[step], (pct, label) =>
+    const result = await compressPdfOnce(buffer, { ...TARGET_LADDER[step], report }, (pct, label) =>
       sendProgress(Math.min(99, Math.round(base + pct / maxPasses)), `Pass ${pass}: ${label ?? 'compressing…'}`));
+    // Which step this is travels with the result, so the caller can say what it took.
+    return { ...result, applied: { ...result.applied, ladderStep: step, ladderSteps: TARGET_LADDER.length, targetBytes } };
   };
   const fits = (r: CompressResult) => r.buffer.byteLength <= targetBytes;
 
@@ -124,10 +152,39 @@ async function compressPdfOnce(
   sendProgress(5, 'Loading PDF…');
   const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
 
-  // Determine JPEG quality from options
+  // The settings, worked out once: the pass and the report read the same values.
   const jpegQuality = (options.jpegQuality ?? 75) / 100;
+  // Downscale factor: explicit (target-size mode), or derived from the requested DPI.
+  const scale = options.imageScale ?? (options.dpi && options.dpi < 150 ? options.dpi / 150 : 1);
+  const lossless = options.level === 'low';
+  const applied: CompressApplied = {
+    lossless,
+    jpegQuality: options.jpegQuality ?? 75,
+    imageScale: lossless ? 1 : scale,
+    grayscale: !lossless && !!options.grayscale,
+    stripFonts: !!options.stripFonts,
+  };
   let imagesTotal = 0;
   let imagesRecompressed = 0;
+
+  // Per-image outcomes, for the images some page draws, in page order.
+  const outcomes = new Map<PDFRef, CompressImageOutcome>();
+  if (options.report) {
+    for (const [ref, pages] of imagePages(pageImageRefs(pdfLib, doc))) {
+      const stream = doc.context.lookup(ref);
+      if (!(stream instanceof PDFRawStream)) continue;
+      const size = (key: string) => {
+        const value = stream.dict.lookup(PDFName.of(key));
+        return value instanceof pdfLib.PDFNumber ? value.asNumber() : 0;
+      };
+      const width = size('Width');
+      const height = size('Height');
+      const bytes = stream.contents.byteLength;
+      outcomes.set(ref, {
+        pages, width, height, outWidth: width, outHeight: height, bytesBefore: bytes, bytesAfter: bytes, action: 'kept',
+      });
+    }
+  }
 
   sendProgress(10, 'Stripping metadata…');
   doc.setTitle('');
@@ -160,8 +217,6 @@ async function compressPdfOnce(
     sendProgress(15, 'Compressing images…');
     const context = doc.context;
     const planned = planImagePass(pdfLib, context);
-    // Downscale factor: explicit (target-size mode), or derived from the requested DPI.
-    const scale = options.imageScale ?? (options.dpi && options.dpi < 150 ? options.dpi / 150 : 1);
 
     imagesTotal = planned.length;
     for (let i = 0; i < planned.length; i++) {
@@ -170,23 +225,30 @@ async function compressPdfOnce(
         15 + Math.round(((i + 1) / planned.length) * 60),
         `Compressing image ${i + 1}/${planned.length}…`
       );
-      if (!plan.reencode) continue;
+      const outcome = outcomes.get(ref);
+      const keep = (reason: ImageKeptReason) => {
+        if (outcome) outcome.reason = reason;
+      };
+      if (!plan.reencode) { keep(keptReason(plan.reason)); continue; }
 
       let bmp: ImageBitmap | undefined;
       try {
         const { width, height, channels } = plan;
         const rawBytes = stream.contents;
-        if (rawBytes.byteLength < 1024) continue;
+        if (rawBytes.byteLength < 1024) { keep('small'); continue; }
 
         if (plan.source === 'jpeg') {
           // Re-encoding a JPEG at high quality and the same size only costs a
           // generation of quality; it is worth doing when it is also downsampled.
-          if (jpegQuality >= 0.9 && scale >= 1) continue;
+          if (jpegQuality >= 0.9 && scale >= 1) { keep('quality-90-plus'); continue; }
           // The stream has to be the image its dictionary describes: a baseline
           // or progressive 8-bit JPEG of that size with that many components.
           // A CMYK JPEG labelled RGB, say, is not something to guess at.
           const frame = readJpegFrame(rawBytes);
-          if (!frame || frame.width !== width || frame.height !== height || frame.components !== channels) continue;
+          if (!frame || frame.width !== width || frame.height !== height || frame.components !== channels) {
+            keep('unsupported');
+            continue;
+          }
           const blob = new Blob([rawBytes as BlobPart], { type: 'image/jpeg' });
           // 'none': the PDF's colour space says what the samples mean, so a
           // profile embedded in the JPEG itself must not be applied on top.
@@ -194,7 +256,7 @@ async function compressPdfOnce(
         } else {
           const pixelData = await inflate(rawBytes);
           // Exactly one byte per sample, or this is not the layout we think it is.
-          if (pixelData.length !== width * height * channels) continue;
+          if (pixelData.length !== width * height * channels) { keep('unsupported'); continue; }
 
           const { canvas, ctx } = createCanvas2D(width, height);
           const imageData = ctx.createImageData(width, height);
@@ -244,7 +306,7 @@ async function compressPdfOnce(
         );
 
         // Only replace if actually smaller
-        if (outBuf.byteLength >= rawBytes.byteLength) continue;
+        if (outBuf.byteLength >= rawBytes.byteLength) { keep('not-smaller'); continue; }
 
         const newDict = replacementImageDict(pdfLib, context, stream.dict, {
           width: targetW,
@@ -254,7 +316,11 @@ async function compressPdfOnce(
         });
         context.assign(ref, PDFRawStream.of(newDict, outBuf));
         imagesRecompressed++;
+        if (outcome) {
+          Object.assign(outcome, { action: 'recompressed', outWidth: targetW, outHeight: targetH, bytesAfter: outBuf.byteLength });
+        }
       } catch {
+        keep('failed');
         continue;
       } finally {
         bmp?.close();
@@ -272,6 +338,7 @@ async function compressPdfOnce(
   // This is the only reduction at the "Low" tier (no image recompression there) and
   // squeezes extra bytes out of every tier. Falls back to the pdf-lib output if qpdf
   // can't improve on it.
+  const images = options.report ? [...outcomes.values()] : undefined;
   sendProgress(92, 'Optimizing structure…');
   try {
     const { qpdfCompress } = await import('../workers/qpdf-helper');
@@ -284,13 +351,20 @@ async function compressPdfOnce(
         ) as ArrayBuffer,
         imagesTotal,
         imagesRecompressed,
+        applied,
+        images,
       };
     }
   } catch {
     /* keep pdf-lib output */
   }
 
-  return { buffer: savedBytes.buffer as ArrayBuffer, imagesTotal, imagesRecompressed };
+  return { buffer: savedBytes.buffer as ArrayBuffer, imagesTotal, imagesRecompressed, applied, images };
+}
+
+/** The reason code for a plan that says "leave it", for the report. */
+export function keptReason(planReason: string): ImageKeptReason {
+  return /mask/.test(planReason) ? 'masked' : 'unsupported';
 }
 
 // ─── Which images may be re-encoded ──────────────────────────────────────────

@@ -5,6 +5,7 @@ import { openImages } from '../helpers/image-to-pdf';
 import { openEdit, addObject } from '../helpers/edit-pdf';
 import { openMerge } from '../helpers/merge-pdf';
 import { openSplit } from '../helpers/split-pdf';
+import { openCompress } from '../helpers/compress-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -75,5 +76,13 @@ export const MIGRATED: MigratedTool[] = [
       await page.getByTestId('page-select-0').click();
       await page.getByTestId('page-select-2').click();
     },
+  },
+  {
+    // A one-page-large tool: the stage compares a page of the original with the
+    // same page of the result. Medium is chosen on entry, so the action is
+    // available at once and there is no `makeReady`.
+    slug: 'compress-pdf',
+    name: 'Compress PDF',
+    enter: (page) => openCompress(page, FIXTURE.pdf3page),
   },
 ];

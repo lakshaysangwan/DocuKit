@@ -51,7 +51,61 @@ export type CompressPdfOptions = {
    * quality as will fit. When set, the other options are ignored.
    */
   targetBytes?: number;
+  /**
+   * Also return what was done to each image (`ProcessingStats.images`) and the
+   * settings the pass used (`ProcessingStats.applied`), for the facts shown
+   * beside the compare view.
+   */
+  report?: boolean;
 };
+
+/** The settings a compression pass actually used. */
+export interface CompressApplied {
+  /** True when no image was re-encoded by design (Low, or the lossless target step). */
+  lossless: boolean;
+  /** JPEG quality, 1–100, images were written at (meaningless when `lossless`). */
+  jpegQuality: number;
+  /** Linear factor applied to each image's width and height (1 = unchanged). */
+  imageScale: number;
+  grayscale: boolean;
+  stripFonts: boolean;
+  /** Target-size mode: the step chosen (0 = lossless) and the number of steps. */
+  ladderStep?: number;
+  ladderSteps?: number;
+  /** Target-size mode: the limit, in bytes. */
+  targetBytes?: number;
+}
+
+/** Why an image was left exactly as it was. */
+export type ImageKeptReason = 'masked' | 'unsupported' | 'small' | 'not-smaller' | 'quality-90-plus' | 'failed';
+
+/** What a compression pass did with one image XObject. */
+export interface CompressImageOutcome {
+  /** Zero-based pages whose resources draw this image (directly or through a form). */
+  pages: number[];
+  width: number;
+  height: number;
+  outWidth: number;
+  outHeight: number;
+  /** Encoded stream length before and after. Equal when kept. */
+  bytesBefore: number;
+  bytesAfter: number;
+  action: 'recompressed' | 'kept';
+  reason?: ImageKeptReason;
+}
+
+/** One page of the per-page image inventory a probe returns. */
+export interface ProbePageInfo {
+  pageIndex: number;
+  /** Image XObjects the page draws. */
+  images: number;
+  /** Of those, the ones the lossy pass may re-encode. */
+  eligible: number;
+  /** Encoded bytes of the eligible images. */
+  eligibleBytes: number;
+  /** Width × height summed over the eligible images. */
+  eligiblePixels: number;
+}
 
 export type ReorderOptions = {
   // Source page index for each output position. -1 inserts a blank page.
@@ -194,6 +248,8 @@ export type WorkerRequest =
   | { op: 'merge'; buffers: ArrayBuffer[]; options: MergeOptions; progressPort: MessagePort }
   | { op: 'split'; buffer: ArrayBuffer; options: SplitOptions; progressPort: MessagePort }
   | { op: 'compress-pdf'; buffer: ArrayBuffer; options: CompressPdfOptions; progressPort: MessagePort }
+  /** One page cut out as its own PDF, plus the image inventory of every page. Pure pdf-lib: no canvas. */
+  | { op: 'compress-probe'; buffer: ArrayBuffer; pageIndex?: number; progressPort: MessagePort }
   | { op: 'reorder'; buffer: ArrayBuffer; options: ReorderOptions; progressPort: MessagePort }
   | { op: 'sign-visual'; buffer: ArrayBuffer; options: SignVisualOptions; progressPort: MessagePort }
   | { op: 'encrypt'; buffer: ArrayBuffer; options: EncryptOptions; progressPort: MessagePort }
@@ -223,10 +279,24 @@ export interface ProcessingStats {
    *  nothing — the output is structurally optimised only. */
   imagesTotal?: number;
   imagesRecompressed?: number;
+  /** compress-pdf with `report`: the settings used. */
+  applied?: CompressApplied;
+  /** compress-pdf with `report`: one entry per image XObject that pages draw. */
+  images?: CompressImageOutcome[];
+  /** compress-pdf: the result was not smaller, so the original bytes came back. */
+  returnedOriginal?: boolean;
 }
 
 export type WorkerResponse =
   | { status: 'success'; result: ArrayBuffer; stats?: ProcessingStats }
+  | {
+      status: 'success-probe';
+      /** The chosen page alone, as a PDF. */
+      pagePdf: ArrayBuffer;
+      pageIndex: number;
+      pageCount: number;
+      pages: ProbePageInfo[];
+    }
   | { status: 'success-multi'; results: ArrayBuffer[]; stats?: ProcessingStats }
   | { status: 'success-thumbnails'; thumbnails: ImageBitmap[] }
   | { status: 'success-text'; pages: Array<{ pageIndex: number; text: string; words: TextWord[] }> }

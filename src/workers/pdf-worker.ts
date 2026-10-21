@@ -814,8 +814,8 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
 
       case 'compress-pdf': {
-        const { buffer: result, imagesTotal, imagesRecompressed } = await compressPdf(msg.buffer, msg.options, sendProgress);
-        response = { status: 'success', result, stats: { originalSize: msg.buffer.byteLength, outputSize: result.byteLength, durationMs: Date.now() - start, imagesTotal, imagesRecompressed } };
+        const { buffer: result, imagesTotal, imagesRecompressed, applied, images, returnedOriginal } = await compressPdf(msg.buffer, msg.options, sendProgress);
+        response = { status: 'success', result, stats: { originalSize: msg.buffer.byteLength, outputSize: result.byteLength, durationMs: Date.now() - start, imagesTotal, imagesRecompressed, applied, images, returnedOriginal } };
         break;
       }
 

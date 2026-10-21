@@ -33,6 +33,8 @@ export interface ActionBarProps {
     busyLabel?: string;
     /** Briefly after it resolves. Defaults to "Downloaded!"; say less when the click only starts downloads. */
     doneLabel?: string;
+    /** `'outline'`: a download the visitor has been warned about ("Download anyway"). */
+    variant?: 'primary' | 'outline';
   };
   /** One line about the result: "contract-signed.pdf · 677.6 KB · 7 pages". */
   summary?: string;
@@ -219,6 +221,7 @@ export default function ActionBar({
               ariaLabel={download.ariaLabel}
               busyLabel={download.busyLabel}
               doneLabel={download.doneLabel}
+              variant={download.variant}
               className="h-11 w-full min-w-0 whitespace-nowrap px-3 py-0"
             />
           ) : (
