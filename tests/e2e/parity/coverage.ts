@@ -61,9 +61,10 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
   },
   'split-pdf': {
     '5 split modes': C([T('split-pdf')], 'extract, remove, by-range, extract-each and every-N all tested'),
-    'Visual thumbnail page selector': C([SOURCED], 'built after the source check found the thumbnails were rendered and discarded — the grid now shows them, and the test proves real pixels plus two-way sync with the range field'),
-    'Text syntax: "1-5, 8, odd, even, last"': C(['parity/claims.spec.ts'], 'odd, even and last all resolve to the right pages'),
-    'ZIP output for multi-file splits': C([T('split-pdf')]),
+    'Every page shown, marked with what will happen to it': C([SOURCED, T('split-pdf-pages')], 'real page pixels and two-way sync with the range field; per mode, the marks on the pages ("Selected", "Removed", "PDF n", "Not included") are matched against the pages read back from each downloaded file'),
+    'Text syntax: "1-5, 8, odd, even, last"': C(['parity/claims.spec.ts', T('split-pdf-pages')], 'odd, even and last all resolve to the right pages'),
+    'A list of the files you will get, with names and pages': C([T('split-pdf-pages')], 'the listed names and pages equal the downloaded files and their pages'),
+    'Several PDFs download as separate files, or as one ZIP': C([T('split-pdf'), T('split-pdf-pages')], 'Download all and per-file downloads up to 10 files, and the ZIP of 12 parts, each read back against the listed names and pages'),
     'Range input with live page count': C(['parity/claims.spec.ts']),
   },
   'compress-pdf': {

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
-import { expectDownload, expectDownloads, assertPdf, countPdfPagesStrict, extractPdfText } from '../helpers/harness';
+import { expectDownload, expectDownloads, assertPdf, countPdfPagesStrict, extractPdfText, readZipEntries, uploadFiles } from '../helpers/harness';
 import { openSplit, chooseSplitMode, gridMarks, outputList, pagesByMark, openOptions } from '../helpers/split-pdf';
 
 /**
@@ -19,7 +19,7 @@ async function pagesIn(bytes: Buffer): Promise<number[]> {
   const count = await countPdfPagesStrict(bytes);
   const out: number[] = [];
   for (let i = 0; i < count; i++) {
-    const m = /Page (\d+) of 5/.exec(await extractPdfText(bytes, i));
+    const m = /Page (\d+) of \d+/.exec(await extractPdfText(bytes, i));
     out.push(m ? Number(m[1]) : -1);
   }
   return out;
@@ -256,6 +256,25 @@ test.describe('Split PDF — handing over the files', () => {
     const one = await expectDownload(page, () => page.getByTestId('result-download').nth(1).click());
     expect(one.name).toBe('doc-5page-part2.pdf');
     expect(await pagesIn(one.bytes)).toEqual([3, 4]);
+  });
+
+  test('more than 10 files: the main download is a ZIP of exactly the listed files, and each keeps its own button', async ({ page }) => {
+    await page.goto('/split-pdf');
+    await uploadFiles(page, FIXTURE.pdf48page);
+    await expect(page.getByTestId('split-page')).toHaveCount(48, { timeout: 30_000 });
+    await chooseSplitMode(page, 'Split Every N');
+    await page.getByLabel('Pages per PDF').fill('4');
+    const listed = await outputList(page);
+    expect(listed).toHaveLength(12);
+    await run(page);
+
+    await expect(page.getByTestId('download-button')).toHaveText('Download ZIP (12 PDFs)');
+    await expect(page.getByTestId('result-download')).toHaveCount(12);
+    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    expect(name).toBe('doc-48page-split.zip');
+    const entries = await readZipEntries(bytes);
+    expect(entries.map((e) => e.name)).toEqual(listed.map((l) => l.name));
+    expect(await pagesIn(entries[11].bytes)).toEqual([45, 46, 47, 48]);
   });
 
   test('the output list names exactly the files that download', async ({ page }) => {
