@@ -24,7 +24,7 @@ test.describe('Image to PDF', () => {
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('two images → one PDF with a page per image (A4 + center)', async ({ page }) => {
+  test('two images → one PDF with a page per image (A4 + fit)', async ({ page }) => {
     const diag = new PageDiagnostics(page);
     await page.goto('/image-to-pdf');
     await addFilesAndWait(page, [FIXTURE.jpg, FIXTURE.png], 2);
@@ -34,9 +34,10 @@ test.describe('Image to PDF', () => {
     await expect(page.getByTestId('output-page')).toHaveCount(2);
     await expect(page.getByTestId('file-info')).toContainText('2 images');
 
-    // Defaults: A4 page size, center placement.
+    // Defaults: A4 page size, Fit placement, Auto orientation.
     await expect(page.getByTestId('i2p-size-a4')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('i2p-placement-center')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('i2p-placement-fit')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('i2p-orientation-auto')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('tool-action')).toHaveText('Create PDF (2 pages)');
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
@@ -57,9 +58,9 @@ test.describe('Image to PDF', () => {
     // spinbuttons disappear (the label text also appears in page copy, so we
     // assert on the controls, not the text).
     await expect(page.getByRole('spinbutton')).toHaveCount(0);
-    // The margins are hidden, not gone, and the tool says so.
+    // A "Fit Image" page is the image: no margin, and the tool says so.
     await expect(page.getByTestId('i2p-size-note')).toHaveText(
-      'Each page takes the size of its image, with the margins still applied around it.',
+      'Each page is exactly the size of its image, with no margin.',
     );
 
     await page.getByTestId('tool-action').click();

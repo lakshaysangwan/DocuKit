@@ -143,8 +143,10 @@ export type ImagesToPdfOptions = {
   pageSize: 'fit' | 'a4' | 'letter' | 'legal' | 'custom';
   customWidth?: number;   // points
   customHeight?: number;  // points
-  placement: 'center' | 'stretch' | 'fit' | 'cover';
-  margins: { top: number; right: number; bottom: number; left: number };  // points
+  placement: 'center' | 'stretch' | 'fit' | 'cover';  // 'center' is the same as 'fit'
+  /** Fixed page sizes only. 'auto' (the default) turns each page to match its image. */
+  orientation?: 'auto' | 'portrait' | 'landscape';
+  margins: { top: number; right: number; bottom: number; left: number };  // points; none on 'fit' pages
   backgroundColor?: string;
 };
 

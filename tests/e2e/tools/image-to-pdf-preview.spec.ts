@@ -25,6 +25,8 @@ import { findMarkerInViewer, markerCentres, readDrawnImages } from '../helpers/s
 // landscape 1200×800, portrait 900×1200, square 800×800, landscape 1000×700
 const MIXED = [FIXTURE.jpg, FIXTURE.jpg2, FIXTURE.png, FIXTURE.webp];
 const MM = 72 / 25.4;
+const A4_TALL = [595.28, 841.89];
+const A4_WIDE = [841.89, 595.28];
 
 const cardNames = (page: Page) =>
   page.getByTestId('file-card').evaluateAll((els) => els.map((e) => e.getAttribute('data-filename')));
@@ -52,33 +54,47 @@ async function expectMarkerUpright(page: Page, pdf: Buffer) {
 test.describe('Image to PDF — the preview is the file', () => {
   const CASES: { name: string; set: (page: Page) => Promise<void>; check?: (pages: Awaited<ReturnType<typeof previewPages>>) => void }[] = [
     {
-      name: 'A4, Center, default 10 mm margins — mixed portrait and landscape',
+      name: 'A4, Fit, Auto orientation, default 10 mm margins — mixed portrait and landscape',
       set: async () => {},
       check: (pages) => {
-        // Every page is upright A4 whatever the image; a landscape photo is
-        // as wide as the margins allow and sits in the middle.
-        for (const p of pages) expect([p.pageW, p.pageH]).toEqual([595.28, 841.89]);
+        // Auto: the landscape images get landscape A4, the portrait and the
+        // square one portrait A4.
+        expect(pages.map((p) => [p.pageW, p.pageH])).toEqual([A4_WIDE, A4_TALL, A4_TALL, A4_WIDE]);
+        // A landscape photo on its landscape page is as wide as the margins allow.
         const landscape = pages[0];
         expect(landscape.draw.x).toBeCloseTo(10 * MM, 1);
-        expect(landscape.draw.w).toBeCloseTo(595.28 - 20 * MM, 1);
-        expect(landscape.draw.y).toBeGreaterThan(200);
+        expect(landscape.draw.w).toBeCloseTo(841.89 - 20 * MM, 1);
         const portrait = pages[1];
         expect(portrait.draw.w / portrait.draw.h).toBeCloseTo(900 / 1200, 3);
+        // A 3:4 photo on upright A4 is as wide as the margins allow.
+        expect(portrait.draw.w).toBeCloseTo(595.28 - 20 * MM, 1);
       },
     },
     {
-      name: 'Letter, Cover — runs over the margins and is cut at the page edge',
+      name: 'A4, Portrait — every page upright whatever the image',
+      set: async (page) => {
+        await page.getByTestId('i2p-orientation-portrait').click();
+      },
+      check: (pages) => {
+        expect(pages.map((p) => [p.pageW, p.pageH])).toEqual([A4_TALL, A4_TALL, A4_TALL, A4_TALL]);
+        expect(pages[0].draw.w).toBeCloseTo(595.28 - 20 * MM, 1);
+      },
+    },
+    {
+      name: 'Letter, Landscape, Cover — runs over the margins and is cut at the page edge',
       set: async (page) => {
         await page.getByRole('button', { name: 'Letter' }).click();
+        await page.getByTestId('i2p-orientation-landscape').click();
         await page.getByRole('button', { name: 'cover', exact: true }).click();
       },
       check: (pages) => {
+        expect(pages.every((p) => p.pageW === 792 && p.pageH === 612)).toBe(true);
         const landscape = pages[0];
         expect(landscape.draw.x).toBeLessThan(0);
-        expect(landscape.draw.x + landscape.draw.w).toBeGreaterThan(612);
+        expect(landscape.draw.x + landscape.draw.w).toBeGreaterThan(792);
         // Top and bottom still stop at the margins.
         expect(landscape.draw.y).toBeCloseTo(10 * MM, 1);
-        expect(landscape.draw.h).toBeCloseTo(792 - 20 * MM, 1);
+        expect(landscape.draw.h).toBeCloseTo(612 - 20 * MM, 1);
       },
     },
     {
@@ -88,17 +104,16 @@ test.describe('Image to PDF — the preview is the file', () => {
         await page.getByRole('button', { name: 'stretch', exact: true }).click();
       },
       check: (pages) => {
+        expect(pages.map((p) => [p.pageW, p.pageH])).toEqual([[1008, 612], [612, 1008], [612, 1008], [1008, 612]]);
         for (const p of pages) {
-          expect([p.pageW, p.pageH]).toEqual([612, 1008]);
-          expect(p.draw.w).toBeCloseTo(612 - 20 * MM, 1);
-          expect(p.draw.h).toBeCloseTo(1008 - 20 * MM, 1);
+          expect(p.draw.w).toBeCloseTo(p.pageW - 20 * MM, 1);
+          expect(p.draw.h).toBeCloseTo(p.pageH - 20 * MM, 1);
         }
       },
     },
     {
       name: 'A4, Fit, uneven margins typed in millimetres and inches',
       set: async (page) => {
-        await page.getByRole('button', { name: 'fit', exact: true }).click();
         await page.getByLabel(/top margin/i).fill('30');
         await page.getByLabel(/right margin/i).fill('0');
         await page.getByTestId('i2p-unit-in').click();
@@ -106,28 +121,33 @@ test.describe('Image to PDF — the preview is the file', () => {
       },
       check: (pages) => {
         const landscape = pages[0];
-        expect(landscape.draw.x).toBeCloseTo(108, 1);
-        expect(landscape.draw.w).toBeCloseTo(595.28 - 108, 1);
+        // On landscape A4 the 3:2 photo is held by the height between the
+        // 30 mm top and 10 mm bottom margins, and centred right of the 1.5 in left one.
+        expect(landscape.draw.y).toBeCloseTo(10 * MM, 1);
+        expect(landscape.draw.h).toBeCloseTo(595.28 - 40 * MM, 1);
+        expect(landscape.draw.x).toBeGreaterThan(108);
+        expect(landscape.draw.x + landscape.draw.w).toBeLessThanOrEqual(841.89 + 1e-6);
       },
     },
     {
-      name: 'Fit Image — each page is its image, with the margins still applied',
+      name: 'Fit Image — each page is exactly its image, with no margin',
       set: async (page) => {
         await page.getByRole('button', { name: 'Fit Image' }).click();
       },
       check: (pages) => {
         expect(pages.map((p) => [p.pageW, p.pageH])).toEqual([[1200, 800], [900, 1200], [800, 800], [1000, 700]]);
-        // The margin fields are hidden, but the 10 mm margins are in the page.
-        expect(pages[0].draw.y).toBeCloseTo(10 * MM, 1);
-        expect(pages[0].draw.h).toBeCloseTo(800 - 20 * MM, 1);
-        expect(pages[0].draw.w).toBeLessThan(1200 - 20 * MM);
+        for (const p of pages) expect(p.draw).toEqual({ x: 0, y: 0, w: p.pageW, h: p.pageH });
       },
     },
     {
-      name: 'Fit Image chosen after Cover — the hidden placement still applies',
+      name: 'Fit Image with margins and Cover set beforehand — still exactly the image',
       set: async (page) => {
+        await page.getByLabel(/left margin/i).fill('40');
         await page.getByRole('button', { name: 'cover', exact: true }).click();
         await page.getByRole('button', { name: 'Fit Image' }).click();
+      },
+      check: (pages) => {
+        for (const p of pages) expect(p.draw).toEqual({ x: 0, y: 0, w: p.pageW, h: p.pageH });
       },
     },
   ];
@@ -168,14 +188,16 @@ test.describe('Image to PDF — the preview follows the options', () => {
     await expect.poll(async () => (await previewPages(page))[0].draw.x).toBeCloseTo(40 * MM, 1);
 
     const after = (await previewPages(page))[0];
-    expect(after.imageBox.x).toBeCloseTo((40 * MM) / 595.28, 2);
+    // The landscape photo is on a landscape A4 page (Auto orientation).
+    expect([after.pageW, after.pageH]).toEqual(A4_WIDE);
+    expect(after.imageBox.x).toBeCloseTo((40 * MM) / 841.89, 2);
     expect(after.imageBox.x).toBeGreaterThan(before.imageBox.x + 0.1);
     // The dashed guide moved with it.
     const guide = await page.getByTestId('output-page-margins').first().evaluate((el) => {
       const pageBox = el.parentElement!.getBoundingClientRect();
       return (el.getBoundingClientRect().left - pageBox.left) / pageBox.width;
     });
-    expect(guide).toBeCloseTo((40 * MM) / 595.28, 2);
+    expect(guide).toBeCloseTo((40 * MM) / 841.89, 2);
 
     // Nothing was run to get there.
     await expect(page.getByTestId('action-bar')).toHaveAttribute('data-phase', 'ready');
@@ -185,27 +207,60 @@ test.describe('Image to PDF — the preview follows the options', () => {
     expectPreviewMatchesFile([after], await readOutputPages(await createAndDownload(page)));
   });
 
-  test('the page size changes the shape of the page on screen', async ({ page }) => {
-    await openImages(page, FIXTURE.jpg);
-    const aspect = async () => (await previewPages(page))[0].boxAspect;
+  test('the page size and orientation change the shape of the page on screen', async ({ page }) => {
+    await openImages(page, [FIXTURE.jpg, FIXTURE.jpg2]);
+    const aspects = async () => (await previewPages(page)).map((p) => p.boxAspect);
     const caption = page.getByTestId('page-grid-caption');
+    const cards = page.getByTestId('file-card');
 
-    expect(await aspect()).toBeCloseTo(595.28 / 841.89, 2);
-    await expect(caption).toHaveText('A4 · 210 × 297 mm · portrait');
+    // Auto: the landscape photo on a landscape page, the portrait one upright.
+    let [wide, tall] = await aspects();
+    expect(wide).toBeCloseTo(841.89 / 595.28, 2);
+    expect(tall).toBeCloseTo(595.28 / 841.89, 2);
+    await expect(caption).toHaveText('A4 · 210 × 297 mm · turned to match each image');
+    await expect(cards.nth(0)).toContainText('landscape');
+    await expect(cards.nth(1)).toContainText('portrait');
 
     await page.getByRole('button', { name: 'Letter' }).click();
-    expect(await aspect()).toBeCloseTo(612 / 792, 2);
-    await expect(caption).toHaveText('Letter · 216 × 279 mm · portrait');
+    [wide, tall] = await aspects();
+    expect(wide).toBeCloseTo(792 / 612, 2);
+    expect(tall).toBeCloseTo(612 / 792, 2);
+    await expect(caption).toHaveText('Letter · 216 × 279 mm · turned to match each image');
 
     await page.getByRole('button', { name: 'Legal' }).click();
-    expect(await aspect()).toBeCloseTo(612 / 1008, 2);
+    await page.getByTestId('i2p-orientation-portrait').click();
+    [wide, tall] = await aspects();
+    expect(wide).toBeCloseTo(612 / 1008, 2);
+    expect(tall).toBeCloseTo(612 / 1008, 2);
     await expect(caption).toHaveText('Legal · 216 × 356 mm · portrait');
 
-    // "Fit Image": the page takes the landscape photo's own shape.
+    await page.getByTestId('i2p-orientation-landscape').click();
+    [wide, tall] = await aspects();
+    expect(wide).toBeCloseTo(1008 / 612, 2);
+    expect(tall).toBeCloseTo(1008 / 612, 2);
+    await expect(caption).toHaveText('Legal · 216 × 356 mm · landscape');
+
+    // "Fit Image": each page takes its photo's own shape, and the orientation
+    // choice goes away with the margins.
     await page.getByRole('button', { name: 'Fit Image' }).click();
-    expect(await aspect()).toBeCloseTo(1200 / 800, 2);
-    await expect(caption).toHaveText('Fit Image · each page is the size of its image');
-    await expect(page.getByTestId('file-card')).toContainText('423 × 282 mm');
+    [wide, tall] = await aspects();
+    expect(wide).toBeCloseTo(1200 / 800, 2);
+    expect(tall).toBeCloseTo(900 / 1200, 2);
+    await expect(caption).toHaveText('Fit Image · each page is exactly its image');
+    await expect(cards.nth(0)).toContainText('423 × 282 mm');
+    await expect(page.getByTestId('i2p-orientation-auto')).toHaveCount(0);
+  });
+
+  test('Center is gone: the three placements left are three different pages', async ({ page }) => {
+    await openImages(page, FIXTURE.jpg2);
+    await expect(page.getByTestId('i2p-placement-center')).toHaveCount(0);
+    await expect(page.getByTestId('i2p-placement-fit')).toHaveAttribute('aria-pressed', 'true');
+    const draws = new Set<string>();
+    for (const placement of ['fit', 'stretch', 'cover']) {
+      await page.getByTestId(`i2p-placement-${placement}`).click();
+      draws.add(JSON.stringify((await previewPages(page))[0].draw));
+    }
+    expect(draws.size).toBe(3);
   });
 
   test('S, M and L change how many pages fit across, not the pages', async ({ page }) => {
@@ -228,7 +283,8 @@ test.describe('Image to PDF — the preview follows the options', () => {
     expect(small).toBeLessThan(medium);
     await expect(page.getByTestId('grid-size-s')).toHaveAttribute('aria-pressed', 'true');
     // The page keeps its proportions at every size.
-    expect((await previewPages(page))[0].boxAspect).toBeCloseTo(595.28 / 841.89, 1);
+    const first = (await previewPages(page))[0];
+    expect(first.boxAspect).toBeCloseTo(first.pageW / first.pageH, 1);
   });
 });
 
@@ -459,7 +515,7 @@ test.describe('Image to PDF — viewing a page large', () => {
     const box = (await large.boundingBox())!;
     expect(box.width).toBeGreaterThan((await card.boundingBox())!.width * 1.15);
     expect(box.height, 'the page takes most of the screen').toBeGreaterThan(page.viewportSize()!.height * 0.8);
-    expect(box.width / box.height).toBeCloseTo(595.28 / 841.89, 2);
+    expect(box.width / box.height).toBeCloseTo(841.89 / 595.28, 2); // photo.jpg is landscape: Auto turned its page
 
     // Focus is inside the dialog, and the dialog has no serious accessibility faults.
     expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
@@ -570,6 +626,7 @@ test.describe('Image to PDF — one action, and a result that never goes stale',
     expect(shown.map((p) => p.filename)).toEqual(['photo.jpg', 'photo-2.jpg', 'graphic.png']);
     const written = await readOutputPages(await createAndDownload(page));
     expectPreviewMatchesFile(shown, written);
-    expect(written.map((p) => [p.pageW, p.pageH])).toEqual([[612, 792], [612, 792], [612, 792]]);
+    // Auto orientation: the two landscape-or-portrait photos get matching pages, the square one upright.
+    expect(written.map((p) => [p.pageW, p.pageH])).toEqual([[792, 612], [612, 792], [612, 792]]);
   });
 });

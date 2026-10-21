@@ -152,8 +152,8 @@ test.describe('Source-check closures — image to PDF', () => {
     assertPdf(bytes);
     expect(await countPdfPagesStrict(bytes)).toBe(1);
 
-    // The fixture is landscape on a portrait A4 page, so the image is as wide as
-    // the margins allow and its left edge sits exactly on the left margin.
+    // The fixture is a 3:2 landscape photo on a landscape A4 page, so the image
+    // is as wide as the margins allow and its left edge sits exactly on the left margin.
     // pdf-lib paints an image as translate(x, y), rotate, scale(w, h), skew, Do —
     // so the translate and scale just ahead of the "Do" are its box in points.
     const content = (await readPdfContentStreams(bytes)).join('\n');
@@ -163,8 +163,9 @@ test.describe('Source-check closures — image to PDF', () => {
     expect(draw, 'the image draw should be readable from the content stream').not.toBeNull();
     const [, x, , width] = draw!.map(Number);
     expect(x).toBeCloseTo(108, 1); // left margin: 1.5 in
-    // A4 is 595.28 pt wide; the right margin is still the default 10 mm (28.35 pt).
-    expect(width).toBeCloseTo(595.28 - 108 - 28.35, 1);
+    // Orientation is Auto, so the landscape photo is on landscape A4, 841.89 pt
+    // wide; the right margin is still the default 10 mm (28.35 pt).
+    expect(width).toBeCloseTo(841.89 - 108 - 28.35, 1);
   });
 });
 

@@ -119,7 +119,7 @@ test.describe('Image to PDF on a phone', () => {
     await page.getByTestId('options-toggle').tap();
     await expect(page.getByTestId('ws-controls')).toBeVisible();
     await page.getByTestId('i2p-size-fit').tap();
-    await expect(page.getByTestId('page-grid-caption')).toHaveText('Fit Image · each page is the size of its image');
+    await expect(page.getByTestId('page-grid-caption')).toHaveText('Fit Image · each page is exactly its image');
     expect((await previewPages(page)).map((p) => [p.pageW, p.pageH])).toEqual([[1200, 800], [900, 1200], [800, 800]]);
     expectPhoneLayout(await layout(page), 'options open');
 

@@ -67,39 +67,35 @@ export function orientPage(
 }
 
 /**
- * OPEN DECISION (owner's): there is no Orientation option yet, so every
- * fixed-size page is portrait whatever the image's shape. To add the option,
- * replace this constant with the chosen value in `pageSizeFor` — nothing else
- * in the layout needs to change.
+ * The page an image gets: its own size for "fit", otherwise the chosen sheet,
+ * turned as `options.orientation` says. That defaults to `auto`: a landscape
+ * image gets a landscape sheet, a portrait or square one a portrait sheet.
  */
-const ORIENTATION: PageOrientation = 'portrait';
-
-/** The page an image gets: its own size for "fit", otherwise the chosen sheet. */
 export function pageSizeFor(img: { width: number; height: number }, options: ImagesToPdfOptions): [number, number] {
   if (options.pageSize === 'fit') return [img.width, img.height];
   if (options.pageSize === 'custom' && options.customWidth && options.customHeight) {
     return [options.customWidth, options.customHeight];
   }
   const [width, height] = PAGE_SIZES[options.pageSize as StandardPageSize] ?? PAGE_SIZES.a4;
-  return orientPage(width, height, img, ORIENTATION);
+  return orientPage(width, height, img, options.orientation ?? 'auto');
 }
 
+const NO_MARGINS: Margins = { top: 0, right: 0, bottom: 0, left: 0 };
+
 /**
- * The margins that are applied.
- *
- * OPEN DECISION (owner's): "Fit Image" pages keep the margins too, although the
- * tool hides the margin fields for that page size. To make "Fit Image" pages
- * edge to edge, return zero margins here when `options.pageSize === 'fit'`.
+ * The margins that are applied. A "Fit Image" page is exactly its image, so it
+ * has none, whatever the (hidden) margin fields hold.
  */
 export function marginsFor(options: ImagesToPdfOptions): Margins {
-  return options.margins;
+  return options.pageSize === 'fit' ? NO_MARGINS : options.margins;
 }
 
 /**
  * The page size and the rectangle the image is drawn into.
  *
- *   center, fit   the largest size that fits inside the margins, centred
- *                 (the two are the same today — an open decision)
+ *   fit           the largest size that fits inside the margins, centred
+ *                 ("center" is an older name for the same thing; the tool no
+ *                 longer offers it separately)
  *   cover         the smallest size that covers the area inside the margins,
  *                 centred; it runs over the margins and is cut at the page edge
  *   stretch       exactly the area inside the margins, proportions not kept

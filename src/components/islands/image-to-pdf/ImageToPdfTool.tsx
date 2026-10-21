@@ -25,7 +25,12 @@ import { formatBytes, generateId, cn } from '@/lib/utils';
 import type { ImagesToPdfOptions } from '@/types/worker-messages';
 
 type PageSize = 'fit' | 'a4' | 'letter' | 'legal';
-type Placement = 'center' | 'stretch' | 'fit' | 'cover';
+/**
+ * "Center" used to be offered too; it ran the same code as "Fit", so it was a
+ * name, not a choice, and has gone. The worker still accepts it.
+ */
+type Placement = 'fit' | 'stretch' | 'cover';
+type Orientation = 'auto' | 'portrait' | 'landscape';
 
 /**
  * What the dropzone takes. JPEG and PNG go into the PDF as they are; the rest
@@ -51,11 +56,25 @@ const MARGIN_UNIT_LABEL: Record<MarginUnit, string> = {
 };
 
 const PAGE_SIZE_OPTIONS: PageSize[] = ['fit', 'a4', 'letter', 'legal'];
-const PLACEMENT_OPTIONS: Placement[] = ['center', 'fit', 'stretch', 'cover'];
+const PLACEMENT_OPTIONS: Placement[] = ['fit', 'stretch', 'cover'];
+const ORIENTATION_OPTIONS: { value: Orientation; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'landscape', label: 'Landscape' },
+];
+const ORIENTATION_NOTE: Record<Orientation, string> = {
+  auto: 'Each page is turned to match its image: landscape for a wide image, portrait otherwise.',
+  portrait: 'Every page is upright, whatever the shape of its image.',
+  landscape: 'Every page is turned on its side, whatever the shape of its image.',
+};
+const ORIENTATION_CAPTION: Record<Orientation, string> = {
+  auto: 'turned to match each image',
+  portrait: 'portrait',
+  landscape: 'landscape',
+};
 
 /** What each placement does, said the way the preview shows it. */
 const PLACEMENT_NOTE: Record<Placement, string> = {
-  center: 'The whole image, as large as fits inside the margins, in the middle of the page.',
   fit: 'The whole image, as large as fits inside the margins, in the middle of the page.',
   stretch: 'Stretched to fill the area inside the margins. The image’s proportions are not kept.',
   cover: 'Fills the area inside the margins and runs over them; whatever passes the page edge is cut off.',
@@ -98,7 +117,8 @@ const note = 'text-xs text-[var(--color-text-secondary)]';
 export default function ImageToPdfTool() {
   const [items, setItems] = useState<Item[]>([]);
   const [pageSize, setPageSize] = useState<PageSize>('a4');
-  const [placement, setPlacement] = useState<Placement>('center');
+  const [placement, setPlacement] = useState<Placement>('fit');
+  const [orientation, setOrientation] = useState<Orientation>('auto');
   // Margins are held in points — the only unit the worker's ImagesToPdfOptions
   // take — and shown in the chosen unit. Switching units therefore re-displays
   // the same physical margin: "10 mm" becomes "0.39 in", never "10 in", and going
@@ -212,6 +232,7 @@ export default function ImageToPdfTool() {
     () => ({
       pageSize,
       placement,
+      orientation,
       margins: {
         top: round2(marginsPt.top),
         right: round2(marginsPt.right),
@@ -220,7 +241,7 @@ export default function ImageToPdfTool() {
       },
       backgroundColor: '#FFFFFF',
     }),
-    [pageSize, placement, marginsPt],
+    [pageSize, placement, orientation, marginsPt],
   );
 
   const layouts = useMemo(() => {
@@ -313,8 +334,8 @@ export default function ImageToPdfTool() {
 
   const sizeCaption =
     pageSize === 'fit'
-      ? 'Fit Image · each page is the size of its image'
-      : `${PAGE_SIZE_LABEL[pageSize]} · ${standardPageMm(pageSize)} · portrait`;
+      ? 'Fit Image · each page is exactly its image'
+      : `${PAGE_SIZE_LABEL[pageSize]} · ${standardPageMm(pageSize)} · ${ORIENTATION_CAPTION[orientation]}`;
 
   const summary = run.result
     ? `${run.result.file.name} · ${formatBytes(run.result.file.size)} · ${plural(run.result.pages, 'page')}`
@@ -366,6 +387,7 @@ export default function ImageToPdfTool() {
     if (!layout || !item.image) return undefined;
     const parts: string[] = [];
     if (pageSize === 'fit') parts.push(formatPageMm(layout.pageW, layout.pageH));
+    else if (orientation === 'auto') parts.push(layout.pageW > layout.pageH ? 'landscape' : 'portrait');
     if (item.image.reencoded) {
       parts.push(item.image.turned ? 'turned upright' : `saved as ${item.image.mime === 'image/png' ? 'PNG' : 'JPEG'}`);
     }
@@ -435,10 +457,38 @@ export default function ImageToPdfTool() {
         </div>
         <p className={note} data-testid="i2p-size-note">
           {pageSize === 'fit'
-            ? 'Each page takes the size of its image, with the margins still applied around it.'
-            : `Every page is ${PAGE_SIZE_LABEL[pageSize]}, ${standardPageMm(pageSize)}, upright.`}
+            ? 'Each page is exactly the size of its image, with no margin.'
+            : `Every page is ${PAGE_SIZE_LABEL[pageSize]}, ${standardPageMm(pageSize)}.`}
         </p>
       </section>
+
+      {pageSize !== 'fit' && (
+        <section className="flex flex-col gap-2" aria-labelledby="i2p-orientation">
+          <h3 id="i2p-orientation" className={heading}>
+            Orientation
+          </h3>
+          <div className="flex flex-wrap gap-2" role="group" aria-labelledby="i2p-orientation">
+            {ORIENTATION_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => {
+                  invalidate();
+                  setOrientation(o.value);
+                }}
+                aria-pressed={orientation === o.value}
+                data-testid={`i2p-orientation-${o.value}`}
+                className={optionButton(orientation === o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <p className={note} data-testid="i2p-orientation-note">
+            {ORIENTATION_NOTE[orientation]}
+          </p>
+        </section>
+      )}
 
       {pageSize !== 'fit' && (
         <section className="flex flex-col gap-2" aria-labelledby="i2p-placement">
@@ -541,7 +591,9 @@ export default function ImageToPdfTool() {
           <dd className="text-[var(--color-text-primary)]">{run.result.pages}</dd>
           <dt className="text-[var(--color-text-secondary)]">Page size</dt>
           <dd className="text-[var(--color-text-primary)]">
-            {pageSize === 'fit' ? 'Fit Image' : `${PAGE_SIZE_LABEL[pageSize]}, ${standardPageMm(pageSize)}`}
+            {pageSize === 'fit'
+              ? 'Fit Image'
+              : `${PAGE_SIZE_LABEL[pageSize]}, ${standardPageMm(pageSize)}, ${ORIENTATION_CAPTION[orientation]}`}
           </dd>
         </dl>
         <NextStep href="/compress-pdf/" label="Compress PDF">Large file? Shrink it with</NextStep>
