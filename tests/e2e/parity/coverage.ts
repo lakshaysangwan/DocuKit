@@ -45,6 +45,7 @@ const CLOSED = 'parity/closed-gaps.spec.ts';
 const SOURCED = 'parity/source-check-closures.spec.ts';
 const SIGN_PLACEMENT = 'tools/sign-pdf-placement.spec.ts';
 const I2P_PREVIEW = 'tools/image-to-pdf-preview.spec.ts';
+const EDIT = T('edit-pdf');
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -139,13 +140,13 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Live preview on sample page': C([VISUAL]),
   },
   'edit-pdf': {
-    'Text boxes with font/size/color/style': P([T('edit-pdf'), VISUAL], 'adding text is tested; font, size and colour options are not'),
-    'Shapes: rectangle, ellipse, line, arrow': C(['parity/claims.spec.ts'], 'each of the four visibly marks the canvas'),
-    'Freehand drawing with Bezier smoothing': P(['parity/claims.spec.ts'], 'drawing marks the canvas; the Bezier smoothing itself is not measured'),
-    'Highlight, whiteout, and stamp tools': C(['parity/claims.spec.ts']),
-    'Image overlays': U('SOURCE CHECK — implemented at activeTool "image" -> file picker -> addImage; needs a test. Copy trimmed: the emoji half was never built, so it is gone from the bullet.'),
-    'Undo/redo (50 actions)': P(['parity/claims.spec.ts'], 'undo and redo both verified (this test found and fixed a bug where the first undo did not revert); the 50-action depth is not'),
-    'Flatten or keep as PDF annotations': C([T('edit-pdf')], 'both modes verified at the /Annot level'),
+    'Text with font size, colour and opacity': C([EDIT], 'the font size field, its step buttons and a corner pull each change the Tf size read back from the downloaded file (6–144 pt bounds checked), the typed words are the Tj operand, and a colour and an opacity chosen in the pane are the rg colour and the /ca of the ExtGState in the file'),
+    'Images, rectangles, ellipses, lines and arrows': C([EDIT, 'parity/claims.spec.ts'], 'each is added, resized by its corner and by the millimetre fields, and found in the downloaded file as its own clipped frame at the box shown on screen'),
+    'Freehand drawing, highlight, whiteout and stamps': C([EDIT, 'parity/claims.spec.ts'], 'a mouse stroke, a highlight, a whiteout box and a stamp are each resized by handle and fields and read back from the file at the size shown'),
+    'Resize anything by its corners, with Smaller and Larger, or in millimetres': C([EDIT, 'workspace/mobile.spec.ts'], 'for all ten kinds a corner drag and typed width/height/X/Y are read back from the downloaded file to 0.5% of the page; Smaller and Larger by mouse and by touch; Keep proportions on and off; undo and redo of a resize'),
+    'Saved exactly where shown, on rotated and cropped pages too': CU(['src/lib/edit-pdf/write.test.ts'], 'on the /Rotate 90 and offset-CropBox fixtures text, an image, a rectangle, an arrow and a stamp are moved and resized and each frame in the downloaded file maps (through pdf.js) to the box shown, to 0.5% of the page, in both save modes; the unit test adds /Rotate 270 with an offset crop box and a page that leaves graphics states open', [EDIT]),
+    'Undo and redo': C([EDIT, 'parity/claims.spec.ts'], 'the buttons and Ctrl+Z / Ctrl+Shift+Z undo and redo a resize, and the downloaded file has the redone size'),
+    'Save into the page or as PDF annotations': C([EDIT], 'Part of the page leaves no /Annot objects; Separate annotations writes FreeText, Square, Line and Stamp annotations whose /Rect is the box shown'),
   },
   'add-page-numbers': {
     '6 position options': P([T('page-numbers')], 'one position asserted, not all six'),
