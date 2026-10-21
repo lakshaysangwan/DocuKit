@@ -156,7 +156,7 @@ export const LANDING_PAGES: LandingDef[] = [
     howToSteps: [
       { title: 'Upload your PDF', description: 'Drop your PDF into the upload area. Target size mode is already on, set to 100 KB.' },
       { title: 'Compress', description: 'Click "Compress PDF". Stronger settings are tried only until the file fits the limit.' },
-      { title: 'Check and download', description: 'Compare the before and after sizes and the page preview, then download the compressed PDF.' },
+      { title: 'Check and download', description: 'Read what it took to fit, compare any page with your original and check the sizes before and after, then download the compressed PDF.' },
     ],
     features: [
       'Target size mode: fit under a KB or MB limit',
@@ -187,7 +187,7 @@ export const LANDING_PAGES: LandingDef[] = [
     howToSteps: [
       { title: 'Upload your PDF', description: 'Drop your PDF into the upload area. Target size mode is already on, set to 200 KB.' },
       { title: 'Compress', description: 'Click "Compress PDF". Stronger settings are tried only until the file fits the limit.' },
-      { title: 'Check and download', description: 'Compare the before and after sizes and the page preview, then download the compressed PDF.' },
+      { title: 'Check and download', description: 'Read what it took to fit, compare any page with your original and check the sizes before and after, then download the compressed PDF.' },
     ],
     features: [
       'Target size mode: fit under a KB or MB limit',
@@ -218,7 +218,7 @@ export const LANDING_PAGES: LandingDef[] = [
     howToSteps: [
       { title: 'Upload your PDF', description: 'Drop your PDF into the upload area. Target size mode is already on, set to 1 MB.' },
       { title: 'Compress', description: 'Click "Compress PDF". Stronger settings are tried only until the file fits the limit.' },
-      { title: 'Check and download', description: 'Compare the before and after sizes and the page preview, then download the compressed PDF.' },
+      { title: 'Check and download', description: 'Read what it took to fit, compare any page with your original and check the sizes before and after, then download the compressed PDF.' },
     ],
     features: [
       'Target size mode: fit under a KB or MB limit',

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { FIXTURE } from '../fixtures/generate';
-import { expectDownload, expectImageRendered } from '../helpers/harness';
+import { expectDownload } from '../helpers/harness';
 import {
   afterPixels,
   chooseLevel,

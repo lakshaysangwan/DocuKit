@@ -68,12 +68,14 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Range input with live page count': C(['parity/claims.spec.ts']),
   },
   'compress-pdf': {
-    '4 compression levels including custom': C([T('compress-pdf')]),
-    'Side-by-side quality preview': C([VISUAL]),
+    'Five settings: Low (lossless), Medium, High, Custom and Target size': C([T('compress-pdf'), T('compress-pdf-image-safety')], 'each of the five is run and its output checked'),
+    'Side-by-side quality preview': C([VISUAL, T('compress-preview')], 'before compressing, a one-page preview at the chosen level beside the original (Low pixel-identical, Medium changed, High more; matches the real output within 0.5 per channel); after it, the real output beside the original'),
+    'Any page compared with your original at Fit, 100% or 200%': C([T('compress-preview')], 'page change, rail, zoom sizes, split, side by side and hold, never cropped'),
+    'A warning when a page comes out badly wrong': C([T('compress-preview')], 'absent at High and at the harshest target; shown, with "Download anyway", on output from a stubbed encoder that blackens images'),
     'Before/after file size comparison': C([T('compress-pdf')]),
-    'Custom DPI and JPEG quality controls': P([T('compress-pdf')], 'controls are revealed; their effect on output is not measured'),
+    'Custom image scale and JPEG quality controls': C([T('compress-pdf-image-safety'), T('compress-preview')], 'a lower value scales images down even at high quality; the chosen quality is the one the preview reports'),
     'Grayscale conversion option': P([T('compress-pdf')], 'control is revealed; grayscale output is not verified'),
-    'Target size mode: fit under a KB or MB limit': C([T('compress-pdf')], 'output lands under a reachable target, a looser target keeps more quality, and an unreachable one is reported rather than passed off as success'),
+    'Target size mode: fit under a KB or MB limit': C([T('compress-pdf'), T('compress-preview')], 'output lands under a reachable target, a looser target keeps more quality, and an unreachable one is reported rather than passed off as success; what it took is stated, with a warning at the harsh end'),
   },
   'rearrange-pdf-pages': {
     'Drag-and-drop page reorder': U("SOURCE CHECK — implemented at PageThumbnailGrid (DndContext + useSortable + arrayMove); needs a test."),
