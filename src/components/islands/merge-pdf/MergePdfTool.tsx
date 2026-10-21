@@ -608,7 +608,7 @@ export default function MergePdfTool() {
         }}
         renderBadge={(page) => {
           const f = byId.get(page.fileId);
-          return f ? <FileBadge letter={f.letter} colour={f.colour} className="mr-auto ml-1" /> : null;
+          return f ? <FileBadge letter={f.letter} colour={f.colour} className="h-5 min-w-5 px-1 text-[11px]" /> : null;
         }}
         removeVerb="Leave out"
         cardTestId="merge-page"
@@ -625,7 +625,7 @@ export default function MergePdfTool() {
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RotateCcw className="size-3.5" aria-hidden="true" />
-            Reset order
+            <span className="max-sm:sr-only">Reset order</span>
           </button>
         }
         onReorder={reorderPages}
@@ -821,7 +821,13 @@ export default function MergePdfTool() {
       action={
         <ActionBar
           phase={run.phase}
-          label={unknownPages ? 'Merge into 1 PDF' : `Merge into 1 PDF (${plural(outputPages, 'page')})`}
+          label={
+            unknownPages
+              ? 'Merge into 1 PDF'
+              : phone
+                ? `Merge (${plural(outputPages, 'page')})`
+                : `Merge into 1 PDF (${plural(outputPages, 'page')})`
+          }
           runningLabel="Merging…"
           onRun={merge}
           disabledReason={disabledReason}

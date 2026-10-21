@@ -10,7 +10,7 @@ export interface PageCardProps {
   name: string;
   /** What the buttons call this page, when the file name alone is not enough: "A · page 2 (a.pdf)". */
   itemLabel?: string;
-  /** Drawn in the button row, between the handle and the buttons: a tag saying where the page is from. */
+  /** Drawn before "Page 2 of 5": a tag saying where the page is from. */
   badge?: ReactNode;
   /** The remove button's verb: "Remove" (the default), "Leave out". */
   removeVerb?: string;
@@ -120,7 +120,6 @@ export default function PageCard({
         ) : (
           <span aria-hidden="true" />
         )}
-        {badge}
         <div className={cn('flex', compact ? 'gap-0.5' : 'gap-1')}>
           {onOpen && (
             <button
@@ -162,9 +161,12 @@ export default function PageCard({
       </div>
 
       <div className="flex min-w-0 flex-col gap-0.5 border-t border-[var(--color-border)] px-2.5 py-2">
-        <p data-testid="page-label" className="truncate text-xs font-semibold text-[var(--color-text-primary)]">
-          Page {index + 1} of {total}
-        </p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {badge}
+          <p data-testid="page-label" className="truncate text-xs font-semibold text-[var(--color-text-primary)]">
+            Page {index + 1} of {total}
+          </p>
+        </div>
         <p className="truncate text-xs text-[var(--color-text-secondary)]" title={name}>
           {name}
         </p>

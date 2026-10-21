@@ -18,6 +18,8 @@ export async function openMerge(page: Page, files: Upload[], pages: number) {
   await expect(page.getByTestId('merge-page')).toHaveCount(pages, { timeout: 30_000 });
   // Every file read: the range fields are open.
   for (const input of await page.getByTestId('page-range-input').all()) await expect(input).toBeEnabled();
+  // And every thumbnail drawn, so nothing is still being laid out under a drag.
+  await expect(page.getByTestId('merge-page-image')).toHaveCount(pages, { timeout: 30_000 });
 }
 
 /** What the grid says each page is, in order: "A · page 2". */
@@ -44,9 +46,14 @@ export async function dragPage(page: Page, from: number, to: number) {
   await page.mouse.move(ax, ay);
   await page.mouse.down();
   await page.mouse.move(ax + 12, ay + 4, { steps: 4 });
+  // The drag has really started (WebKit can be a beat behind) before gliding to the target.
+  await expect(cards.nth(from)).toHaveAttribute('data-dragging', 'true');
   await page.mouse.move(bx, by, { steps: 20 });
+  await page.waitForTimeout(100);
   await page.mouse.move(bx + 1, by + 1);
+  await page.waitForTimeout(50);
   await page.mouse.up();
+  await expect(page.locator('[data-testid="merge-page"][data-dragging="true"]')).toHaveCount(0);
   await page.waitForTimeout(150);
 }
 

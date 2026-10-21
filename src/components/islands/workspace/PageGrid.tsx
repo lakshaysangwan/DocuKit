@@ -33,7 +33,7 @@ export interface PageGridProps<T extends { id: string }> {
    * Defaults to `getName`.
    */
   getItemLabel?: (item: T, index: number) => string;
-  /** A tag drawn in each card's button row, saying where the page comes from. */
+  /** A tag drawn before each card's "Page 2 of 5", saying where the page comes from. */
   renderBadge?: (item: T, index: number) => ReactNode;
   /** The remove button's verb. Defaults to "Remove". */
   removeVerb?: string;

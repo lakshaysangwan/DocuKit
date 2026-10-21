@@ -102,10 +102,12 @@ test.describe('Merge PDF — pages in the merged PDF', () => {
     const handle = page.getByTestId('file-row').nth(1).getByTestId('file-reorder');
     await handle.focus();
     // dnd-kit measures the rows a frame after pick-up, so give each key a moment.
+    await expect(handle).toBeFocused();
     await page.keyboard.press('Space');
+    await expect(page.getByTestId('file-row').nth(1)).toHaveAttribute('data-dragging', 'true');
     await page.waitForTimeout(150);
     await page.keyboard.press('ArrowUp');
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(250);
     await page.keyboard.press('Space');
     await expect(page.getByTestId('file-row').nth(0)).toHaveAttribute('data-filename', 'doc-5page.pdf');
     await expect.poll(() => gridOrder(page)).toEqual(['B · page 1', 'B · page 2', 'A · page 3', 'A · page 1', 'A · page 2']);
