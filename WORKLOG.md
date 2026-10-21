@@ -88,9 +88,19 @@ fix is new font files; pages that leave two graphics states open made appended c
 and shifted — fixed for Sign (`src/lib/pdf/content-balance.ts`), still present in Watermark and Page
 Numbers. `tools/sign-pdf.spec.ts:102` is flaky on WebKit (mouse moves fired faster than
 `signature_pad`'s 16 ms throttle) — pace the moves ≥20 ms.
+| `0d14ec7`…`973280d` (W3, 9 commits) | Image to PDF in the workspace: every output page shown as it will be saved (true proportions, margin guides, live as options are typed); drag and keyboard reorder with a visible prompt; page dialog; Orientation option defaulting to Auto (Lakshay's decision — landscape images get landscape A4/Letter/Legal pages); "Fit Image" without margins; "Center" merged into "Fit"; WebP/GIF/BMP/HEIC re-encoded before embedding; EXIF-rotated photos upright. New shared `PageGrid`, `PageCard`, `PagePreviewDialog`, `OutputPagePreview`. Fixed the keyboard-reorder and WebKit drawn-signature test flakes | Clean worktree: 471 Chromium, 586 Firefox/WebKit, 34 mobile, 9 visual, 692 unit. Live: four mixed images on three engines, output order / MediaBox / `cm` equal to the preview to 0.01 pt; Portrait, Fit Image, typed margins, remove, add, dialog, JPG to PDF, phone |
+
+W3 notes: one layout function (`src/lib/images-to-pdf-layout.ts`) feeds both the preview and the
+writer; its vitest table pins every unchanged option combination to the pre-refactor numbers. Open:
+"Cover" fills inside the margins on one axis but bleeds to the page edge on the other (asked
+Lakshay); "Fit Image" turns pixels into points, so a 12 MP photo makes a page about 1.4 m wide;
+re-encoded images over Safari's canvas limit may come out blank on iOS (not verified). On 2026-10-20
+Windows cleaned `%TEMP%` and deleted the W3 worktree's files mid-task (commits survived) — worktrees
+now live under `D:/Project/docukit-wt/<id>`. Lakshay's decisions on 2026-10-21: Image to PDF output
+changes approved; migrate every tool the workspace suits; sub-agents run at medium effort at most.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1 and W2 are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1, W2 and W3 are done; new: T19 — Edit PDF, adjustable size for added text, images and shapes; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
