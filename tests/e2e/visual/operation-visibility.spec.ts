@@ -66,11 +66,10 @@ test.describe('UX: operation visibility', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
 
     const preview = page.getByTestId('watermark-preview');
-    await expect(preview).toBeVisible({ timeout: 20_000 });
-    // The preview canvas is really sized (rendered), not a 0×0 placeholder.
-    await expect
-      .poll(async () => preview.evaluate((c: HTMLCanvasElement) => c.width * c.height))
-      .toBeGreaterThan(0);
+    // The page is drawn and the watermark is laid over it (the layer is the size of the page).
+    await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
+    await expect(preview).toHaveAttribute('data-count', '1', { timeout: 20_000 });
+    expect((await preview.boundingBox())!.width).toBeGreaterThan(100);
 
     const before = await preview.screenshot({ path: shot('watermark-preview-before') });
 

@@ -504,123 +504,17 @@ async function watermark(
   options: WatermarkOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, StandardFonts, degrees, rgb, PDFArray, PDFName } = await import('pdf-lib');
+  const [{ PDFDocument }, { writeWatermark }] = await Promise.all([import('pdf-lib'), import('../lib/watermark-write')]);
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
-  const pages = doc.getPages();
-
-  /**
-   * Move the watermark underneath the page's existing content.
-   *
-   * pdf-lib has no z-order API: every draw call appends to the page's content
-   * stream, so a watermark always lands on top. But `addContentStream` first
-   * normalises /Contents into an array and pushes our stream last, so moving
-   * that last entry to the front paints it before everything else — which is
-   * exactly "behind". pdf-lib wraps each draw in q/Q, so the graphics state the
-   * original content inherits is unchanged.
-   *
-   * Call this once per page, after that page's draw calls — and only if something
-   * was drawn, or the "last entry" is part of the original content instead.
-   */
-  const moveLastContentStreamToBack = (page: (typeof pages)[number]) => {
-    const contents = page.node.get(PDFName.of('Contents'));
-    if (!(contents instanceof PDFArray) || contents.size() < 2) return;
-    const last = contents.get(contents.size() - 1);
-    contents.remove(contents.size() - 1);
-    contents.insert(0, last);
-  };
-
-  const targetPages = pages.filter((_, i) => {
-    if (options.applyTo === 'all') return true;
-    if (options.applyTo === 'odd') return i % 2 === 0;
-    if (options.applyTo === 'even') return i % 2 === 1;
-    if (options.applyTo === 'range') return options.pageRange?.includes(i) ?? false;
-    return true;
-  });
-
-  const opacity = (options.opacity ?? 50) / 100;
-  const font = await doc.embedFont(StandardFonts.HelveticaBold);
-  let embeddedImage: Awaited<ReturnType<typeof doc.embedPng>> | null = null;
-
-  if (options.type === 'image' && options.imageDataUrl) {
-    const base64 = options.imageDataUrl.split(',')[1];
-    const binaryStr = atob(base64);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let j = 0; j < binaryStr.length; j++) bytes[j] = binaryStr.charCodeAt(j);
-    const isPng = options.imageDataUrl.startsWith('data:image/png');
-    embeddedImage = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
-  }
-
-  const total = targetPages.length;
-  for (let i = 0; i < total; i++) {
-    sendProgress(10 + Math.round(((i + 1) / total) * 80), `Watermarking page ${i + 1}/${total}…`);
-    const page = targetPages[i];
-    const { width, height } = page.getSize();
-    const rot = options.rotation ?? -45;
-    const [r, g, b] = parseColor(options.color ?? '#000000');
-    let drew = false;
-
-    if (options.type === 'text' && options.text) {
-      drew = true;
-      const fontSize = options.fontSize ?? 60;
-      const textWidth = font.widthOfTextAtSize(options.text, fontSize);
-      const textHeight = font.heightAtSize(fontSize);
-
-      if (options.placement === 'center') {
-        page.drawText(options.text, {
-          x: width / 2 - textWidth / 2,
-          y: height / 2 - textHeight / 2,
-          size: fontSize,
-          font,
-          color: rgb(r, g, b),
-          opacity,
-          rotate: degrees(rot),
-        });
-      } else {
-        // Tiled
-        const spacing = options.tileSpacing ?? 200;
-        for (let tx = 0; tx < width + spacing; tx += spacing) {
-          for (let ty = 0; ty < height + spacing; ty += spacing) {
-            page.drawText(options.text, {
-              x: tx - textWidth / 2,
-              y: ty,
-              size: fontSize,
-              font,
-              color: rgb(r, g, b),
-              opacity,
-              rotate: degrees(rot),
-            });
-          }
-        }
-      }
-    } else if (options.type === 'image' && embeddedImage) {
-      drew = true;
-      const imgW = options.placement === 'tiled' ? 150 : Math.min(width * 0.5, 300);
-      const scale = imgW / embeddedImage.width;
-      const imgH = embeddedImage.height * scale;
-
-      if (options.placement === 'center') {
-        page.drawImage(embeddedImage, {
-          x: width / 2 - imgW / 2,
-          y: height / 2 - imgH / 2,
-          width: imgW,
-          height: imgH,
-          opacity,
-          rotate: degrees(rot),
-        });
-      } else {
-        const spacing = (options.tileSpacing ?? 200) + imgW;
-        for (let tx = 0; tx < width + spacing; tx += spacing) {
-          for (let ty = 0; ty < height + spacing; ty += spacing) {
-            page.drawImage(embeddedImage, { x: tx, y: ty, width: imgW, height: imgH, opacity });
-          }
-        }
-      }
-    }
-
-    if (drew && options.layer === 'behind') moveLastContentStreamToBack(page);
-  }
+  const { pages, imageBytes, ...rest } = options;
+  await writeWatermark(
+    doc,
+    pages,
+    { ...rest, imageBytes: imageBytes ? new Uint8Array(imageBytes) : undefined },
+    (done, total) => sendProgress(10 + Math.round((done / total) * 80), `Watermarking page ${done}/${total}…`),
+  );
 
   sendProgress(95, 'Saving…');
   const bytes = await doc.save({ useObjectStreams: false });

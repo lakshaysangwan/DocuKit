@@ -57,10 +57,11 @@ test.describe('Source-check closures — watermark', () => {
 
     await page.getByTestId('wm-apply-range').click();
     await page.getByTestId('wm-page-range').fill('99');
-    await page.getByTestId('tool-action').click();
 
-    // A silent no-op was the failure mode worth guarding against here.
-    await expect(page.getByText(/Enter which pages to watermark/i)).toBeVisible();
+    // A silent no-op was the failure mode worth guarding against here. In the
+    // workspace the action cannot be pressed, and says why next to it.
+    await expect(page.getByTestId('tool-action')).toBeDisabled();
+    await expect(page.getByTestId('action-hint')).toHaveText(/Enter which pages to watermark/i);
     await expect(page.getByTestId('download-button')).toHaveCount(0);
   });
 

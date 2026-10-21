@@ -48,7 +48,7 @@ export type SaveMode = 'flatten' | 'annotations';
 const KAPPA = 0.5522847498307936;
 
 /** Compact number for a content stream. */
-const n = (v: number) => {
+export const n = (v: number) => {
   const r = Math.round(v * 10000) / 10000;
   return Object.is(r, -0) ? '0' : String(r);
 };
@@ -63,7 +63,7 @@ function rgb(hex: string): [number, number, number] {
 const fillColour = (hex: string) => rgb(hex).map(n).join(' ') + ' rg';
 const strokeColour = (hex: string) => rgb(hex).map(n).join(' ') + ' RG';
 
-function dataUrlBytes(url: string): Uint8Array {
+export function dataUrlBytes(url: string): Uint8Array {
   const comma = url.indexOf(',');
   const bin = atob(url.slice(comma + 1));
   const out = new Uint8Array(bin.length);
@@ -114,7 +114,7 @@ interface Fonts {
 }
 
 /** Encode text for `Tj`. Characters Helvetica has no glyph for become "?" rather than failing the save. */
-function encode(font: PDFFont, text: string): string {
+export function encode(font: PDFFont, text: string): string {
   try {
     return font.encodeText(text).toString();
   } catch {
@@ -229,7 +229,7 @@ function framedBody(frame: ObjectFrame, body: string): string {
 }
 
 /** Concatenated, decoded page content — to count the graphics states it leaves open. */
-function unclosedStates(doc: PDFDocument, page: PDFPage): number {
+export function unclosedStates(doc: PDFDocument, page: PDFPage): number {
   try {
     const contents = page.node.Contents();
     const streams = contents instanceof PDFArray ? contents.asArray().map((e) => doc.context.lookup(e)) : [contents];

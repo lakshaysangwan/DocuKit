@@ -33,11 +33,11 @@ test.describe('P7 — visual regression: preview surfaces', () => {
   test('watermark preview', async ({ page }) => {
     await page.goto('/watermark-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    // The page in the workspace viewer with the watermark drawn over it.
+    await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
     const preview = page.getByTestId('watermark-preview');
-    await expect(preview).toBeVisible({ timeout: 20_000 });
-    await expect
-      .poll(async () => preview.evaluate((c: HTMLCanvasElement) => c.width * c.height))
-      .toBeGreaterThan(0);
+    await expect(preview).toHaveAttribute('data-count', '1', { timeout: 20_000 });
+    await expectImageRendered(page.getByTestId('page-image'));
     await expect(preview).toHaveScreenshot('watermark-preview.png', shot);
   });
 

@@ -6,6 +6,7 @@ import { openEdit, addObject } from '../helpers/edit-pdf';
 import { openMerge } from '../helpers/merge-pdf';
 import { openSplit } from '../helpers/split-pdf';
 import { openCompress } from '../helpers/compress-pdf';
+import { openWatermark } from '../helpers/watermark';
 
 /**
  * The tools that live in the shared workspace.
@@ -84,5 +85,13 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'compress-pdf',
     name: 'Compress PDF',
     enter: (page) => openCompress(page, FIXTURE.pdf3page),
+  },
+  {
+    // A place-on-page tool whose stage is any page with the watermark drawn on
+    // it from the layout the worker writes with. "CONFIDENTIAL" is set on
+    // entry, so the action is available at once and there is no `makeReady`.
+    slug: 'watermark-pdf',
+    name: 'Watermark PDF',
+    enter: (page) => openWatermark(page, FIXTURE.pdf3page),
   },
 ];

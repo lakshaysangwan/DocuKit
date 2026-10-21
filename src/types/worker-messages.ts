@@ -1,3 +1,5 @@
+import type { WatermarkWriteOptions } from '../lib/watermark-write';
+import type { PageGeometry } from '../lib/pdf/page-geometry';
 // ─── Request types (main thread → worker) ───────────────────────────────────
 
 export type MergeOptions = {
@@ -153,20 +155,17 @@ export type EncryptOptions = {
   };
 };
 
-export type WatermarkOptions = {
-  type: 'text' | 'image';
-  text?: string;
-  imageDataUrl?: string;
-  font?: string;
-  fontSize?: number;
-  color?: string;
-  opacity?: number;
-  rotation?: number;
-  placement: 'center' | 'tiled';
-  tileSpacing?: number;
-  applyTo: 'all' | 'odd' | 'even' | 'range';
-  pageRange?: number[];
-  layer: 'behind' | 'front';
+/**
+ * Watermark PDF. Where the watermark goes is worked out by `layoutWatermark`
+ * (lib/watermark-layout.ts) from these options and each page's geometry — the
+ * same call the preview makes — so the worker is told the geometry pdf.js
+ * reported for every page it writes on, not left to guess it.
+ */
+export type WatermarkOptions = Omit<WatermarkWriteOptions, 'imageBytes'> & {
+  /** Image watermark: PNG or JPEG bytes, exactly as previewed. */
+  imageBytes?: ArrayBuffer;
+  /** The pages to watermark, each with the geometry it was previewed on. */
+  pages: { pageIndex: number; geometry: PageGeometry }[];
 };
 
 export type PageNumberOptions = {
