@@ -98,9 +98,16 @@ re-encoded images over Safari's canvas limit may come out blank on iOS (not veri
 Windows cleaned `%TEMP%` and deleted the W3 worktree's files mid-task (commits survived) — worktrees
 now live under `D:/Project/docukit-wt/<id>`. Lakshay's decisions on 2026-10-21: Image to PDF output
 changes approved; migrate every tool the workspace suits; sub-agents run at medium effort at most.
+| `fb819e8`, `b77b0d1` (T19) | Edit PDF in the workspace: every added object (text, image, rectangle, ellipse, line, arrow, drawing, highlight, whiteout, stamp) resizable by corner handles, Smaller/Larger, keyboard and mm fields with "Keep proportions"; text font-size field (6–144 pt); properties editable on the selected object; sensible default sizes relative to the page; output drawn per object as vectors and real text (was a full-page PNG in "Part of the page"), correct on rotated and offset pages in both save modes; copy corrected ("Fabric.js", "Bezier smoothing", "50 actions" removed) | Clean worktree: 495 Chromium, 632 Firefox/WebKit, 37 mobile, 9 visual (editor baseline regenerated on purpose), 722 unit. Live: text, image and rectangle sized by handle and fields on three engines, file vs screen within 0.002% of the page, annotations mode, `/Rotate 90`, phone |
+
+T19 notes: the old canvas editor (`AnnotationCanvas`, `AnnotationToolbar`, `pdf-annotations.ts`) is
+gone; shapes are now added at a default size and then resized, not drawn by dragging; single-letter
+shortcuts were dropped; "Save PDF" needs at least one object. Not verified: non-ASCII text (saved as a
+picture of itself), HEIC/GIF images inside Edit, annotations in Acrobat. The design doc's Edit row
+still names `AnnotationCanvas`.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1, W2 and W3 are done; new: T19 — Edit PDF, adjustable size for added text, images and shapes; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1, W2, W3 and T19 (Edit PDF sizing, in the workspace) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
