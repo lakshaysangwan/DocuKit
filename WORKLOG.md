@@ -105,9 +105,15 @@ gone; shapes are now added at a default size and then resized, not drawn by drag
 shortcuts were dropped; "Save PDF" needs at least one object. Not verified: non-ASCII text (saved as a
 picture of itself), HEIC/GIF images inside Edit, annotations in Acrobat. The design doc's Edit row
 still names `AnnotationCanvas`.
+| `9129d0a`, `481a7f0`, `fdb23cf` (T1) | Merge PDF in the workspace: every page of every file in output order with file-letter badges, drag across files, × to leave a page out, page ranges synced both ways with the grid, inline unlock, "Reset order", options always visible; worker `segments` on both paths, `sourceKey` in `mupdf-merge.ts` so bookmarks remap when a file is split into runs; blank pages only at file changes | Clean worktree: 514 Chromium, 668 Firefox/WebKit, 39 mobile, 9 visual (two Merge baselines regenerated on purpose), 736 unit. Live check pending: Cloudflare Pages did not start a build for `fdb23cf` (no "Cloudflare Pages" check on the commit 40 minutes after the push; production still served the previous Merge bundle) — this commit is pushed partly to trigger it |
+
+T1 notes: new WebKit flakes in `tools/merge-pdf-pages.spec.ts` (the Unlock button re-renders while
+clicked — possibly the 500 ms auto-try of the password, which could also eat a real click — and a
+lost file-row keyboard drag), and one `workspace/contract.spec.ts` axe colour-contrast hit on Edit
+PDF mid-transition. Not tested: 50+ files, very large PDFs, real touch drag.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1, W2, W3 and T19 (Edit PDF sizing, in the workspace) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace) and T1 (Merge) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
