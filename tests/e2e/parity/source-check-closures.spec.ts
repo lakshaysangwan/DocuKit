@@ -213,7 +213,13 @@ test.describe('Source-check closures — visual page selectors', () => {
     await expect(thumbs).toHaveCount(3);
     for (let i = 0; i < 3; i++) {
       await expect
-        .poll(() => thumbs.nth(i).evaluate((img: HTMLImageElement) => img.naturalWidth))
+        .poll(() =>
+          thumbs
+            .nth(i)
+            .locator('img')
+            .evaluate((img: HTMLImageElement) => img.naturalWidth)
+            .catch(() => 0),
+        )
         .toBeGreaterThan(0);
     }
 

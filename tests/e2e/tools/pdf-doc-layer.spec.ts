@@ -71,7 +71,7 @@ const thumbSources = (page: Page) =>
 test.describe('PDF document layer behind the page thumbnails', () => {
   test('thumbnails are blob: images that really decode, from one document that is closed when they are done', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/split-pdf');
+    await page.goto('/pdf-to-image');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
 
     const thumbs = page.getByTestId('page-thumb');
@@ -95,7 +95,7 @@ test.describe('PDF document layer behind the page thumbnails', () => {
 
   test('loading another file releases the previous file’s thumbnails', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/split-pdf');
+    await page.goto('/pdf-to-image');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await expect(page.getByTestId('page-thumb')).toHaveCount(3, { timeout: 20_000 });
     const first = await thumbSources(page);

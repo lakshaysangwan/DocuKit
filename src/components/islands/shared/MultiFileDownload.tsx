@@ -45,6 +45,10 @@ interface MultiFileDownloadProps {
    * keeps its place (and its DOM node) whether or not there is a result yet.
    */
   children?: ReactNode;
+  /** Shared state from `useMultiFileDownload`, when the primary button is elsewhere. */
+  controller?: MultiDownloadController;
+  /** Leave out the primary download button: the caller shows it (with the same `controller`). */
+  hidePrimary?: boolean;
 }
 
 type Busy = null | 'primary' | 'zip' | 'folder' | 'share';
@@ -74,29 +78,32 @@ function useObjectUrls(files: MultiFile[], enabled: boolean): string[] {
   return entry && entry.for === files ? entry.urls : [];
 }
 
+export interface MultiDownloadOptions {
+  files: MultiFile[];
+  zipName: string;
+  noun?: { one: string; other: string };
+  directLimit?: number;
+  folderStartIn?: string;
+}
+
+/** The download logic behind `MultiFileDownload`, for a tool that puts the primary button elsewhere. */
+export type MultiDownloadController = ReturnType<typeof useMultiFileDownload>;
+
 /**
- * Hands over a tool's output files: one image downloads as itself, a few
- * download as separate files from one click, and many fall back to a ZIP —
- * with a ZIP, a folder save and the share sheet offered as secondary routes
- * wherever the browser supports them, and a per-file Download on every card.
- *
- * Layout contract: the primary row comes first and nothing is ever inserted
- * above it. The status line below it has its height reserved, so messages
- * appearing after a click move neither the buttons nor the cards.
+ * The state and actions of a multi-file hand-over. Use it when the primary
+ * download lives somewhere else (a workspace's action bar): pass the same
+ * controller to that button and to `<MultiFileDownload controller hidePrimary>`,
+ * so both share one busy state and one status line.
  */
-export default function MultiFileDownload({
+export function useMultiFileDownload({
   files,
   zipName,
   noun = { one: 'file', other: 'files' },
-  preview = false,
-  listLabel = 'Output files',
   directLimit = DIRECT_DOWNLOAD_LIMIT,
   folderStartIn,
-  children,
-}: MultiFileDownloadProps) {
+}: MultiDownloadOptions) {
   const [busy, setBusy] = useState<Busy>(null);
   const [message, setMessage] = useState<StatusMessage | null>(null);
-  const urls = useObjectUrls(files, preview);
 
   const n = files.length;
   const count = (k: number) => `${k} ${k === 1 ? noun.one : noun.other}`;
@@ -170,18 +177,60 @@ export default function MultiFileDownload({
     mode === 'single' ? `Download ${noun.one}`
       : mode === 'direct' ? `Download all (${count(n)})`
         : `Download ZIP (${count(n)})`;
+  const primaryAriaLabel =
+    mode === 'single' ? `Download ${noun.one} ${files[0]?.name ?? ''}` : mode === 'zip' ? `${primaryLabel}: ${zipName}` : undefined;
+  const primaryBusyLabel = mode === 'direct' ? 'Starting downloads…' : 'Preparing…';
+  const primaryDoneLabel = mode === 'direct' ? 'Downloads started' : 'Download started';
+
+  return {
+    files, zipName, noun, n, mode, count, busy, status, folderOk, shareOk,
+    primaryLabel, primaryAriaLabel, primaryBusyLabel, primaryDoneLabel,
+    handlePrimary, handleFolder, handleShare, handleOne,
+    handleZip: () => run('zip', downloadZip),
+  };
+}
+
+/**
+ * Hands over a tool's output files: one image downloads as itself, a few
+ * download as separate files from one click, and many fall back to a ZIP —
+ * with a ZIP, a folder save and the share sheet offered as secondary routes
+ * wherever the browser supports them, and a per-file Download on every card.
+ *
+ * Layout contract: the primary row comes first and nothing is ever inserted
+ * above it. The status line below it has its height reserved, so messages
+ * appearing after a click move neither the buttons nor the cards.
+ *
+ * With `controller` (from `useMultiFileDownload`) it shows that controller's
+ * state; with `hidePrimary` it leaves the primary download to the caller.
+ */
+export default function MultiFileDownload({
+  files,
+  zipName,
+  noun = { one: 'file', other: 'files' },
+  preview = false,
+  listLabel = 'Output files',
+  directLimit = DIRECT_DOWNLOAD_LIMIT,
+  folderStartIn,
+  children,
+  controller,
+  hidePrimary = false,
+}: MultiFileDownloadProps) {
+  const own = useMultiFileDownload({ files, zipName, noun, directLimit, folderStartIn });
+  const c = controller ?? own;
+  const { n, mode, count, busy, status, folderOk, shareOk, primaryLabel, handlePrimary, handleFolder, handleShare, handleOne } = c;
+  const urls = useObjectUrls(c.files, preview);
 
   return (
     <div className="flex flex-col gap-3" data-testid="multi-download" data-mode={n > 0 ? mode : 'empty'}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {children}
-        {n > 0 && (
+        {n > 0 && !hidePrimary && (
           <DownloadButton
             onClick={handlePrimary}
             label={primaryLabel}
-            ariaLabel={mode === 'single' ? `Download ${noun.one} ${files[0].name}` : mode === 'zip' ? `${primaryLabel}: ${zipName}` : undefined}
-            busyLabel={mode === 'direct' ? 'Starting downloads…' : 'Preparing…'}
-            doneLabel={mode === 'direct' ? 'Downloads started' : 'Download started'}
+            ariaLabel={c.primaryAriaLabel}
+            busyLabel={c.primaryBusyLabel}
+            doneLabel={c.primaryDoneLabel}
             disabled={busy !== null && busy !== 'primary'}
           />
         )}
@@ -192,8 +241,8 @@ export default function MultiFileDownload({
           {(mode === 'direct' || folderOk || shareOk) && (
             <div className="flex flex-wrap gap-2 sm:justify-end" data-testid="download-options">
               {mode === 'direct' && (
-                <button type="button" onClick={() => run('zip', downloadZip)} disabled={busy !== null}
-                  data-testid="download-zip" aria-label={`Download as ZIP: ${zipName}`} className={secondaryButton}>
+                <button type="button" onClick={c.handleZip} disabled={busy !== null}
+                  data-testid="download-zip" aria-label={`Download as ZIP: ${c.zipName}`} className={secondaryButton}>
                   {busy === 'zip' ? 'Preparing ZIP…' : 'Download as ZIP'}
                 </button>
               )}
@@ -206,7 +255,7 @@ export default function MultiFileDownload({
               {shareOk && (
                 <button type="button" onClick={handleShare} disabled={busy !== null}
                   data-testid="share-files" className={secondaryButton}>
-                  Share or save {n === 1 ? noun.one : noun.other}…
+                  Share or save {n === 1 ? c.noun.one : c.noun.other}…
                 </button>
               )}
             </div>
@@ -231,7 +280,7 @@ export default function MultiFileDownload({
             className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-3 sm:p-4">
             <p className="mb-3 text-sm font-medium text-[var(--color-text-primary)]">{count(n)} ready</p>
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {files.map((file, i) => (
+              {c.files.map((file, i) => (
                 <li key={file.name} data-testid="result-card"
                   className="flex min-w-0 flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2">
                   {preview && (

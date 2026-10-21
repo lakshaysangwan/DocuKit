@@ -58,12 +58,12 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
   test('split-pdf — range and every-N', async ({ page }) => {
     await page.goto('/split-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
-    // Default mode "Extract Pages" shows the page-selection input.
-    await expect(page.getByLabel('Page selection')).toBeVisible();
+    // Default mode "Extract Pages" shows the page field.
+    await expect(page.getByLabel('Pages to extract')).toBeVisible();
     await assertAllLabelled(page);
     // Switch to "Split Every N" to reveal the chunk-size input.
     await page.getByRole('button', { name: /Split Every N/ }).click();
-    await expect(page.getByLabel('Pages per chunk')).toBeVisible();
+    await expect(page.getByLabel('Pages per PDF')).toBeVisible();
     await assertAllLabelled(page);
   });
 

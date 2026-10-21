@@ -4,15 +4,18 @@ import {
   PageDiagnostics,
   addSingleFileAndWait,
   expectDownload,
+  expectDownloads,
   assertPdf,
-  assertZip,
   countPdfPages,
 } from '../helpers/harness';
 
-/** Wait until the split tool has finished loading the PDF (action enabled). */
+/**
+ * Wait until the split tool has finished loading the PDF: its pages are drawn.
+ * (The action is not a signal: Extract and Remove wait for pages to be chosen.)
+ */
 async function loadPdf(page: import('@playwright/test').Page, file: string) {
   await addSingleFileAndWait(page, file);
-  await expect(page.getByTestId('tool-action')).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByTestId('split-page').first()).toBeVisible({ timeout: 20_000 });
 }
 
 async function chooseMode(page: import('@playwright/test').Page, label: string) {
@@ -64,7 +67,7 @@ test.describe('Split PDF', () => {
     expect(countPdfPages(bytes)).toBe(3);
   });
 
-  test('split-by-range mode produces a ZIP of multiple PDFs', async ({ page }) => {
+  test('split-by-range mode produces one PDF per range, as separate downloads', async ({ page }) => {
     await page.goto('/split-pdf');
     await loadPdf(page, FIXTURE.pdf5page);
 
@@ -75,24 +78,30 @@ test.describe('Split PDF', () => {
     await expect(page.getByText('Split complete!')).toBeVisible({ timeout: 45_000 });
     await expect(page.getByText(/2 files · /)).toBeVisible();
 
-    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    assertZip(bytes);
-    expect(name).toMatch(/\.zip$/);
+    // A few files arrive as themselves, not in a ZIP.
+    await expect(page.getByTestId('download-button')).toHaveText('Download all (2 PDFs)');
+    const files = await expectDownloads(page, () => page.getByTestId('download-button').click(), 2);
+    expect(files.map((f) => f.name).sort()).toEqual(['doc-5page-part1.pdf', 'doc-5page-part2.pdf']);
+    for (const f of files) assertPdf(f.bytes);
+    expect(files.map((f) => countPdfPages(f.bytes)).sort()).toEqual([2, 3]);
   });
 
-  test('extract-each mode produces a ZIP with one PDF per page', async ({ page }) => {
+  test('extract-each mode produces one PDF per page', async ({ page }) => {
     await page.goto('/split-pdf');
     await loadPdf(page, FIXTURE.pdf5page);
 
     await chooseMode(page, 'Extract Each Page');
-    await expect(page.getByText(/Will create 5 individual PDF files/)).toBeVisible();
+    await expect(page.getByTestId('split-output')).toHaveCount(5);
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByText('Split complete!')).toBeVisible({ timeout: 45_000 });
     await expect(page.getByText(/5 files · /)).toBeVisible();
 
-    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    assertZip(bytes);
+    const files = await expectDownloads(page, () => page.getByTestId('download-button').click(), 5);
+    for (const f of files) {
+      assertPdf(f.bytes);
+      expect(countPdfPages(f.bytes)).toBe(1);
+    }
   });
 
   test('split-every-N mode chunks the document', async ({ page }) => {
@@ -102,13 +111,13 @@ test.describe('Split PDF', () => {
     await chooseMode(page, 'Split Every N');
     const n = page.getByRole('spinbutton');
     await n.fill('2');
-    await expect(page.getByText(/Creates ~3 parts/)).toBeVisible();
+    await expect(page.getByTestId('split-output')).toHaveCount(3);
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByText('Split complete!')).toBeVisible({ timeout: 45_000 });
 
-    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    // 5 pages / 2 = 3 parts -> ZIP.
-    assertZip(bytes);
+    // 5 pages / 2 = 3 parts: 2, 2 and 1 pages, as separate files.
+    const files = await expectDownloads(page, () => page.getByTestId('download-button').click(), 3);
+    expect(files.map((f) => countPdfPages(f.bytes)).sort()).toEqual([1, 2, 2]);
   });
 });

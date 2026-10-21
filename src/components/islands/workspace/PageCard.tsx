@@ -4,6 +4,34 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X, ZoomIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+/**
+ * What will happen to a page, shown on its card: a tag ("PDF 2", "Removed") and
+ * how the page is drawn. Colour is never the only signal — a colour always
+ * comes with its label.
+ */
+export interface PageMark {
+  /** The tag at the top of the card. */
+  label?: string;
+  /** A CSS colour for the tag and the card's top edge: the page's group. */
+  colour?: string;
+  /**
+   * `selected`  outlined in the primary colour.
+   * `dimmed`    faded: the page goes nowhere.
+   * `removed`   faded and edged in red: the page is taken out.
+   */
+  state?: 'selected' | 'dimmed' | 'removed';
+}
+
+/** Makes the page itself a toggle (pick pages), instead of "view large". */
+export interface PageSelect {
+  selected: boolean;
+  onToggle: () => void;
+  /** The toggle's accessible name: "Page 2". Its state is `aria-pressed`. */
+  label: string;
+  /** The toggle's test id. */
+  testId?: string;
+}
+
 export interface PageCardProps {
   id: string;
   /** The file this page comes from. Names the card's buttons and its `data-filename`. */
@@ -33,6 +61,12 @@ export interface PageCardProps {
   /** Smaller buttons, for the smallest grid size. */
   compact?: boolean;
   disabled?: boolean;
+  /** What will happen to this page. */
+  mark?: PageMark;
+  /** Clicking the page selects it; "view large" stays on its button. */
+  select?: PageSelect;
+  /** Show the file name line. Off when every page comes from the same file. Defaults to true. */
+  showName?: boolean;
 }
 
 /**
@@ -56,7 +90,13 @@ const animateLayoutChanges: AnimateLayoutChanges = (args) => !(args.isSorting ||
  * (reorder). The handle reorders with a mouse, a finger, or the keyboard: Space
  * to pick up, arrows to move, Space to drop, Esc to cancel.
  *
- * Test ids: `file-card` (with `data-filename`), `page-thumb`, `page-label`,
+ * With `mark` the card carries a tag ("PDF 2") and is drawn as selected, faded
+ * or removed. With `select` the page itself is a toggle button (pick pages), so
+ * a click selects rather than enlarges. A card has a tag or a reorder handle,
+ * not both.
+ *
+ * Test ids: `file-card` (with `data-filename`, and `data-mark` /
+ * `data-mark-state` when marked), `page-thumb`, `page-mark`, `page-label`,
  * `page-detail`, `page-reorder`, `page-open`, `file-remove`.
  */
 export default function PageCard({
@@ -76,6 +116,9 @@ export default function PageCard({
   onOpen,
   compact = false,
   disabled = false,
+  mark,
+  select,
+  showName = true,
 }: PageCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -92,20 +135,48 @@ export default function PageCard({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        ...(mark?.colour ? { borderTopColor: mark.colour, borderTopWidth: 4 } : {}),
+      }}
       data-testid={testId}
       data-filename={name}
       data-page-id={id}
       data-dragging={isDragging ? 'true' : undefined}
+      data-mark={mark?.label}
+      data-mark-state={mark?.state}
       className={cn(
         'relative flex flex-col rounded-xl border bg-[var(--color-surface)]',
         isDragging
           ? 'z-10 border-[var(--color-primary)] shadow-2xl'
-          : 'border-[var(--color-border)] shadow-[var(--shadow-card)]',
+          : mark?.state === 'selected'
+            ? 'border-[var(--color-primary)] shadow-[var(--shadow-card)] ring-2 ring-[var(--color-primary)]'
+            : mark?.state === 'removed'
+              ? 'border-dashed border-[var(--color-error)] shadow-[var(--shadow-card)]'
+              : 'border-[var(--color-border)] shadow-[var(--shadow-card)]',
       )}
     >
-      <div className={cn('flex items-center justify-between', compact ? 'gap-0.5 p-1' : 'gap-1 p-1.5')}>
-        {sortable ? (
+      <div className={cn('flex min-h-0 items-center justify-between', compact ? 'gap-0.5 p-1' : 'gap-1 p-1.5')}>
+        {mark?.label && !sortable ? (
+          <span
+            data-testid="page-mark"
+            className={cn(
+              'inline-flex min-w-0 items-center truncate rounded-md px-1.5 font-semibold leading-none',
+              compact ? 'h-7 px-1 text-[10px]' : 'h-8 text-xs',
+              mark.colour
+                ? 'text-white'
+                : mark.state === 'selected'
+                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                  : mark.state === 'removed'
+                    ? 'bg-[var(--color-error)]/10 text-[var(--color-error)]'
+                    : 'bg-[var(--color-background)] text-[var(--color-text-secondary)]',
+            )}
+            style={mark.colour ? { backgroundColor: mark.colour } : undefined}
+          >
+            <span className="truncate">{mark.label}</span>
+          </span>
+        ) : sortable ? (
           <button
             type="button"
             data-testid="page-reorder"
@@ -149,16 +220,44 @@ export default function PageCard({
 
       {/* The page. For a mouse it is also a shortcut: click to view large, drag
           to reorder. Both have a button above, so it is not a control itself. */}
-      <div
-        data-testid="page-thumb"
-        onClick={onOpen}
-        onPointerDown={dragByPage}
-        className={cn('bg-[var(--color-background)]', compact ? 'p-1.5' : 'p-2.5', onOpen && 'cursor-zoom-in')}
-      >
-        <div className="flex w-full items-center justify-center" style={{ aspectRatio: String(CARD_FRAME_ASPECT) }}>
-          <div style={{ width: `${width}%` }}>{children}</div>
-        </div>
-      </div>
+      {(() => {
+        const faded = mark?.state === 'dimmed' || mark?.state === 'removed';
+        const picture = (
+          <div
+            data-testid="page-thumb"
+            onClick={select ? undefined : onOpen}
+            onPointerDown={dragByPage}
+            className={cn(
+              'bg-[var(--color-background)]',
+              compact ? 'p-1.5' : 'p-2.5',
+              select ? 'cursor-pointer' : onOpen && 'cursor-zoom-in',
+            )}
+          >
+            <div className="flex w-full items-center justify-center" style={{ aspectRatio: String(CARD_FRAME_ASPECT) }}>
+              <div style={{ width: `${width}%` }} className={cn(faded && 'opacity-40 grayscale')}>
+                {children}
+              </div>
+            </div>
+          </div>
+        );
+        // Picking pages: the page is the toggle. Its state is aria-pressed, and
+        // "view large" stays on the button above.
+        return select ? (
+          <button
+            type="button"
+            onClick={select.onToggle}
+            disabled={disabled}
+            aria-pressed={select.selected}
+            aria-label={select.label}
+            data-testid={select.testId}
+            className="block w-full text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:cursor-not-allowed"
+          >
+            {picture}
+          </button>
+        ) : (
+          picture
+        );
+      })()}
 
       <div className="flex min-w-0 flex-col gap-0.5 border-t border-[var(--color-border)] px-2.5 py-2">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -167,9 +266,11 @@ export default function PageCard({
             Page {index + 1} of {total}
           </p>
         </div>
-        <p className="truncate text-xs text-[var(--color-text-secondary)]" title={name}>
-          {name}
-        </p>
+        {showName && (
+          <p className="truncate text-xs text-[var(--color-text-secondary)]" title={name}>
+            {name}
+          </p>
+        )}
         {detail !== undefined && (
           <p data-testid="page-detail" className="min-h-4 truncate text-[11px] leading-4 text-[var(--color-text-secondary)]">
             {detail}

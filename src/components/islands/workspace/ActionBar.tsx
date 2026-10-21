@@ -25,7 +25,15 @@ export interface ActionBarProps {
   progressLabel?: string;
   onCancel?: () => void;
   /** Required for the `done` phase: the download that replaces the action. */
-  download?: { label: string; onDownload: () => void | Promise<void>; ariaLabel?: string };
+  download?: {
+    label: string;
+    onDownload: () => void | Promise<void>;
+    ariaLabel?: string;
+    /** While `onDownload` is pending. Defaults to "Preparing…". */
+    busyLabel?: string;
+    /** Briefly after it resolves. Defaults to "Downloaded!"; say less when the click only starts downloads. */
+    doneLabel?: string;
+  };
   /** One line about the result: "contract-signed.pdf · 677.6 KB · 7 pages". */
   summary?: string;
   /** "Make changes": go back to editing. The caller invalidates the result. */
@@ -209,6 +217,8 @@ export default function ActionBar({
               onClick={download.onDownload}
               label={download.label}
               ariaLabel={download.ariaLabel}
+              busyLabel={download.busyLabel}
+              doneLabel={download.doneLabel}
               className="h-11 w-full min-w-0 whitespace-nowrap px-3 py-0"
             />
           ) : (

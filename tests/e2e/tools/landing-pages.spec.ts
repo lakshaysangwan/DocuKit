@@ -134,12 +134,32 @@ test.describe('Landing pages — the preset is applied', () => {
   test('Delete PDF Pages opens in Remove mode: listed pages are dropped, the rest kept', async ({ page }) => {
     await page.goto('/delete-pdf-pages/');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
+    await expect(page.getByTestId('split-modes').getByRole('button', { name: /^Remove Pages/ })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('textbox').fill('2, 4');
+    // The grid shows the pages that will go.
+    await expect(page.locator('[data-testid="split-page"][data-mark="Removed"]')).toHaveCount(2);
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
-    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertPdf(bytes);
+    expect(name).toBe('doc-5page-split.pdf');
     expect(countPdfPages(bytes)).toBe(3);
+  });
+
+  test('Extract PDF Pages opens in Extract mode: the pages clicked are the pages delivered', async ({ page }) => {
+    await page.goto('/extract-pdf-pages/');
+    await addSingleFileAndWait(page, FIXTURE.pdf5page);
+    await expect(page.getByTestId('split-modes').getByRole('button', { name: /^Extract Pages/ })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('page-select-1').click();
+    await page.getByTestId('page-select-3').click();
+    await expect(page.getByRole('textbox')).toHaveValue('2, 4');
+
+    await page.getByTestId('tool-action').click();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    assertPdf(bytes);
+    expect(name).toBe('doc-5page-split.pdf');
+    expect(countPdfPages(bytes)).toBe(2);
   });
 });

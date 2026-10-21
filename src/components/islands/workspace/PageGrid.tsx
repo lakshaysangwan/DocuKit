@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -10,10 +10,11 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
-import PageCard from './PageCard';
+import PageCard, { type PageMark } from './PageCard';
 import PagePreviewDialog from './PagePreviewDialog';
 
 export type PageGridSize = 's' | 'm' | 'l';
+export type { PageMark };
 
 /** Where a page is being drawn: in its card, or large in the dialog. */
 export type PageGridView = 'card' | 'large';
@@ -55,6 +56,28 @@ export interface PageGridProps<T extends { id: string }> {
   disabled?: boolean;
   /** Names the list for assistive tech. Defaults to "Pages". */
   label?: string;
+  /** What will happen to each page: a tag on its card, and how it is drawn. */
+  getMark?: (item: T, index: number) => PageMark | undefined;
+  /**
+   * Make each page a toggle: clicking it (or Space / Enter on it) selects or
+   * deselects it, and "view large" stays on its button. Leave out for pages
+   * that are only looked at.
+   */
+  selection?: {
+    isSelected: (item: T, index: number) => boolean;
+    onToggle: (item: T, index: number) => void;
+    /** The toggle's accessible name. Defaults to "Page 2". */
+    getLabel?: (item: T, index: number) => string;
+    getTestId?: (item: T, index: number) => string;
+  };
+  /**
+   * A full-width row before a card, to start a new group ("PDF 2 · pages 3–4").
+   * Return null where no group starts. It is decoration: say the same on the
+   * cards (with `getMark`) for assistive tech.
+   */
+  renderDivider?: (item: T, index: number) => ReactNode;
+  /** Show the file name on every card. Off when all pages come from one file. Defaults to true. */
+  showNames?: boolean;
 }
 
 const SIZES: { value: PageGridSize; text: string; name: string }[] = [
@@ -78,7 +101,10 @@ const CARD_MIN: Record<PageGridSize, string> = {
  *   • Each card says "Page 2 of 5" and which file it is.
  *   • Reorder by dragging a page, or with the handle and the keyboard; every
  *     move is announced by file name and position.
- *   • Click a page to see it large, with Previous / Next.
+ *   • Click a page to see it large, with Previous / Next — or, with
+ *     `selection`, click it to pick it (its button still shows it large).
+ *   • Optionally, each page says what will happen to it (`getMark`) and groups
+ *     can be set apart by a full-width divider (`renderDivider`).
  *
  * It fills its container (give it a positioned parent, as `ToolWorkspace`'s
  * stage is) and scrolls inside itself.
@@ -104,6 +130,10 @@ export default function PageGrid<T extends { id: string }>({
   onRemove,
   disabled = false,
   label = 'Pages',
+  getMark,
+  selection,
+  renderDivider,
+  showNames = true,
 }: PageGridProps<T>) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -208,30 +238,52 @@ export default function PageGrid<T extends { id: string }>({
                 CARD_MIN[size],
               )}
             >
-              {items.map((item, index) => (
-                <li key={item.id} className="min-w-0">
-                  <PageCard
-                    id={item.id}
-                    name={getName(item)}
-                    itemLabel={getItemLabel?.(item, index)}
-                    badge={renderBadge?.(item, index)}
-                    removeVerb={removeVerb}
-                    testId={cardTestId}
-                    index={index}
-                    total={items.length}
-                    aspect={getAspect(item, index)}
-                    // With details on, every card keeps the line, so a row stays level.
-                    detail={getDetail ? (getDetail(item, index) ?? '') : undefined}
-                    sortable={sortable}
-                    compact={size === 's'}
-                    onRemove={onRemove ? () => onRemove(item.id) : undefined}
-                    onOpen={() => show(item.id)}
-                    disabled={disabled}
-                  >
-                    {renderPage(item, index, 'card')}
-                  </PageCard>
-                </li>
-              ))}
+              {items.map((item, index) => {
+                const divider = renderDivider?.(item, index);
+                return (
+                  <Fragment key={item.id}>
+                    {divider ? (
+                      <li aria-hidden="true" data-testid="page-grid-divider" className="col-span-full">
+                        {divider}
+                      </li>
+                    ) : null}
+                    <li className="min-w-0">
+                      <PageCard
+                        id={item.id}
+                        name={getName(item)}
+                        itemLabel={getItemLabel?.(item, index)}
+                        badge={renderBadge?.(item, index)}
+                        removeVerb={removeVerb}
+                        testId={cardTestId}
+                        index={index}
+                        total={items.length}
+                        aspect={getAspect(item, index)}
+                        // With details on, every card keeps the line, so a row stays level.
+                        detail={getDetail ? (getDetail(item, index) ?? '') : undefined}
+                        sortable={sortable}
+                        compact={size === 's'}
+                        onRemove={onRemove ? () => onRemove(item.id) : undefined}
+                        onOpen={() => show(item.id)}
+                        disabled={disabled}
+                        mark={getMark?.(item, index)}
+                        select={
+                          selection
+                            ? {
+                                selected: selection.isSelected(item, index),
+                                onToggle: () => selection.onToggle(item, index),
+                                label: selection.getLabel?.(item, index) ?? `Page ${index + 1}`,
+                                testId: selection.getTestId?.(item, index),
+                              }
+                            : undefined
+                        }
+                        showName={showNames}
+                      >
+                        {renderPage(item, index, 'card')}
+                      </PageCard>
+                    </li>
+                  </Fragment>
+                );
+              })}
             </ul>
           </SortableContext>
         </DndContext>

@@ -4,6 +4,7 @@ import { openSign, addTypedSignature } from '../helpers/sign';
 import { openImages } from '../helpers/image-to-pdf';
 import { openEdit, addObject } from '../helpers/edit-pdf';
 import { openMerge } from '../helpers/merge-pdf';
+import { openSplit } from '../helpers/split-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -62,5 +63,17 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'merge-pdf',
     name: 'Merge PDF',
     enter: (page) => openMerge(page, [FIXTURE.pdf3page, FIXTURE.pdf5page], 8),
+  },
+  {
+    // A pick-pages tool: the document pane is every page, marked with what will
+    // become of it. It opens in Extract Pages, which waits for pages to be
+    // chosen, so `makeReady` picks two by clicking them.
+    slug: 'split-pdf',
+    name: 'Split PDF',
+    enter: (page) => openSplit(page, FIXTURE.pdf3page, 3),
+    makeReady: async (page) => {
+      await page.getByTestId('page-select-0').click();
+      await page.getByTestId('page-select-2').click();
+    },
   },
 ];
