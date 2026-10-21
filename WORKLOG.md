@@ -111,9 +111,18 @@ T1 notes: new WebKit flakes in `tools/merge-pdf-pages.spec.ts` (the Unlock butto
 clicked — possibly the 500 ms auto-try of the password, which could also eat a real click — and a
 lost file-row keyboard drag), and one `workspace/contract.spec.ts` axe colour-contrast hit on Edit
 PDF mid-transition. Not tested: 50+ files, very large PDFs, real touch drag.
+| `8c38628`, `76d0478`, `e28b132` (T2) | Split PDF in the workspace: every page shown in every mode with the outcome on the grid (Selected / Removed / "PDF 1, 2…" colour-and-label groups / dividers for Every N / per-page numbers), an output list with real file names, several results through `MultiFileDownload` instead of a forced ZIP, page numbers past the end flagged instead of trimmed; Delete / Extract PDF Pages copy updated; Merge's Unlock button no longer vanishes under a click while the automatic password try runs | Clean worktree: 535 Chromium, 708 Firefox/WebKit, 41 mobile, 9 visual, 748 unit. Live (Cloudflare started the build ~10 minutes after the push): Split, Delete and Extract specs against docukit.uk on three engines, phone emulation; a Firefox fast-click experiment on Extract PDF Pages lost 0 of 30 clicks |
+
+T2 notes: `PageGrid` / `PageCard` gained selection, marks and group dividers; `MultiFileDownload`'s
+logic is now a `useMultiFileDownload()` hook. A Firefox flake in `tools/landing-pages.spec.ts:150`
+(first page click lost) fired twice in the gate but not on production. At 375 px in S size the "Not
+included" tag is truncated. PDF to Image still uses the old `PageSelectorGrid`. Cloudflare Pages builds
+now start up to ~10 minutes after a push (both T1 and T2); allow 15 minutes before calling a deploy
+stuck. Live-run specs that assert "no console errors" fail on production only because the CSP blocks
+the Cloudflare Web Analytics beacon — switching Web Analytics off (Lakshay's to-do) fixes that.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace) and T1 (Merge) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge) and T2 (Split) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
