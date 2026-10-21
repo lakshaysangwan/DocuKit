@@ -30,6 +30,13 @@ export interface MergeInput {
   pages: number[] | null;
   /** Used only in error messages. */
   name: string;
+  /**
+   * Which source document this run of pages comes from. Inputs with the same key
+   * are one document split into several runs: it is opened once, and its links
+   * and outline are remapped once against all the pages it contributes. Defaults
+   * to the input's own position (every input its own document).
+   */
+  sourceKey?: string | number;
 }
 
 /**
@@ -170,32 +177,67 @@ export async function mergeWithOutlines(
   sendProgress(10, 'Loading documents…');
   const out = new mupdf.PDFDocument();
 
-  const entries: OutlineEntry[] = [];
+  // One opened document, one graft map and one page map per source, however
+  // many runs of output pages it is split into. Kept in first-appearance order,
+  // which is the order the sources' outlines are written in.
+  interface Source {
+    src: MuPDF.PDFDocument;
+    graft: MuPDF.PDFGraftMap;
+    /** Source page index → merged page index, for every page this source contributes. */
+    pageMap: Map<number, number>;
+  }
+  const sources = new Map<MergeInput['sourceKey'], Source>();
+  const sourceOf = (input: MergeInput, key: MergeInput['sourceKey']): Source => {
+    let source = sources.get(key);
+    if (!source) {
+      const src = mupdf.Document.openDocument(input.bytes, 'application/pdf').asPDF();
+      if (!src) throw new Error(`"${input.name}" is not a PDF document.`);
+      source = { src, graft: out.newGraftMap(), pageMap: new Map() };
+      sources.set(key, source);
+    }
+    return source;
+  };
+
   let outPageCount = 0;
   let lastBounds: [number, number, number, number] = [0, 0, 612, 792];
 
+  // 1. Graft every page, in output order. Nothing is remapped yet: a source's
+  //    links and bookmarks may point at a page that only arrives in a later run.
   for (let di = 0; di < inputs.length; di++) {
     const input = inputs[di];
-    const opened = mupdf.Document.openDocument(input.bytes, 'application/pdf');
-    const src = opened.asPDF();
-    if (!src) throw new Error(`"${input.name}" is not a PDF document.`);
+    const key = input.sourceKey ?? di;
+    const { src, graft, pageMap } = sourceOf(input, key);
 
     const count = src.countPages();
     const indices = input.pages && input.pages.length > 0
       ? input.pages.filter((i) => i >= 0 && i < count)
       : Array.from({ length: count }, (_, i) => i);
 
-    const pageMap = new Map<number, number>();
     for (const idx of indices) {
-      out.graftPage(-1, src, idx);
+      graft.graftPage(-1, src, idx);
       pageMap.set(idx, outPageCount++);
       const bounds = src.loadPage(idx).getBounds();
       lastBounds = [bounds[0], bounds[1], bounds[2], bounds[3]];
     }
 
-    // Re-create the links graft left behind. External links carry over as-is;
-    // internal ones are re-pointed at the target page's merged position, and
-    // dropped when that page was excluded by a page selection.
+    // A blank only where one document ends and another begins.
+    const next = inputs[di + 1];
+    if (insertBlankPages && next && (next.sourceKey ?? di + 1) !== key) {
+      const blank = out.addPage(lastBounds, 0, out.newDictionary(), '');
+      out.insertPage(-1, blank);
+      outPageCount++;
+    }
+
+    sendProgress(10 + Math.round(((di + 1) / inputs.length) * 60), `Merged ${outPageCount} pages…`);
+  }
+
+  // 2. Once per source, with its complete page map: re-create the links graft
+  //    left behind and rebase its outline. External links carry over as-is;
+  //    internal ones are re-pointed at the target page's merged position, and
+  //    dropped when that page was left out.
+  sendProgress(75, 'Writing links…');
+  const entries: OutlineEntry[] = [];
+  for (const { src, pageMap } of sources.values()) {
     for (const [srcIdx, outIdx] of pageMap) {
       const links = src.loadPage(srcIdx).getLinks();
       if (links.length === 0) continue;
@@ -229,14 +271,6 @@ export async function mergeWithOutlines(
 
     const outline = src.loadOutline();
     if (outline) entries.push(...remapOutline(outline, src, pageMap));
-
-    if (insertBlankPages && di < inputs.length - 1) {
-      const blank = out.addPage(lastBounds, 0, out.newDictionary(), '');
-      out.insertPage(-1, blank);
-      outPageCount++;
-    }
-
-    sendProgress(10 + Math.round(((di + 1) / inputs.length) * 70), `Merged ${outPageCount} pages…`);
   }
 
   sendProgress(85, 'Writing bookmarks…');

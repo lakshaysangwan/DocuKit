@@ -113,16 +113,48 @@ async function loadPossiblyEncrypted(
   }
 }
 
+/** One run of output pages from one input file; `pages` null = all of them. */
+interface MergePart {
+  file: number;
+  pages: number[] | null;
+}
+
+/**
+ * The merged PDF's pages as runs, in output order: from `segments` when the
+ * visitor arranged pages, otherwise one run per file from the per-file
+ * selections (or whole files), as a plain merge has always been.
+ */
+function mergeParts(fileCount: number, options: MergeOptions): MergePart[] {
+  if (options.segments && options.segments.length > 0) {
+    return options.segments
+      .filter((s) => s.file >= 0 && s.file < fileCount)
+      .map((s) => ({ file: s.file, pages: s.pages }));
+  }
+  return Array.from({ length: fileCount }, (_, file) => {
+    const selection = options.pageSelections?.[file];
+    return { file, pages: selection && selection.length > 0 ? selection : null };
+  });
+}
+
+/** A run's source pages, clamped to the document. */
+function partIndices(part: MergePart, count: number): number[] {
+  return part.pages ? part.pages.filter((i) => i >= 0 && i < count) : Array.from({ length: count }, (_, i) => i);
+}
+
 async function merge(
   buffers: ArrayBuffer[],
   options: MergeOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
   const { PDFDocument } = await import('pdf-lib');
+  const parts = mergeParts(buffers.length, options);
+  const used = new Set(parts.map((p) => p.file));
 
   // Decrypt up front either way — MuPDF would refuse the encrypted bytes too.
+  // A file none of whose pages is used is not opened (nor asked for its password).
   const loaded = await Promise.all(
     buffers.map(async (buf, i) => {
+      if (!used.has(i)) return null;
       const name = options.fileNames?.[i] ?? `File ${i + 1}`;
       const password = options.passwords?.[i] ?? null;
       const { doc, plain } = await loadPossiblyEncrypted(toUint8Array(buf), password, name);
@@ -134,41 +166,47 @@ async function merge(
     const { mergeWithOutlines } = await import('./mupdf-merge');
     // Hand MuPDF the original bytes. Round-tripping them through pdf-lib first
     // would rewrite the very structures this path exists to preserve, and pdf-lib
-    // has no concept of an outline to rewrite them faithfully.
-    const inputs = loaded.map(({ plain, name }, i) => ({
-      bytes: plain,
-      pages: options.pageSelections?.[i] ?? null,
-      name,
-    }));
+    // has no concept of an outline to rewrite them faithfully. Runs of the same
+    // file share its `sourceKey`, so it is opened once and its outline and links
+    // are remapped once, against every page it contributes.
+    const inputs = parts.map((part) => {
+      const { plain, name } = loaded[part.file]!;
+      return { bytes: plain, pages: part.pages, name, sourceKey: part.file };
+    });
     const merged = await mergeWithOutlines(inputs, options.insertBlankPages ?? false, sendProgress);
     return merged.buffer as ArrayBuffer;
   }
 
   sendProgress(5, 'Loading documents…');
-  const docs = loaded.map(({ doc }) => doc);
 
   sendProgress(20, 'Merging pages…');
   const merged = await PDFDocument.create();
-  const total = docs.reduce((s, d) => s + d.getPageCount(), 0);
-  let done = 0;
 
-  for (let di = 0; di < docs.length; di++) {
-    const doc = docs[di];
+  // Copy each file's pages in ONE call, however many runs it is split into, so
+  // its fonts and images are copied once rather than once per run.
+  const copied = new Map<number, Map<number, Awaited<ReturnType<typeof merged.copyPages>>[number]>>();
+  for (const file of used) {
+    const doc = loaded[file]!.doc;
     const count = doc.getPageCount();
-    // Honor an optional per-file page selection; default to all pages.
-    const selection = options.pageSelections?.[di];
-    const indices = (selection && selection.length > 0)
-      ? selection.filter((i) => i >= 0 && i < count)
-      : Array.from({ length: count }, (_, i) => i);
-    const copied = await merged.copyPages(doc, indices);
-    copied.forEach((page) => merged.addPage(page));
+    const wanted = [...new Set(parts.filter((p) => p.file === file).flatMap((p) => partIndices(p, count)))];
+    const pages = await merged.copyPages(doc, wanted);
+    copied.set(file, new Map(wanted.map((src, i) => [src, pages[i]])));
+  }
 
-    if (options.insertBlankPages && di < docs.length - 1) {
-      merged.addPage();
+  const total = parts.reduce((s, p) => s + partIndices(p, loaded[p.file]!.doc.getPageCount()).length, 0);
+  let done = 0;
+  for (let pi = 0; pi < parts.length; pi++) {
+    const part = parts[pi];
+    const pages = copied.get(part.file)!;
+    for (const src of partIndices(part, loaded[part.file]!.doc.getPageCount())) {
+      merged.addPage(pages.get(src)!);
+      done++;
     }
-
-    done += count;
-    sendProgress(20 + Math.round((done / total) * 70), `Merged ${done}/${total} pages…`);
+    // A blank goes where one document ends and the next begins — never between
+    // two runs of the same file, and never after the last page.
+    const next = parts[pi + 1];
+    if (options.insertBlankPages && next && next.file !== part.file) merged.addPage();
+    sendProgress(20 + Math.round((done / Math.max(total, 1)) * 70), `Merged ${done}/${total} pages…`);
   }
 
   sendProgress(95, 'Saving…');

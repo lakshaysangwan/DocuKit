@@ -14,6 +14,15 @@ export type MergeOptions = {
    */
   pageSelections?: (number[] | null)[];
   /**
+   * The merged PDF's pages in output order, as runs of consecutive output pages
+   * from one file: `file` indexes `buffers`, `pages` are 0-based source pages in
+   * the order they go out (`null` = every page of that file, for a file whose
+   * page count was unknown when the merge was asked for). When given it
+   * replaces `pageSelections`, and the same file may appear in several runs.
+   * "Insert blank pages" then puts a blank only where the source file changes.
+   */
+  segments?: { file: number; pages: number[] | null }[];
+  /**
    * Per-file password for encrypted inputs, aligned to `buffers`. A `null`
    * entry for an encrypted file makes the merge fail with a message naming it.
    */
