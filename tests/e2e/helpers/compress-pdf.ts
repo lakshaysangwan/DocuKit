@@ -44,6 +44,30 @@ export async function expectOutputCompare(page: Page) {
   await expectImageRendered(preview.getByTestId('compare-after'));
 }
 
+/**
+ * Wait for the live preview of the current settings: both images painted, no
+ * update pending. Where the preview waits to be asked (a phone, an engine
+ * that cannot draw in a worker) it presses "Preview quality" first.
+ */
+export async function settledPreview(page: Page) {
+  const button = page.getByTestId('preview-quality');
+  if ((await button.isVisible()) && (await button.isEnabled())) await button.click();
+  const preview = page.getByTestId('compress-preview');
+  await expect(preview).toHaveAttribute('data-source', 'preview', { timeout: 60_000 });
+  await expect(preview).toHaveAttribute('data-busy', 'false', { timeout: 60_000 });
+  await expect(preview.locator('img')).toHaveCount(2);
+  await expectImageRendered(preview.getByTestId('compare-before'));
+  await expectImageRendered(preview.getByTestId('compare-after'));
+}
+
+/** "Images on this page: 25.7 KB → 3.3 KB" → bytes before and after (1 KB = 1024 bytes). */
+export function parsePageBytes(text: string): { before: number; after: number } {
+  const m = /Images on this page: ([\d.]+) (B|KB|MB) → ([\d.]+) (B|KB|MB)/.exec(text);
+  if (!m) throw new Error(`no page sizes in "${text}"`);
+  const unit = { B: 1, KB: 1024, MB: 1024 * 1024 } as const;
+  return { before: Number(m[1]) * unit[m[2] as 'B'], after: Number(m[3]) * unit[m[4] as 'B'] };
+}
+
 /** Pixels of an `<img>` at its natural size. */
 async function pixelsOf(img: Locator) {
   await expectImageRendered(img);

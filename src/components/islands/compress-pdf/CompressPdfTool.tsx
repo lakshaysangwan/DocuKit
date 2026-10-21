@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import DropZone from '@/components/islands/shared/DropZone';
 import NextStep from '@/components/islands/shared/NextStep';
@@ -8,6 +8,7 @@ import WorkspaceFileBar from '@/components/islands/workspace/WorkspaceFileBar';
 import PageRail from '@/components/islands/workspace/PageRail';
 import CompareView from '@/components/islands/workspace/CompareView';
 import { useToolRun } from '@/components/islands/workspace/use-tool-run';
+import { useCompressPreview } from './use-compress-preview';
 import { usePdfDocument } from '@/hooks/use-pdf-document';
 import { usePageRender } from '@/hooks/use-page-render';
 import { useMediaQuery } from '@/hooks/use-media-query';
@@ -19,6 +20,7 @@ import type { PdfDocHandle } from '@/lib/pdf/doc-handle';
 import { downloadBlob } from '@/lib/download';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { formatBytes, cn } from '@/lib/utils';
+import { supportsOffscreenCanvas } from '@/lib/canvas-2d';
 import type { ProcessingStats } from '@/types/worker-messages';
 
 /**
@@ -175,6 +177,9 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
     [invalidate],
   );
 
+  // Whether the visitor has moved to a page: until then the preview may choose one.
+  const moved = useRef(false);
+
   const acceptFile = useCallback(
     (files: File[]) => {
       const next = files[0];
@@ -182,6 +187,7 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
       invalidate();
       setFile(next);
       setPageIndex(0);
+      moved.current = false;
     },
     [invalidate],
   );
@@ -262,13 +268,45 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
 
   /* ── What is on the stage ─────────────────────────────────────────────── */
 
+  // The live preview: on desktop it follows every change; on a phone, or where a
+  // worker cannot draw (compression would then block the page), it waits for
+  // "Preview quality".
+  const preview = useCompressPreview({
+    file: status === 'ready' ? file : null,
+    pageIndex: index,
+    settings,
+    auto: !phone && supportsOffscreenCanvas,
+    paused: run.phase === 'running' || done,
+    onPageChosen: useCallback((i: number) => {
+      if (!moved.current) setPageIndex(i);
+    }, []),
+  });
+  const previewShown = !done && preview.shown && preview.shown.pageIndex === index ? preview.shown : null;
+  const previewDoc = usePdfDocument(previewShown?.pdf ?? null).doc;
+
   const pageSize = usePageSize(doc, index);
   // Rendered only once the page's own shape is known, so the first render is the right size.
   const renderWidth = pageSize ? displayWidth : 0;
   const beforeUrl = usePageRender(doc, index, renderWidth);
-  const afterUrl = usePageRender(outDoc, index, renderWidth);
+  // After a run, the page of the real output; before it, the one-page preview.
+  const afterUrl = usePageRender(done ? outDoc : previewDoc, done ? index : 0, renderWidth);
   const pageHasText = usePageHasText(doc, index);
-  const comparing = done && !!beforeUrl && !!afterUrl;
+  const source: 'output' | 'preview' | null = done ? 'output' : previewShown ? 'preview' : null;
+  const comparing = !!source && !!beforeUrl && !!afterUrl;
+  const previewBusy = !done && preview.status === 'working';
+
+  const previewFacts = useMemo(() => {
+    const applied = previewShown?.stats.applied;
+    if (!applied) return null;
+    return buildFacts({
+      phase: 'preview',
+      pageIndex: index,
+      reportPageIndex: 0,
+      applied,
+      images: previewShown.stats.images,
+      pageHasText,
+    });
+  }, [previewShown, index, pageHasText]);
 
   const result = run.result;
   const facts = useMemo(() => {
@@ -288,6 +326,7 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
   const goToPage = useCallback(
     (next: number) => {
       if (next < 0 || next >= pageCount) return;
+      moved.current = true;
       setPageIndex(next);
     },
     [pageCount],
@@ -325,13 +364,26 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
     </div>
   );
 
+  const levelName = LEVELS.find((l) => l.value === level)?.label ?? 'this level';
+  const factsLine = (f: { heading: string; pageImageBytes?: { before: number; after: number } }) =>
+    f.pageImageBytes ? `${f.heading} · ${pageBytesLine(f.pageImageBytes)}` : f.heading;
   let stageStatus: string;
   if (status !== 'ready') stageStatus = 'Opening your PDF…';
-  else if (run.phase === 'running') stageStatus = `Page ${index + 1}, your original. Compressing…`;
+  else if (run.phase === 'running') stageStatus = 'Compressing your PDF…';
   else if (done && facts) {
-    stageStatus = facts.pageImageBytes ? `${facts.heading} · ${pageBytesLine(facts.pageImageBytes)}` : facts.heading;
+    stageStatus = factsLine(facts);
     if (!comparing) stageStatus += ' · drawing the compressed page…';
-  } else stageStatus = `Page ${index + 1}, your original. Compress it to compare the result with it.`;
+  } else if (done) stageStatus = `Result for page ${index + 1}`;
+  else if (level === 'target')
+    stageStatus = `Page ${index + 1}, your original. Target size shows its result after compressing: what it takes depends on the whole file.`;
+  else if (preview.status === 'error') stageStatus = `The preview of page ${index + 1} could not be made. Compressing still works.`;
+  else if (preview.status === 'waiting')
+    stageStatus = `Page ${index + 1}, your original. Press Preview quality to see it at ${levelName}.`;
+  else if (previewBusy) stageStatus = `Making the preview of page ${index + 1} at ${levelName}…`;
+  else if (previewFacts) stageStatus = factsLine(previewFacts);
+  else stageStatus = `Page ${index + 1}, your original.`;
+
+  const showPreviewButton = !done && run.phase !== 'running' && level !== 'target' && !preview.live && preview.status !== 'off';
 
   const corruptionWarning = suspect
     ? `${suspectPages.length === 1 ? 'Page' : 'Pages'} ${listPages(suspectPages)} ${suspectPages.length === 1 ? 'looks' : 'look'} badly wrong after compressing — for example dark, inverted or with parts missing. Look before you download; the file can still be downloaded.`
@@ -342,7 +394,9 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
       <div
         className="relative min-h-0 flex-1"
         data-testid={comparing ? 'compress-preview' : 'compress-page'}
-        data-source={comparing ? 'output' : undefined}
+        data-source={comparing ? source : undefined}
+        data-busy={previewBusy ? 'true' : 'false'}
+        data-live={preview.live ? 'true' : 'false'}
       >
         <CompareView
           before={beforeUrl ? { src: beforeUrl, alt: `Before image, page ${index + 1}` } : null}
@@ -353,13 +407,26 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
           afterLabel="Compressed"
           onDisplayWidth={setDisplayWidth}
           toolbarStart={pager}
-          busy={done && !comparing}
+          busy={(done && !comparing) || previewBusy}
         />
       </div>
       <div className="flex min-h-12 shrink-0 flex-col justify-center gap-0.5 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5">
-        <p data-testid="preview-status" aria-live="polite" className="line-clamp-2 text-xs text-[var(--color-text-secondary)]">
-          {stageStatus}
-        </p>
+        <div className="flex items-center gap-2">
+          <p data-testid="preview-status" aria-live="polite" className="line-clamp-2 min-w-0 flex-1 text-xs text-[var(--color-text-secondary)]">
+            {stageStatus}
+          </p>
+          {showPreviewButton && (
+            <button
+              type="button"
+              onClick={preview.request}
+              disabled={preview.status === 'working' || preview.current}
+              data-testid="preview-quality"
+              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {preview.status === 'working' ? 'Making preview…' : 'Preview quality'}
+            </button>
+          )}
+        </div>
         {corruptionWarning && (
           <p data-testid="corruption-warning" role="alert" className="text-xs font-medium text-[var(--color-error)]">
             {corruptionWarning}
@@ -422,6 +489,27 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
           ))}
         </div>
       </section>
+
+      {previewFacts && level !== 'target' && (
+        <section data-testid="quality-facts" aria-labelledby="cp-preview-heading" className="flex flex-col gap-1.5">
+          <h3 id="cp-preview-heading" className={heading}>
+            {previewFacts.heading}
+          </h3>
+          {previewFacts.lines.map((line) => (
+            <p key={line} className="text-sm text-[var(--color-text-secondary)]">
+              {line}
+            </p>
+          ))}
+          {previewFacts.pageImageBytes && (
+            <p data-testid="preview-page-size" className="text-sm text-[var(--color-text-secondary)]">
+              {pageBytesLine(previewFacts.pageImageBytes)}
+            </p>
+          )}
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            The whole file's size is known only after compressing.
+          </p>
+        </section>
+      )}
 
       {level === 'target' && (
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">

@@ -57,6 +57,11 @@ export type CompressPdfOptions = {
    * beside the compare view.
    */
   report?: boolean;
+  /**
+   * A one-page quality preview: return what the pass made even when it is not
+   * smaller, so the page shows exactly what the pass does to its images.
+   */
+  preview?: boolean;
 };
 
 /** The settings a compression pass actually used. */

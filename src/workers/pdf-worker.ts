@@ -9,6 +9,7 @@
  */
 
 import { compressPdf } from '../lib/pdf-compress';
+import { probePdf } from '../lib/pdf-compress-probe';
 import { layoutImagePage } from '../lib/images-to-pdf-layout';
 import { countUnclosedGraphicsStates } from '../lib/pdf/content-balance';
 import type {
@@ -816,6 +817,12 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       case 'compress-pdf': {
         const { buffer: result, imagesTotal, imagesRecompressed, applied, images, returnedOriginal } = await compressPdf(msg.buffer, msg.options, sendProgress);
         response = { status: 'success', result, stats: { originalSize: msg.buffer.byteLength, outputSize: result.byteLength, durationMs: Date.now() - start, imagesTotal, imagesRecompressed, applied, images, returnedOriginal } };
+        break;
+      }
+
+      case 'compress-probe': {
+        const { pagePdf, pageIndex, pageCount, pages } = await probePdf(msg.buffer, msg.pageIndex);
+        response = { status: 'success-probe', pagePdf, pageIndex, pageCount, pages };
         break;
       }
 

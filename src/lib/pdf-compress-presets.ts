@@ -47,6 +47,11 @@ export function compressOptionsFor(s: CompressSettings): CompressPdfOptions {
   return { level: s.level, dpi: preset.dpi, jpegQuality: preset.jpegQuality, grayscale: false, stripFonts: false, report: true };
 }
 
+/** The same, for a one-page quality preview. */
+export function previewOptionsFor(s: CompressSettings): CompressPdfOptions {
+  return { ...compressOptionsFor(s), preview: true };
+}
+
 /**
  * A key that changes exactly when the output would: settings a level ignores
  * are left out, so moving the Custom sliders does not invalidate a Medium preview.

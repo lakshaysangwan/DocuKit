@@ -49,7 +49,7 @@ export async function compressPdf(
     : await compressPdfOnce(buffer, options, sendProgress);
   // Re-saving a small, already-tight PDF can add a few bytes. Hand back the
   // original rather than a "compressed" file that is no smaller than the input.
-  if (result.buffer.byteLength < buffer.byteLength) return result;
+  if (options.preview || result.buffer.byteLength < buffer.byteLength) return result;
   return {
     ...result,
     buffer: buffer.slice(0),

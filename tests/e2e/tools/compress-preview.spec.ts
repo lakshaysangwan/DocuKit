@@ -10,6 +10,8 @@ import {
   meanDiff,
   meanLuma,
   openCompress,
+  parsePageBytes,
+  settledPreview,
 } from '../helpers/compress-pdf';
 
 /**
@@ -92,7 +94,7 @@ test.describe('Compress PDF — the result, compared page by page', () => {
     await page.getByTestId('page-next').click();
     await expect(page.getByTestId('page-indicator')).toHaveText('Page 2 of 4');
     await expect(page.getByTestId('quality-facts')).toContainText('Result for page 2');
-    await expect.poll(async () => (await comparePixels(page)).before.src).not.toBe(first.before.src);
+    await expect(page.getByTestId('compress-preview').getByTestId('compare-before')).not.toHaveAttribute('src', first.before.src);
     const second = await comparePixels(page);
     // Page 2 is a different photo, so its original looks different from page 1's.
     expect(meanDiff(first.before, second.before)).toBeGreaterThan(5);
@@ -269,10 +271,124 @@ test.describe('Compress PDF — a page that comes out badly wrong is caught', ()
   });
 });
 
-test('the page is shown large before a run, and is the original', async ({ page }) => {
-  await openCompress(page, FIXTURE.pdfPhoto);
-  await expect(page.getByTestId('compare-view')).toHaveAttribute('data-mode', /single|split/);
-  await expectImageRendered(page.getByTestId('compare-before'));
-  await expect(page.getByTestId('download-button')).toHaveCount(0);
-  await expect(page.getByTestId('preview-status')).not.toBeEmpty();
+test.describe('Compress PDF — the quality preview, before anything is compressed', () => {
+  /** Choose a level and read the settled preview. */
+  async function previewAt(page: Page, level: string) {
+    await chooseLevel(page, level);
+    await settledPreview(page);
+    const facts = page.getByTestId('quality-facts');
+    await expect(facts).toContainText('Preview of page 1');
+    return comparePixels(page);
+  }
+
+  test('appears before Compress is pressed, with both images painted', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+    await settledPreview(page);
+    await expect(page.getByTestId('download-button')).toHaveCount(0);
+    await expect(page.getByTestId('quality-facts')).toContainText('Preview of page 1');
+    await expect(page.getByTestId('preview-status')).toContainText('Preview of page 1 · Images on this page:');
+    // Never a whole-file size before the run.
+    await expect(page.getByText(/Before: /)).toHaveCount(0);
+  });
+
+  test('pixel and size proof: Low changes nothing, Medium something, High more and smaller', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+
+    const low = await previewAt(page, 'Low');
+    await expect(page.getByTestId('quality-facts')).toContainText('Images are not re-encoded; document properties are cleared.');
+    expect(meanDiff(low.before, low.after), 'Low: identical pixels').toBe(0);
+
+    const medium = await previewAt(page, 'Medium');
+    await expect(page.getByTestId('quality-facts')).toContainText('JPEG quality 75');
+    const mediumBytes = parsePageBytes((await page.getByTestId('preview-page-size').textContent()) ?? '');
+
+    const high = await previewAt(page, 'High');
+    await expect(page.getByTestId('quality-facts')).toContainText('JPEG quality 50');
+    const highBytes = parsePageBytes((await page.getByTestId('preview-page-size').textContent()) ?? '');
+
+    const dMedium = meanDiff(medium.before, medium.after);
+    const dHigh = meanDiff(high.before, high.after);
+    expect(dMedium, 'Medium changes pixels').toBeGreaterThan(0);
+    expect(dHigh, 'High changes them more').toBeGreaterThan(dMedium);
+    expect(mediumBytes.after).toBeLessThan(mediumBytes.before);
+    expect(highBytes.after).toBeLessThan(mediumBytes.after);
+    expect(highBytes.before).toBe(mediumBytes.before);
+  });
+
+  test('faithful: the preview at High is the page the real run makes', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+    await chooseLevel(page, 'High');
+    await settledPreview(page);
+    const preview = await afterPixels(page);
+
+    await compressAndCompare(page);
+    await expect(page.getByTestId('page-indicator')).toHaveText('Page 1 of 4');
+    const output = await afterPixels(page);
+    expect(meanDiff(preview, output), 'preview vs the real output, page 1').toBeLessThan(0.5);
+  });
+
+  test('rapid changes settle on the last one', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+    await chooseLevel(page, 'Custom');
+    const quality = page.locator('#cp-jpeg-quality');
+    for (const q of [30, 60, 45, 80, 35]) await quality.fill(String(q));
+    await settledPreview(page);
+    const facts = page.getByTestId('quality-facts');
+    await expect(facts).toContainText('JPEG quality 35');
+    // …and stays there: no older result lands on top of it afterwards.
+    await page.waitForTimeout(1500);
+    await expect(facts).toContainText('JPEG quality 35');
+    await expect(page.getByTestId('compress-preview')).toHaveAttribute('data-busy', 'false');
+  });
+
+  test('changing page previews that page', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+    await settledPreview(page);
+    const first = await comparePixels(page);
+    await page.getByTestId('page-next').click();
+    await expect(page.getByTestId('page-indicator')).toHaveText('Page 2 of 4');
+    await settledPreview(page);
+    await expect(page.getByTestId('quality-facts')).toContainText('Preview of page 2');
+    const second = await comparePixels(page);
+    expect(second.before.src).not.toBe(first.before.src);
+    expect(meanDiff(first.before, second.before), 'page 2 is another photo').toBeGreaterThan(5);
+  });
+
+  test('Target size has no preview: its result depends on the whole file', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+    await setTarget(page, 100);
+    await expect(page.getByTestId('preview-status')).toContainText('Target size shows its result after compressing');
+    await expect(page.getByTestId('compress-preview')).toHaveCount(0);
+    await expect(page.getByTestId('compress-page').locator('img')).toHaveCount(1);
+    await expect(page.getByTestId('preview-quality')).toHaveCount(0);
+  });
+
+  test('where a worker cannot draw, the preview waits for "Preview quality"', async ({ page }) => {
+    // As on an engine without OffscreenCanvas: compressing would block the page,
+    // so nothing is compressed until the visitor asks.
+    await page.addInitScript(() => {
+      // @ts-expect-error — hiding it on purpose
+      delete window.OffscreenCanvas;
+    });
+    await openCompress(page, FIXTURE.pdfPhoto);
+    const button = page.getByTestId('preview-quality');
+    await expect(button).toBeVisible();
+    await expect(page.getByTestId('compress-page')).toHaveAttribute('data-live', 'false');
+    await expect(page.getByTestId('preview-status')).toContainText('Press Preview quality to see it at Medium');
+    await page.waitForTimeout(800);
+    await expect(page.getByTestId('compress-preview')).toHaveCount(0);
+
+    await button.click();
+    await settledPreview(page);
+    await expect(page.getByTestId('quality-facts')).toContainText('JPEG quality 75');
+    await expect(button).toBeDisabled();
+
+    // A new setting is not previewed until asked again.
+    await chooseLevel(page, 'High');
+    await expect(page.getByTestId('compress-preview')).toHaveCount(0);
+    await expect(button).toBeEnabled();
+    await button.click();
+    await settledPreview(page);
+    await expect(page.getByTestId('quality-facts')).toContainText('JPEG quality 50');
+  });
 });

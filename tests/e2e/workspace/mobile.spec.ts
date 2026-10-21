@@ -4,6 +4,7 @@ import { openSign, readDrawnImages, signAndDownload, stampViewRect, expectSameRe
 import { expectDownload } from '../helpers/harness';
 import { openImages, previewPages, readOutputPages, expectPreviewMatchesFile } from '../helpers/image-to-pdf';
 import { openEdit, objectViewRect, readDrawnObjects, selectedObject } from '../helpers/edit-pdf';
+import { openCompress, chooseLevel, settledPreview } from '../helpers/compress-pdf';
 import { MIGRATED } from './migrated';
 
 /**
@@ -302,5 +303,35 @@ test.describe('Edit PDF on a phone', () => {
     expectSameRect(drawn[1].rect, text, 0.005, 'text in the file');
     expect(drawn[1].fontSize).toBe(28);
     expectPhoneLayout(await layout(page), 'done');
+  });
+});
+
+test.describe('Compress PDF on a phone', () => {
+  test('the quality preview waits for a tap, then compares the page; the document keeps its share', async ({ page }) => {
+    await openCompress(page, FIXTURE.pdfPhoto);
+    // Battery and memory: nothing is compressed until asked.
+    const button = page.getByTestId('preview-quality');
+    await expect(button).toBeVisible();
+    await expect(page.getByTestId('compress-page')).toHaveAttribute('data-live', 'false');
+    await expect(page.getByTestId('compress-preview')).toHaveCount(0);
+    expectPhoneLayout(await layout(page), 'before the preview');
+
+    await chooseLevel(page, 'High');
+    await page.getByTestId('options-toggle').tap();
+    await expect(page.getByTestId('options-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await button.tap();
+    await settledPreview(page);
+    await expect(page.getByTestId('preview-status')).toContainText('Preview of page 1');
+    expectPhoneLayout(await layout(page), 'with the preview');
+
+    const action = page.getByTestId('tool-action');
+    await action.tap();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('compress-preview')).toHaveAttribute('data-source', 'output', { timeout: 30_000 });
+    // Split, side by side and hold all fit; nothing scrolls sideways.
+    for (const mode of ['side', 'hold', 'split']) {
+      await page.getByTestId(`compare-mode-${mode}`).tap();
+      expectPhoneLayout(await layout(page), `compare: ${mode}`);
+    }
   });
 });
