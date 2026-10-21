@@ -319,8 +319,8 @@ export default function ImageToPdfTool() {
       ? 'This is the page your PDF will have. Open Options to change its size or margins, or press Create PDF.'
       : `This is the page your PDF will have. Change its size or margins ${beside}, or press Create PDF.`;
   } else {
-    const drag = coarse ? 'Drag a page by its handle to move it' : 'Drag a page to move it';
-    prompt = `These are the ${count} pages your PDF will have, in this order. ${drag}, or press Create PDF.`;
+    const drag = coarse ? 'Drag pages by their handle to change their order' : 'Drag pages to change their order';
+    prompt = `These are the ${count} pages of your PDF, in order. ${drag}, then press Create PDF.`;
   }
 
   const disabledReason =

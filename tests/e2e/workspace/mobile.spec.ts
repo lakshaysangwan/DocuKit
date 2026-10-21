@@ -105,7 +105,7 @@ test.describe('Image to PDF on a phone', () => {
       const button = (await cards.first().getByTestId(id).boundingBox())!;
       expect(Math.min(button.width, button.height), `${id} is big enough to tap`).toBeGreaterThanOrEqual(28);
     }
-    await expect(page.getByTestId('step-prompt')).toContainText('Drag a page by its handle to move it');
+    await expect(page.getByTestId('step-prompt')).toContainText('Drag pages by their handle to change their order');
 
     // The options are closed, so adding images is in the top bar.
     await expect(page.getByTestId('ws-controls')).toBeHidden();

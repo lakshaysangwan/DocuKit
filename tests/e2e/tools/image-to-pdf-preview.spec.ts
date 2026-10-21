@@ -1,4 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { FIXTURE } from '../fixtures/generate';
 import { makeMarkerBmp, makeMarkerGif, makeSidewaysJpeg } from '../fixtures/image-fixtures';
@@ -288,6 +290,96 @@ test.describe('Image to PDF — the preview follows the options', () => {
   });
 });
 
+/** Drop files on an element the way a file manager does: one DataTransfer holding them all. */
+async function dropFiles(page: Page, target: Locator, files: { path: string; type: string }[]) {
+  const payload = await Promise.all(
+    files.map(async (f) => ({ name: basename(f.path), type: f.type, data: (await readFile(f.path)).toString('base64') })),
+  );
+  const dataTransfer = await page.evaluateHandle((list) => {
+    const dt = new DataTransfer();
+    for (const f of list) {
+      const bin = atob(f.data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      dt.items.add(new File([bytes], f.name, { type: f.type }));
+    }
+    return dt;
+  }, payload);
+  await target.dispatchEvent('dragenter', { dataTransfer });
+  await target.dispatchEvent('dragover', { dataTransfer });
+  await target.dispatchEvent('drop', { dataTransfer });
+}
+
+test.describe('Image to PDF — the core job: many images, in your order, one PDF', () => {
+  const SIZE = { 'photo.jpg': [1200, 800], 'photo-2.jpg': [900, 1200], 'graphic.png': [800, 800], 'image.webp': [1000, 700] } as const;
+
+  test('several images go in at once — picked together or dropped together — and more can be added later', async ({ page }) => {
+    // Picked together in the file picker: one change event with two files.
+    await openImages(page, [FIXTURE.jpg, FIXTURE.jpg2]);
+    expect(await cardNames(page)).toEqual(['photo.jpg', 'photo-2.jpg']);
+
+    // Dropped together on the empty page.
+    await page.goto('/image-to-pdf');
+    const empty = page.locator('[data-testid="dropzone"][data-hydrated="true"]');
+    await expect(empty).toBeVisible();
+    await dropFiles(page, empty, [
+      { path: FIXTURE.png, type: 'image/png' },
+      { path: FIXTURE.jpg, type: 'image/jpeg' },
+      { path: FIXTURE.jpg2, type: 'image/jpeg' },
+    ]);
+    await expect(page.getByTestId('output-page')).toHaveCount(3);
+    expect(await cardNames(page)).toEqual(['graphic.png', 'photo.jpg', 'photo-2.jpg']);
+
+    // More later: dropped on "Add images", then picked through it. Each lands at the end.
+    const addImages = page.getByTestId('ws-controls').getByTestId('dropzone');
+    await expect(addImages).toContainText('Add images');
+    await dropFiles(page, addImages, [{ path: FIXTURE.webp, type: 'image/webp' }]);
+    await expect(page.getByTestId('output-page')).toHaveCount(4);
+    await page.getByTestId('ws-controls').locator('input[type="file"]').setInputFiles([FIXTURE.jpg]);
+    await expect(page.getByTestId('output-page')).toHaveCount(5);
+    expect(await cardNames(page)).toEqual(['graphic.png', 'photo.jpg', 'photo-2.jpg', 'image.webp', 'photo.jpg']);
+    await expect(page.getByTestId('tool-action')).toHaveText('Create PDF (5 pages)');
+
+    // One PDF, a page per image, in that order.
+    const written = await readOutputPages(await createAndDownload(page));
+    expect(written.map((p) => [p.image.width, p.image.height])).toEqual([
+      SIZE['graphic.png'],
+      SIZE['photo.jpg'],
+      SIZE['photo-2.jpg'],
+      SIZE['image.webp'],
+      SIZE['photo.jpg'],
+    ]);
+  });
+
+  test('how to reorder is on screen without hunting for it', async ({ page }) => {
+    // One page: nothing to order, so no talk of dragging and no handle.
+    await openImages(page, FIXTURE.jpg);
+    await expect(page.getByTestId('step-prompt')).not.toContainText('Drag');
+    await expect(page.getByTestId('page-reorder')).toHaveCount(0);
+
+    // Two or more: the prompt says how, and every page shows its handle.
+    await page.getByTestId('ws-controls').locator('input[type="file"]').setInputFiles([FIXTURE.jpg2, FIXTURE.png]);
+    await expect(page.getByTestId('output-page')).toHaveCount(3);
+    await expect(page.getByTestId('step-prompt')).toHaveText(
+      'These are the 3 pages of your PDF, in order. Drag pages to change their order, then press Create PDF.',
+    );
+    await page.mouse.move(2, 2); // nothing is hovered
+    const handles = page.getByTestId('page-reorder');
+    await expect(handles).toHaveCount(3);
+    for (const [i, name] of ['photo.jpg', 'photo-2.jpg', 'graphic.png'].entries()) {
+      const handle = handles.nth(i);
+      await expect(handle).toBeVisible();
+      await expect(handle).toHaveAccessibleName(`Reorder ${name}`);
+      expect(await handle.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+      // A cursor that says "grab", and keyboard instructions for screen readers.
+      expect(await handle.evaluate((el) => getComputedStyle(el).cursor)).toBe('grab');
+      await expect(handle).toHaveAccessibleDescription(/press Space or Enter to pick it up, use the arrow keys/);
+    }
+    // Each card says where it is.
+    expect((await previewPages(page)).map((p) => p.label)).toEqual(['Page 1 of 3', 'Page 2 of 3', 'Page 3 of 3']);
+  });
+});
+
 test.describe('Image to PDF — order and removal', () => {
   const THREE = [FIXTURE.jpg, FIXTURE.jpg2, FIXTURE.png];
   const SIZE = { 'photo.jpg': [1200, 800], 'photo-2.jpg': [900, 1200], 'graphic.png': [800, 800] } as const;
@@ -571,7 +663,7 @@ test.describe('Image to PDF — one action, and a result that never goes stale',
 
   test('the result says what was made, and Make changes brings the options back', async ({ page }) => {
     await openImages(page, [FIXTURE.jpg, FIXTURE.png]);
-    await expect(page.getByTestId('step-prompt')).toContainText('These are the 2 pages your PDF will have');
+    await expect(page.getByTestId('step-prompt')).toContainText('These are the 2 pages of your PDF, in order');
     await make(page);
 
     await expect(page.getByTestId('step-prompt')).toHaveText('Your PDF is ready. Download it, or make changes.');
