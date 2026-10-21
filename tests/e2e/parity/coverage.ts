@@ -46,6 +46,7 @@ const SOURCED = 'parity/source-check-closures.spec.ts';
 const SIGN_PLACEMENT = 'tools/sign-pdf-placement.spec.ts';
 const I2P_PREVIEW = 'tools/image-to-pdf-preview.spec.ts';
 const EDIT = T('edit-pdf');
+const WM_PLACEMENT = T('watermark-pdf-placement');
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -137,12 +138,12 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Margin controls in mm or inches': C([SOURCED], 'built: mm/in/pt selector converts rather than reinterpreting the number (10 mm becomes 0.39 in and back to 10 mm without drift), and a 1.5 in margin positions the image 108 pt in from the page edge in the output'),
   },
   'watermark-pdf': {
-    'Text and image watermarks': C([T('watermark-pdf')]),
-    'Full opacity, rotation, and size control': U("SOURCE CHECK — implemented at WatermarkPdfTool sliders (opacity 5-100%, rotation -90..90 deg, font size 12-120pt); needs a test."),
-    'Single placement or tiled/repeated grid': U("SOURCE CHECK — implemented at placement \"center\" | \"tiled\", both honoured by the worker; needs a test."),
-    'Apply to all, odd, even, or specific pages': C([SOURCED], 'built: the worker already handled applyTo "range", so the UI now reaches it — pages 2 and 4 are watermarked and the other three are not'),
-    'Layer behind or on top of content': C([SOURCED], 'built: the worker now reorders /Contents so the watermark stream paints first. Asserted structurally (behind = index 0, front = last) because the two are pixel-identical on a page with no background'),
-    'Live preview on sample page': C([VISUAL]),
+    'Text and image watermarks': C([T('watermark-pdf'), WM_PLACEMENT], 'a text watermark and a PNG image watermark are each added and read back out of the downloaded file at the corners shown on screen'),
+    'Font, colour, size, opacity and rotation controls': C([WM_PLACEMENT], 'Times Bold at 40 pt in red at 45% is read back as /Times-Bold, a 40 Tf, a 1 0 0 rg fill and an ExtGState with /ca 0.45; rotations of -45, 0 and 30 degrees and the image width slider are read back as the frame of every copy, to 0.5% of the page'),
+    'One watermark in the centre, at an edge or in a corner, or tiled with adjustable spacing': CU(['src/lib/watermark-layout.test.ts'], 'single and tiled copies on screen are the copies in the file, corner for corner; a bottom-right watermark keeps the 72 pt chosen from both edges of a /Rotate 90 page, and a wider spacing gives fewer copies; the unit test pins every position and margin, the tile steps (width or height plus the spacing, every other row shifted half a step) and the turned lattice', [WM_PLACEMENT]),
+    'Apply to all, odd, even, or specific pages': C([SOURCED, WM_PLACEMENT, T('watermark-pdf')], 'pages 2 and 4 of five carry the watermark and the other three do not, in the text layer and in the content; the left-out pages are badged "Not watermarked" and shown without it; odd pages run end to end; a range that selects nothing disables the action and says why'),
+    'Layer behind or on top of content': C([SOURCED, WM_PLACEMENT], 'on a page covered by an opaque shape the rendered output shows the marker image on top and none of it behind; structurally the watermark stream is first for behind and last for on top'),
+    'Any page previewed with the watermark where the file will have it, on rotated and cropped pages too': CU(['src/lib/watermark-write.test.ts', 'src/lib/watermark-layout.test.ts'], 'for text and image, single and tiled, turned and not, every copy drawn over the page (read from the SVG’s screen transform) is at the same four corners in the downloaded file (content stream mapped by pdf.js), to 0.5% of the page, on page 2 of a plain file, a /Rotate 90 scan, an offset crop box and a page that leaves graphics states open, where the rendered output is also checked by its pixels; the unit test adds /Rotate 180 and 270, UserUnit and an offset box under /Rotate 90', [WM_PLACEMENT, VISUAL]),
   },
   'edit-pdf': {
     'Text with font size, colour and opacity': C([EDIT], 'the font size field, its step buttons and a corner pull each change the Tf size read back from the downloaded file (6–144 pt bounds checked), the typed words are the Tj operand, and a colour and an opacity chosen in the pane are the rg colour and the /ca of the ExtGState in the file'),
