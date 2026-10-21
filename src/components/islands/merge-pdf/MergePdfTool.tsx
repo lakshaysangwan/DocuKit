@@ -217,6 +217,8 @@ export default function MergePdfTool() {
   const handles = useRef(new Map<string, PdfDocHandle>());
   const attempts = useRef(new Map<string, number>());
   const passwordTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // The password each file's latest open attempt is using.
+  const triedPasswords = useRef(new Map<string, string>());
   const lettersUsed = useRef(0);
 
   useEffect(() => {
@@ -241,6 +243,7 @@ export default function MergePdfTool() {
     (id: string, file: File, password?: string) => {
       const attempt = (attempts.current.get(id) ?? 0) + 1;
       attempts.current.set(id, attempt);
+      triedPasswords.current.set(id, password ?? '');
       openPdf(file, password ? { password } : {}).then(
         (doc) => {
           if (!alive.current.has(id) || attempts.current.get(id) !== attempt) {
@@ -425,11 +428,21 @@ export default function MergePdfTool() {
       passwordTimers.current.delete(id);
       const f = files.find((x) => x.id === id);
       if (!f || f.status !== 'locked' || !f.password.trim()) return;
+      // That very password is already being tried (typing paused): let it finish
+      // rather than start again.
+      if (f.passwordState === 'checking' && triedPasswords.current.get(id) === f.password.trim()) return;
       patchFile(id, { passwordState: 'checking' });
       openFile(id, f.file, f.password.trim());
     },
     [files, openFile, patchFile],
   );
+
+  /** Unlock is about to be pressed: do not swap it out with an automatic try first. */
+  const holdPassword = useCallback((id: string) => {
+    const timer = passwordTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    passwordTimers.current.delete(id);
+  }, []);
 
   const changePassword = useCallback(
     (id: string, password: string) => {
@@ -704,6 +717,7 @@ export default function MergePdfTool() {
                   passwordState={f.passwordState}
                   onPasswordChange={(pw) => changePassword(f.id, pw)}
                   onUnlock={() => unlock(f.id)}
+                  onUnlockIntent={() => holdPassword(f.id)}
                   onRemove={() => removeFile(f.id)}
                   sortable={files.length > 1}
                   disabled={busy}

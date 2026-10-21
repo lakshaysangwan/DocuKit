@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useLayoutEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Lock, X } from 'lucide-react';
@@ -41,6 +41,11 @@ export interface MergeFileRowProps {
   passwordState: 'idle' | 'checking' | 'wrong';
   onPasswordChange: (password: string) => void;
   onUnlock: () => void;
+  /**
+   * The visitor is reaching for Unlock (pointer down on it, or focus): hold the
+   * automatic try, so the button is not swapped for the page field under the click.
+   */
+  onUnlockIntent?: () => void;
   onRemove: () => void;
   sortable: boolean;
   disabled: boolean;
@@ -77,11 +82,26 @@ export default function MergeFileRow({
   passwordState,
   onPasswordChange,
   onUnlock,
+  onUnlockIntent,
   onRemove,
   sortable,
   disabled,
 }: MergeFileRowProps) {
   const uid = useId();
+  // Whether focus is in the password field or its button. When the file opens
+  // they are replaced by the page field, and focus goes there instead of being
+  // dropped on the page.
+  const focusInPassword = useRef(false);
+  const rangeRef = useRef<HTMLInputElement>(null);
+  const wasLocked = useRef(status === 'locked');
+  useLayoutEffect(() => {
+    const unlocked = wasLocked.current && status === 'ready';
+    wasLocked.current = status === 'locked';
+    if (!unlocked || !focusInPassword.current) return;
+    focusInPassword.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body) rangeRef.current?.focus({ preventScroll: true });
+  }, [status]);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     disabled: !sortable || disabled,
@@ -147,7 +167,16 @@ export default function MergeFileRow({
       </div>
 
       {status === 'locked' ? (
-        <div data-testid="merge-passwords" className="flex flex-col gap-1">
+        <div
+          data-testid="merge-passwords"
+          className="flex flex-col gap-1"
+          onFocus={() => {
+            focusInPassword.current = true;
+          }}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focusInPassword.current = false;
+          }}
+        >
           <label htmlFor={`${uid}-pw`} className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)]">
             <Lock className="size-3" aria-hidden="true" />
             Password to open it
@@ -176,6 +205,8 @@ export default function MergeFileRow({
             <button
               type="button"
               onClick={onUnlock}
+              onPointerDown={onUnlockIntent}
+              onFocus={onUnlockIntent}
               disabled={disabled || !password.trim()}
               data-testid="merge-unlock"
               className="h-9 shrink-0 rounded-lg border border-[var(--color-border)] px-3 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -198,6 +229,7 @@ export default function MergeFileRow({
               Pages
             </label>
             <input
+              ref={rangeRef}
               id={`${uid}-range`}
               type="text"
               inputMode="text"

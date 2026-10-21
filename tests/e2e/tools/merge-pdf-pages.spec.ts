@@ -101,14 +101,20 @@ test.describe('Merge PDF — pages in the merged PDF', () => {
     // Move file B above A with the keyboard on its handle.
     const handle = page.getByTestId('file-row').nth(1).getByTestId('file-reorder');
     await handle.focus();
-    // dnd-kit measures the rows a frame after pick-up, so give each key a moment.
     await expect(handle).toBeFocused();
+    // Each step waits for dnd-kit's own announcement, so a key is never pressed
+    // before the drag has registered the one before it. dnd-kit measures the
+    // rows a frame after pick-up and an arrow press before that is dropped, so
+    // the move is repeated until it is announced (at the top, another ArrowUp
+    // does nothing).
     await page.keyboard.press('Space');
     await expect(page.getByTestId('file-row').nth(1)).toHaveAttribute('data-dragging', 'true');
-    await page.waitForTimeout(150);
-    await page.keyboard.press('ArrowUp');
-    await page.waitForTimeout(250);
+    await expect(async () => {
+      await page.keyboard.press('ArrowUp');
+      await expect(page.getByText(/B: doc-5page\.pdf moved to file 1 of 2/)).toBeAttached({ timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
     await page.keyboard.press('Space');
+    await expect(page.getByText(/B: doc-5page\.pdf dropped at file 1 of 2/)).toBeAttached();
     await expect(page.getByTestId('file-row').nth(0)).toHaveAttribute('data-filename', 'doc-5page.pdf');
     await expect.poll(() => gridOrder(page)).toEqual(['B · page 1', 'B · page 2', 'A · page 3', 'A · page 1', 'A · page 2']);
     await page.waitForTimeout(100);
@@ -210,16 +216,24 @@ test.describe('Merge PDF — pages in the merged PDF', () => {
     await expect(page.getByTestId('tool-action')).toBeDisabled();
     await expect(page.getByTestId('action-hint')).toContainText('Enter the password for locked.pdf');
 
-    // A wrong one is said so in place.
+    // A wrong one is said so in place. (A wrong password leaves the button where
+    // it is, so clicking it cannot race the automatic try.)
     await page.getByTestId('merge-password-input').fill('nope');
     await page.getByTestId('merge-unlock').click();
     await expect(page.getByTestId('merge-passwords')).toContainText('That password does not open this file.');
     await expect(page.getByTestId('merge-page')).toHaveCount(6);
 
-    await page.getByTestId('merge-password-input').fill('correct horse');
-    await page.getByTestId('merge-unlock').click();
+    // The right one. The field also tries it by itself once typing pauses, and
+    // the moment it opens the password row gives way to the page field, so the
+    // Unlock button may already be gone: press Enter in the field (the same
+    // action as Unlock) straight after typing, and accept either route.
+    const input = page.getByTestId('merge-password-input');
+    await input.fill('correct horse');
+    await input.press('Enter', { timeout: 2_000 }).catch(() => {});
     await expect(page.getByTestId('merge-page')).toHaveCount(8, { timeout: 30_000 });
     await expect(page.getByTestId('page-locked')).toHaveCount(0);
+    // Focus was in the password field; it moves to the page field that replaced it.
+    await expect(page.getByTestId('file-row').nth(1).getByTestId('page-range-input')).toBeFocused();
     await expect(page.getByTestId('tool-action')).toHaveText('Merge into 1 PDF (8 pages)');
 
     // Its pages are now ordinary pages: put locked.pdf's page 2 first.
