@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { openSign, addTypedSignature } from '../helpers/sign';
 import { openImages } from '../helpers/image-to-pdf';
@@ -116,6 +116,11 @@ export const MIGRATED: MigratedTool[] = [
     makeReady: async (page) => {
       await page.getByTestId('overlay-handle-top').focus();
       await page.keyboard.press('Shift+ArrowDown');
+      // A key press enables the action at once; let its 150ms fade-in finish so
+      // what is checked next is the button as it settles, not mid-fade.
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     },
   },
 ];
