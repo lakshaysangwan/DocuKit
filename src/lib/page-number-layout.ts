@@ -73,9 +73,9 @@ export const PAGE_NUMBER_POSITIONS: readonly PageNumberPosition[] = [
 ];
 
 export const PAGE_NUMBER_FONTS: readonly { value: PageNumberFont; label: string; css: string }[] = [
-  { value: 'Helvetica', label: 'Helvetica (sans-serif)', css: STANDARD_FONT_CSS.helvetica },
-  { value: 'Times-Roman', label: 'Times (serif)', css: STANDARD_FONT_CSS.times },
-  { value: 'Courier', label: 'Courier (monospace)', css: STANDARD_FONT_CSS.courier },
+  { value: 'Helvetica', label: 'Helvetica', css: STANDARD_FONT_CSS.helvetica },
+  { value: 'Times-Roman', label: 'Times', css: STANDARD_FONT_CSS.times },
+  { value: 'Courier', label: 'Courier', css: STANDARD_FONT_CSS.courier },
 ];
 
 export const DEFAULT_PAGE_NUMBER_OPTIONS: PageNumberLayoutOptions = {
