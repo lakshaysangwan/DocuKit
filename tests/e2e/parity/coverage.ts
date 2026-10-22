@@ -47,6 +47,7 @@ const SIGN_PLACEMENT = 'tools/sign-pdf-placement.spec.ts';
 const I2P_PREVIEW = 'tools/image-to-pdf-preview.spec.ts';
 const EDIT = T('edit-pdf');
 const WM_PLACEMENT = T('watermark-pdf-placement');
+const PN_PLACEMENT = T('page-numbers-placement');
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -155,12 +156,13 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Save into the page or as PDF annotations': C([EDIT], 'Part of the page leaves no /Annot objects; Separate annotations writes FreeText, Square, Line and Stamp annotations whose /Rect is the box shown'),
   },
   'add-page-numbers': {
-    '6 position options': P([T('page-numbers')], 'one position asserted, not all six'),
-    'Numeric, Roman, and alphabetic formats': P([T('page-numbers')], 'format switching tested; not every format is verified in output'),
-    'Custom starting number': C([T('page-numbers')]),
-    'Skip first N pages (for TOC/cover)': C([T('page-numbers')]),
-    'Font, size, and color controls': C([SOURCED], 'font control built and the worker now honours options.font instead of always embedding Helvetica; the test reads /Courier and /Times-Roman back out of the output'),
-    'Live preview on first and last page': C([VISUAL]),
+    '6 position options': CU(['src/lib/page-number-layout.test.ts', 'src/lib/page-number-write.test.ts'], 'each of the six positions is chosen and the number on pages 1, 3 and 5 is read back from the downloaded file at the corners shown on screen, to 0.5% of the page; the unit tests pin every position against the original placement and write it on every /Rotate, an offset crop box and UserUnit', [PN_PLACEMENT, T('page-numbers')]),
+    'Numeric, Roman, and alphabetic formats': C([PN_PLACEMENT, T('page-numbers')], 'all six formats ("1", "Page 1", "Page 1 of N", "1/N", i, a) are read back from the file, by the content stream and by pdf.js text extraction, on pages 1, 3 and 5'),
+    'Custom starting number': C([PN_PLACEMENT, T('page-numbers')], 'start 7 after skipping two pages gives 7, 8, 9 on pages 3–5 of the downloaded file; start 3 with roman gives iii–vi'),
+    'Skip first N pages (for TOC/cover)': C([PN_PLACEMENT, T('page-numbers')], 'skipped pages carry no number in the file, are badged "No number on this page" in the rail and say so on the stage; "of N" counts the numbered pages; skipping every page disables the action and says why'),
+    'Font, size, and color controls': C([SOURCED, PN_PLACEMENT], 'Times at 18 pt in red is read back as /Times-Roman, an 18 Tf and a 1 0 0 rg fill, at the box shown; /Courier is read back too'),
+    'Adjustable distance from the page edges': CU(['src/lib/page-number-layout.test.ts'], 'bottom right at 30 mm and 25 mm: the number ends 30 mm from the right edge and its baseline is 25 mm above the bottom, on screen and in the file', [PN_PLACEMENT]),
+    'Any page previewed with its own number, where the file will have it': CU(['src/lib/page-number-write.test.ts'], 'the number drawn over pages 1, 3 and 5 (read from the SVG’s screen transform) has the same text and four corners in the downloaded file (content stream mapped by pdf.js), to 0.5% of the page; on a /Rotate 90 scan it reads upright at the visual bottom centre, in the file and in the rendered output; an offset crop box and a page that leaves graphics states open are checked too, the latter by its rendered pixels and by the Q operators that close the page’s states', [PN_PLACEMENT, VISUAL]),
   },
   'crop-pdf': {
     'Visual crop with drag handles': C(['tools/crop-pdf-handles.spec.ts', VISUAL], 'edge and corner handles are dragged with the mouse (and one by touch), the margin fields follow, and the crop box in the downloaded file matches'),
