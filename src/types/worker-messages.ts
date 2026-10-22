@@ -121,6 +121,7 @@ export type ReorderOptions = {
   order: number[];
   // Rotation per *output position*, parallel to `order`. Positional rather than
   // keyed by source index so two copies of one page can rotate independently.
+  // It is added to the page's own /Rotate (see lib/organize-write.ts).
   rotations: (0 | 90 | 180 | 270)[];
 };
 

@@ -266,55 +266,13 @@ async function reorder(
   options: ReorderOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, degrees } = await import('pdf-lib');
+  const [{ PDFDocument }, { organizePdf }] = await Promise.all([import('pdf-lib'), import('../lib/organize-write')]);
 
   sendProgress(10, 'Loading document…');
   const src = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
-  const out = await PDFDocument.create();
 
-  sendProgress(40, 'Reordering pages…');
-
-  // Copy each distinct source page once. pdf-lib's copier is per-call and caches
-  // by object, so asking for the same index twice in one call would yield one
-  // shared page — rotating either copy would rotate both. Repeat occurrences
-  // therefore get their own copyPages call, which keeps them independent while
-  // leaving the common (no-duplicates) case at a single copy pass.
-  const distinct = [...new Set(options.order.filter((i) => i >= 0))];
-  const copiedDistinct = await out.copyPages(src, distinct);
-  const firstCopy = new Map<number, (typeof copiedDistinct)[number]>();
-  distinct.forEach((srcIdx, i) => firstCopy.set(srcIdx, copiedDistinct[i]));
-
-  // Blank pages adopt the size of the nearest preceding real page so they don't
-  // arrive as Letter in the middle of an A4 document.
-  const srcPageCount = src.getPageCount();
-  let blankSize: [number, number] = srcPageCount > 0
-    ? (() => { const { width, height } = src.getPage(0).getSize(); return [width, height]; })()
-    : [612, 792];
-
-  const used = new Set<number>();
-  for (let pos = 0; pos < options.order.length; pos++) {
-    const srcIdx = options.order[pos];
-    let page;
-
-    if (srcIdx < 0) {
-      page = out.addPage(blankSize);
-    } else {
-      if (used.has(srcIdx)) {
-        [page] = await out.copyPages(src, [srcIdx]);
-      } else {
-        page = firstCopy.get(srcIdx)!;
-        used.add(srcIdx);
-      }
-      out.addPage(page);
-      const { width, height } = page.getSize();
-      blankSize = [width, height];
-    }
-
-    const rotation = options.rotations[pos];
-    if (rotation) {
-      page.setRotation(degrees(rotation));
-    }
-  }
+  sendProgress(40, 'Arranging pages…');
+  const out = await organizePdf(src, options, (f) => sendProgress(40 + Math.round(f * 50), 'Arranging pages…'));
 
   sendProgress(90, 'Saving…');
   const bytes = await out.save({ useObjectStreams: false });
