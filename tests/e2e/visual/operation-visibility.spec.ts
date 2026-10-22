@@ -135,13 +135,17 @@ test.describe('UX: operation visibility', () => {
 
     // Auto-crop should detect the content bbox and set non-zero margins…
     await page.getByTestId('crop-autocrop').click();
-    await page.waitForTimeout(500);
 
-    // …at least one margin input becomes > 0…
-    const values = await page.locator('input[type="number"]').evaluateAll((els) =>
-      els.map((e) => Number((e as HTMLInputElement).value)),
-    );
-    expect(Math.max(...values), 'auto-crop sets a non-zero margin').toBeGreaterThan(0);
+    // …at least one margin input becomes > 0 (Auto-crop renders the page shown
+    // first, so it is waited for rather than given a fixed time)…
+    await expect
+      .poll(async () => {
+        const values = await page.locator('input[type="number"]').evaluateAll((els) =>
+          els.map((e) => Number((e as HTMLInputElement).value)),
+        );
+        return Math.max(...values);
+      }, { message: 'auto-crop sets a non-zero margin', timeout: 15_000 })
+      .toBeGreaterThan(0);
 
     // …and the crop rectangle visibly moves.
     const after = await preview.screenshot({ path: shot('crop-preview-after') });

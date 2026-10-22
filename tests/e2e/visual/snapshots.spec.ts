@@ -129,6 +129,10 @@ test.describe('P8 — visual regression: control surfaces', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     const modes = page.getByTestId("crop-mode");
     await expect(modes).toBeVisible({ timeout: 20_000 });
+    // In the workspace's options pane; settle the page first, then bring the
+    // section fully into the pane in one jump, so it is not caught mid-scroll.
+    await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
+    await modes.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
     await expect(modes).toHaveScreenshot("crop-mode.png", shot);
   });
 
