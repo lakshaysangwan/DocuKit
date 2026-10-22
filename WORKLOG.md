@@ -139,10 +139,15 @@ W5 notes: output on upright pages moves by at most ~0.3 pt (centred/right number
 without kerning, as drawn). "of N" counts only the numbered pages and ignores the start number (start
 3 on 5 pages ends "Page 7 of 5") — kept as today's behaviour; asked Lakshay. No page range built. The
 gate's Chromium step took 8 hours of wall time because the laptop slept mid-run; nothing failed.
+| `6cd3bf6`…`f5c2566` (W6, 5 commits) | Crop PDF in the workspace: any page shown with the crop box (same handles), "Current page" = the page shown (it always cropped page 1 before), pages outside the choice badged "Not cropped", visual margins written through page geometry in CropBox and Flatten modes (correct on rotated and offset pages), inches added with exact round trips, touch drag of the whole box, Auto-crop on the page shown, range field accepts odd/even/first/last; copy corrected — Flatten makes files larger (1 KB → 79 KB on a one-page fixture), so "smaller file" is gone | Clean worktree: 610 Chromium, 859 Firefox/WebKit, 50 mobile, 9 visual (two Crop baselines regenerated on purpose), 929 unit. Live: Crop specs against docukit.uk on three engines (one Chromium page-load timeout passed alone), Crop parity tests, phone touch drag with the CropBox read back |
+
+W6 notes: Crop keeps its own handles (not `OverlayBox`); `PageViewer` gained an optional `padding`;
+new `CropOptions` worker shape. The unmigrated-tool example in the contract and large-file specs is
+now `/protect-pdf`. Not verified: real-device touch, the Flatten 24 MP cap on huge pages.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview), W4 (Watermark) and W5 (Page Numbers) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+PDF preview), W4 (Watermark), W5 (Page Numbers) and W6 (Crop) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
