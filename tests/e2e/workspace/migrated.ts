@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
+import { uploadFiles } from '../helpers/harness';
 import { openSign, addTypedSignature } from '../helpers/sign';
 import { openImages } from '../helpers/image-to-pdf';
 import { openEdit, addObject } from '../helpers/edit-pdf';
@@ -12,6 +13,7 @@ import { openCrop } from '../helpers/crop-pdf';
 import { openOrganize } from '../helpers/organize-pages';
 import { openPdfToImage } from '../helpers/pdf-to-image';
 import { openRedact, openOptions as openRedactOptions } from '../helpers/redact-pdf';
+import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -158,6 +160,48 @@ export const MIGRATED: MigratedTool[] = [
       await openRedactOptions(page);
       await page.getByTestId('confirm-redaction').check();
       // Let the action's fade-in finish, so what is checked next is the button as it settles.
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
+  },
+  {
+    // A whole-file transform: the page large so the visitor confirms the file.
+    // The action waits for a password (and says so); `makeReady` types one in
+    // both fields of the controls pane, opening Options on a phone first.
+    slug: 'protect-pdf',
+    name: 'Protect PDF',
+    enter: async (page) => {
+      await page.goto('/protect-pdf');
+      await uploadFiles(page, FIXTURE.pdf3page);
+      await expect(page.getByTestId('workspace')).toBeVisible();
+      await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
+    },
+    makeReady: async (page) => {
+      await openRedactOptions(page);
+      await page.getByTestId('password').fill('contract-pw-2026');
+      await page.getByTestId('confirm-password').fill('contract-pw-2026');
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
+  },
+  {
+    // A locked file: the stage is a locked placeholder and the action waits for
+    // the password. `makeReady` types it in the controls pane and presses
+    // Enter, and the pages appear.
+    slug: 'unlock-pdf',
+    name: 'Unlock PDF',
+    enter: async (page) => {
+      await addPdfBuffer(page, 'unlock-pdf', await encryptPdf(FIXTURE.pdf3page, { user: 'contract-pw', owner: 'contract-owner' }));
+      await expect(page.getByTestId('workspace')).toBeVisible();
+      await expect(page.getByTestId('locked-stage')).toBeVisible({ timeout: 30_000 });
+    },
+    makeReady: async (page) => {
+      await openRedactOptions(page);
+      await page.getByTestId('unlock-password').fill('contract-pw');
+      await page.getByTestId('unlock-password').press('Enter');
+      await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
       const action = page.getByTestId('tool-action');
       await expect(action).toBeEnabled();
       await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');

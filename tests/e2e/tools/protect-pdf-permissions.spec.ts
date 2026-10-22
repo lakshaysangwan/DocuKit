@@ -174,6 +174,8 @@ test.describe('Protect PDF — passwords', () => {
     await fillOpenPassword(page, OPEN_PW);
     await protectAndDownload(page);
     const first = await page.getByTestId('generated-owner-password').inputValue();
+    // In the workspace the download takes the action's place; Make changes brings it back.
+    await page.getByTestId('edit-again').click();
     await page.getByTestId('tool-action').click();
     await expect
       .poll(async () => page.getByTestId('generated-owner-password').inputValue(), { timeout: 45_000 })
@@ -198,7 +200,11 @@ test.describe('Protect PDF — passwords', () => {
     await openProtect(page);
     await fillOpenPassword(page, OPEN_PW);
     await page.getByTestId('owner-password').fill(OPEN_PW);
-    await page.getByTestId('tool-action').click();
+    // The action is not offered while the passwords clash, and says why.
+    await expect(page.getByTestId('tool-action')).toBeDisabled();
+    await expect(page.getByTestId('action-hint')).toHaveText(
+      'The permissions password must be different from the password that opens the file.'
+    );
     await expect(page.getByTestId('owner-password-error')).toBeVisible();
     await expect(page.getByTestId('download-button')).toHaveCount(0);
   });
@@ -256,11 +262,12 @@ test.describe('Protect PDF — what the screen says about restrictions', () => {
 });
 
 test.describe('Unlock PDF — files made by Protect PDF', () => {
-  async function unlock(page: Page, encrypted: Buffer, password: string): Promise<Buffer> {
+  /** `password` null: a file that opens without one, so no password field is offered. */
+  async function unlock(page: Page, encrypted: Buffer, password: string | null): Promise<Buffer> {
     await page.goto('/unlock-pdf');
     await uploadBuffer(page, { name: 'protected.pdf', mimeType: 'application/pdf', buffer: encrypted });
     await expect(page.getByTestId('file-info')).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId('unlock-password').fill(password);
+    if (password !== null) await page.getByTestId('unlock-password').fill(password);
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
     const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
@@ -286,13 +293,15 @@ test.describe('Unlock PDF — files made by Protect PDF', () => {
     await expectUnlocked(await unlock(page, encrypted, OWNER_PW));
   });
 
-  test('a restrictions-only file unlocks with its permissions password', async ({ page }) => {
+  // qpdf removes the encryption with any password that opens the file, and a
+  // restrictions-only file opens with none, so none is asked for.
+  test('a restrictions-only file unlocks with no password', async ({ page }) => {
     await openProtect(page);
     await page.getByTestId('mode-restrict').check();
     await page.getByTestId('owner-password').fill(OWNER_PW);
     await setPermissions(page, []);
     const encrypted = await protectAndDownload(page);
 
-    await expectUnlocked(await unlock(page, encrypted, OWNER_PW));
+    await expectUnlocked(await unlock(page, encrypted, null));
   });
 });

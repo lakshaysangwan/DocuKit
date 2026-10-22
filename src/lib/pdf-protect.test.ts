@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  NOT_A_PDF_MESSAGE,
   PERMISSION_FLAG,
   PROTECT_PERMISSION_KEYS,
+  UNLOCK_FAILED_MESSAGE,
+  WRONG_PASSWORD_MESSAGE,
+  decryptFailureMessage,
   generatePassword,
   passwordProblem,
   permissionsToFlags,
@@ -144,5 +148,21 @@ describe('generatePassword', () => {
   it('does not repeat itself', () => {
     const seen = new Set(Array.from({ length: 50 }, () => generatePassword(24)));
     expect(seen.size).toBe(50);
+  });
+});
+
+describe('decryptFailureMessage', () => {
+  // What qpdf 12 prints on stderr for each case (the program name and path vary).
+  it('says the password is wrong only when qpdf says so', () => {
+    expect(decryptFailureMessage('qpdf: /input.pdf: invalid password')).toBe(WRONG_PASSWORD_MESSAGE);
+  });
+
+  it('says a file without a PDF header or cross-reference table is not a readable PDF', () => {
+    expect(decryptFailureMessage("WARNING: /input.pdf: can't find PDF header\nqpdf: /input.pdf: can't find startxref")).toBe(NOT_A_PDF_MESSAGE);
+  });
+
+  it('reports anything else as a failure to unlock, not as a wrong password', () => {
+    expect(decryptFailureMessage('qpdf: /input.pdf: unsupported encryption filter')).toBe(UNLOCK_FAILED_MESSAGE);
+    expect(decryptFailureMessage('')).toBe(UNLOCK_FAILED_MESSAGE);
   });
 });

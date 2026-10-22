@@ -3,6 +3,7 @@ import { FIXTURE } from '../fixtures/generate';
 import { uploadFiles, addSingleFileAndWait, addFilesAndWait, unlabelledFormControls } from '../helpers/harness';
 import { openSign, addTypedSignature } from '../helpers/sign';
 import { openEdit, addObject } from '../helpers/edit-pdf';
+import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
 
 /**
  * P4.1 — form-label audit (WCAG 2.1 AA, 1.3.1 / 4.1.2).
@@ -123,6 +124,22 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
     await page.goto('/protect-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf1page);
     await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+    await assertAllLabelled(page);
+  });
+
+  test('protect-pdf — "Check it opens" after protecting', async ({ page }) => {
+    await page.goto('/protect-pdf');
+    await addSingleFileAndWait(page, FIXTURE.pdf1page);
+    await page.getByTestId('password').fill('label-check-pw');
+    await page.getByTestId('confirm-password').fill('label-check-pw');
+    await page.getByTestId('tool-action').click();
+    await expect(page.getByLabel('Check it opens')).toBeVisible({ timeout: 45_000 });
+    await assertAllLabelled(page);
+  });
+
+  test('unlock-pdf — password field for a locked file', async ({ page }) => {
+    await addPdfBuffer(page, 'unlock-pdf', await encryptPdf(FIXTURE.pdf1page, { user: 'open-pw', owner: 'owner-pw' }));
+    await expect(page.getByLabel('PDF password')).toBeVisible({ timeout: 30_000 });
     await assertAllLabelled(page);
   });
 

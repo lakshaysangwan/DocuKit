@@ -44,8 +44,9 @@ test.describe('Protect PDF', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await page.getByTestId('password').fill(PW);
     await page.getByTestId('confirm-password').fill('different');
-    await page.getByTestId('tool-action').click();
-    // No download button should appear; an error toast is shown instead.
+    // The action is not offered, and says why; no download button appears.
+    await expect(page.getByTestId('tool-action')).toBeDisabled();
+    await expect(page.getByTestId('action-hint')).toHaveText('The two passwords do not match.');
     await expect(page.getByTestId('download-button')).toHaveCount(0);
   });
 
@@ -107,6 +108,7 @@ test.describe('Unlock PDF', () => {
     await expect(page.getByTestId('file-info')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('unlock-password').fill('wrong-password');
     await page.getByTestId('tool-action').click();
-    await expect(page.locator('#main-content').getByText(/Incorrect password/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('action-error')).toHaveText('That password does not open this file.', { timeout: 30_000 });
+    await expect(page.getByTestId('download-button')).toHaveCount(0);
   });
 });

@@ -6,6 +6,7 @@ import createModule from '@neslinesli93/qpdf-wasm';
 import type { QpdfInstance } from '@neslinesli93/qpdf-wasm';
 import { readEncryptionInfo } from '../lib/pdf-encryption-info';
 import {
+  decryptFailureMessage,
   passwordProblem,
   permissionsToFlags,
   permissionsToQpdfArgs,
@@ -23,14 +24,40 @@ type QpdfExt = QpdfInstance & { FS: QpdfInstance['FS'] & EmscriptenFSExt };
 
 let modulePromise: Promise<QpdfExt> | null = null;
 
+/**
+ * What qpdf printed on stderr since it was last read. qpdf says why it wrote
+ * nothing only there ("invalid password", "can't find PDF header"), and that is
+ * how a wrong password is told apart from an unreadable file. qpdf never
+ * prints a password.
+ */
+let stderrLines: string[] = [];
+function takeStderr(): string {
+  const text = stderrLines.join('\n');
+  stderrLines = [];
+  return text;
+}
+
 function getModule(): Promise<QpdfExt> {
   if (!modulePromise) {
-    modulePromise = createModule({
-      // Absolute, not root-relative: this may run inside a blob: worker (see
-      // worker-pool.createWorker), where a leading-slash path has no valid base
-      // to resolve against and the fetch fails outright.
-      locateFile: () => new URL('/wasm/qpdf.wasm', self.location.origin).href,
-    }) as Promise<QpdfExt>;
+    // This build of qpdf ignores a `printErr` option: it binds `console.error`
+    // for its stderr as the module is created (synchronously, inside the call
+    // below). So for that moment `console.error` is a function that keeps the
+    // lines instead, and qpdf holds on to it from then on.
+    const original = console.error;
+    console.error = (...parts: unknown[]) => {
+      stderrLines.push(parts.join(' '));
+      if (stderrLines.length > 50) stderrLines.shift();
+    };
+    try {
+      modulePromise = createModule({
+        // Absolute, not root-relative: this may run inside a blob: worker (see
+        // worker-pool.createWorker), where a leading-slash path has no valid base
+        // to resolve against and the fetch fails outright.
+        locateFile: () => new URL('/wasm/qpdf.wasm', self.location.origin).href,
+      }) as Promise<QpdfExt>;
+    } finally {
+      console.error = original;
+    }
   }
   return modulePromise;
 }
@@ -119,18 +146,39 @@ export async function qpdfEncrypt(
   }
 }
 
+/**
+ * Remove a file's encryption. `password` may be the open (user) password, the
+ * permissions (owner) password, or empty for a file that opens without one:
+ * qpdf removes the encryption with any password that opens the file, so a
+ * restrictions-only file needs none.
+ *
+ * Throws with a message for the visitor: the password was wrong, the file is
+ * not a readable PDF, or (anything else) it could not be unlocked.
+ */
 export async function qpdfDecrypt(
   pdfBytes: Uint8Array,
   password: string,
 ): Promise<Uint8Array> {
   const qpdf = await getModule();
   qpdf.FS.writeFile('/input.pdf', pdfBytes);
+  takeStderr();
   try {
-    qpdf.callMain([
-      '--password=' + password, '--decrypt',
-      '/input.pdf', '/output.pdf',
-    ]);
-    const result = qpdf.FS.readFile('/output.pdf');
+    try {
+      qpdf.callMain([
+        '--password=' + password, '--decrypt',
+        '/input.pdf', '/output.pdf',
+      ]);
+    } catch {
+      /* qpdf's failure is reported through what it wrote (or did not), below */
+    }
+    let result: Uint8Array;
+    try {
+      result = qpdf.FS.readFile('/output.pdf');
+    } catch {
+      throw new Error(decryptFailureMessage(takeStderr()));
+    }
+    // Hand back only a file that really has no encryption left.
+    if (readEncryptionInfo(result).encrypted) throw new Error(decryptFailureMessage(''));
     return result;
   } finally {
     try { qpdf.FS.unlink('/input.pdf'); } catch { /* ignore */ }

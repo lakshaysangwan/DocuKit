@@ -147,3 +147,23 @@ export function generatePassword(length: number, alphabet: string = PASSWORD_ALP
   }
   return out;
 }
+
+/** Said when a password does not open a file — by Unlock PDF, by Protect's "Check it opens", and by Merge. */
+export const WRONG_PASSWORD_MESSAGE = 'That password does not open this file.';
+/** Said when a file is not a PDF that can be read at all. */
+export const NOT_A_PDF_MESSAGE = 'This file could not be read as a PDF.';
+/** Said when removing the encryption fails for any other reason. */
+export const UNLOCK_FAILED_MESSAGE = 'The PDF could not be unlocked. It may be damaged, or use a kind of encryption this tool cannot remove.';
+
+/**
+ * What to tell the visitor when `qpdf --decrypt` wrote nothing, from what qpdf
+ * printed on stderr. qpdf says "invalid password" for a wrong password, and
+ * names the missing header or cross-reference table for a file that is not a
+ * PDF; anything else is reported as a failure to unlock, not as a wrong
+ * password.
+ */
+export function decryptFailureMessage(stderr: string): string {
+  if (/invalid password/i.test(stderr)) return WRONG_PASSWORD_MESSAGE;
+  if (/can't find PDF header|can't find startxref|unable to find trailer|not a PDF/i.test(stderr)) return NOT_A_PDF_MESSAGE;
+  return UNLOCK_FAILED_MESSAGE;
+}
