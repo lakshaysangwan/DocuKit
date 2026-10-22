@@ -243,11 +243,11 @@ test.describe('Source-check closures — visual page selectors', () => {
 
     const selector = page.getByTestId('page-selector');
     await expect(selector).toBeVisible({ timeout: 20_000 });
-    await expect(selector.getByTestId('page-thumb')).toHaveCount(3);
+    await expect(selector.getByTestId('p2i-page-image')).toHaveCount(3);
     await expect
       .poll(() =>
         selector
-          .getByTestId('page-thumb')
+          .getByTestId('p2i-page-image')
           .first()
           .evaluate((img: HTMLImageElement) => img.naturalWidth),
       )
@@ -274,14 +274,15 @@ test.describe('Source-check closures — visual page selectors', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf1page);
 
     const selector = page.getByTestId('page-selector');
-    await expect(selector.getByTestId('page-thumb')).toHaveCount(1);
+    await expect(selector.getByTestId('p2i-page-image')).toHaveCount(1);
     await page.getByTestId('page-select-0').click();
     await expect(selector).toContainText('0 of 1 page will be exported');
 
     // An empty selection used to fall through to "all pages" while the grid said
     // zero — the preview and the export have to agree.
-    await page.getByTestId('tool-action').click();
-    await expect(page.getByText(/Select at least one page/i)).toBeVisible();
+    // The action is disabled and says why, so there is nothing to click through.
+    await expect(page.getByTestId('tool-action')).toBeDisabled();
+    await expect(page.getByTestId('action-hint')).toHaveText(/Select at least one page/i);
     await expect(page.getByTestId('download-button')).toHaveCount(0);
   });
 });

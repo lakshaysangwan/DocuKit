@@ -83,6 +83,12 @@ export interface PageGridProps<T extends { id: string }> {
   renderActions?: (item: T, index: number) => ReactNode;
   /** Every card button at least 44px square on a touch screen. */
   largeTouchTargets?: boolean;
+  /**
+   * The enlarged page lays itself out in the dialog's whole area: `renderPage`
+   * with view `'large'` then draws its own zoom and scrolling. See
+   * `PagePreviewDialog`'s `fill`.
+   */
+  previewFill?: boolean;
 }
 
 const SIZES: { value: PageGridSize; text: string; name: string }[] = [
@@ -141,6 +147,7 @@ export default function PageGrid<T extends { id: string }>({
   showNames = true,
   renderActions,
   largeTouchTargets = false,
+  previewFill = false,
 }: PageGridProps<T>) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -304,6 +311,7 @@ export default function PageGrid<T extends { id: string }>({
         title={openItem ? `Page ${openIndex + 1} of ${items.length} · ${getName(openItem)}` : ''}
         detail={openItem ? getDetail?.(openItem, openIndex) : undefined}
         aspect={openItem ? getAspect(openItem, openIndex) : 1}
+        fill={previewFill}
         onPrevious={openIndex > 0 ? () => show(items[openIndex - 1].id) : undefined}
         onNext={openIndex !== -1 && openIndex < items.length - 1 ? () => show(items[openIndex + 1].id) : undefined}
         // Back to the card of the page that was on show, which paging may have changed.

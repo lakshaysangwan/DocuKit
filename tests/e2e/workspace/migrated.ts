@@ -10,6 +10,7 @@ import { openWatermark } from '../helpers/watermark';
 import { openPageNumbers } from '../helpers/page-numbers';
 import { openCrop } from '../helpers/crop-pdf';
 import { openOrganize } from '../helpers/organize-pages';
+import { openPdfToImage } from '../helpers/pdf-to-image';
 
 /**
  * The tools that live in the shared workspace.
@@ -132,5 +133,14 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'rearrange-pdf-pages',
     name: 'Rearrange PDF Pages',
     enter: (page) => openOrganize(page, FIXTURE.pdf3page, 3),
+  },
+  {
+    // A pick-pages tool like Split: the document pane is every page, those left
+    // out marked "Not exported", and each page's magnifier shows it as the image
+    // it will be saved as. Every page is chosen on entry, so the action is
+    // available at once and there is no `makeReady`.
+    slug: 'pdf-to-image',
+    name: 'PDF to Image',
+    enter: (page) => openPdfToImage(page, FIXTURE.pdf3page, 3),
   },
 ];

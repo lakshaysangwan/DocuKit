@@ -6,6 +6,12 @@ import { addSingleFileAndWait, expectImageRendered } from '../helpers/harness';
  * The shared PDF document layer (src/lib/pdf) as the legacy thumbnail hook
  * exposes it today, in a real browser against the production build.
  *
+ * The hook's last caller is Redact PDF, so that is the page driven here (PDF to
+ * Image, which these tests used to drive, now draws its pages through the
+ * document handle directly). Redact asks for 800px on the long edge and does
+ * not print a page count, so those two checks are adapted; what is proven is
+ * the same.
+ *
  * Nothing in the app is instrumented for this. The page is observed from the
  * outside instead:
  *
@@ -65,25 +71,28 @@ const liveDocuments = async (page: Page) => {
   const p = await probe(page);
   return p.opened - p.terminated;
 };
+/** Redact's page images: the hook's thumbnails. */
+const THUMB = '[data-testid="redact-page"] img';
+const thumbs = (page: Page) => page.locator(THUMB);
 const thumbSources = (page: Page) =>
-  page.getByTestId('page-thumb').evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).src));
+  thumbs(page).evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).src));
 
 test.describe('PDF document layer behind the page thumbnails', () => {
   test('thumbnails are blob: images that really decode, from one document that is closed when they are done', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/pdf-to-image');
+    await page.goto('/redact-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
 
-    const thumbs = page.getByTestId('page-thumb');
-    await expect(thumbs).toHaveCount(5, { timeout: 20_000 });
+    const images = thumbs(page);
+    await expect(images).toHaveCount(5, { timeout: 20_000 });
     for (let i = 0; i < 5; i++) {
-      await expectImageRendered(thumbs.nth(i));
-      expect(await thumbs.nth(i).getAttribute('src')).toMatch(/^blob:/);
-      expect(await thumbs.nth(i).getAttribute('alt')).toContain(`Page ${i + 1}`);
+      await expectImageRendered(images.nth(i));
+      expect(await images.nth(i).getAttribute('src')).toMatch(/^blob:/);
+      expect(await images.nth(i).getAttribute('alt')).toContain(`Page ${i + 1}`);
     }
-    // 200px on the long edge of a portrait Letter page, as the tool asks for.
-    const size = await thumbs.first().evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight]);
-    expect(Math.max(...size)).toBe(200);
+    // 800px on the long edge of a portrait Letter page, as the tool asks for.
+    const size = await images.first().evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight]);
+    expect(Math.max(...size)).toBe(800);
 
     // Nothing needs the pdf.js document once the last page is drawn.
     await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
@@ -95,29 +104,29 @@ test.describe('PDF document layer behind the page thumbnails', () => {
 
   test('loading another file releases the previous file’s thumbnails', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/pdf-to-image');
+    await page.goto('/redact-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
-    await expect(page.getByTestId('page-thumb')).toHaveCount(3, { timeout: 20_000 });
+    await expect(thumbs(page)).toHaveCount(3, { timeout: 20_000 });
     const first = await thumbSources(page);
 
     await page.getByRole('button', { name: 'Remove file' }).click();
     await expect(page.getByTestId('file-info')).toHaveCount(0);
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
-    await expect(page.getByTestId('page-thumb')).toHaveCount(5, { timeout: 20_000 });
+    await expect(thumbs(page)).toHaveCount(5, { timeout: 20_000 });
     const second = await thumbSources(page);
 
     const p = await probe(page);
     for (const url of first) expect(p.revoked).toContain(url);
     for (const url of second) expect(p.revoked).not.toContain(url);
-    await expectImageRendered(page.getByTestId('page-thumb').first());
+    await expectImageRendered(thumbs(page).first());
     await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
   });
 
   test('leaving the tool releases its thumbnails and leaves no document open', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/pdf-to-image');
+    await page.goto('/redact-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
-    await expect(page.getByTestId('page-thumb')).toHaveCount(5, { timeout: 20_000 });
+    await expect(thumbs(page)).toHaveCount(5, { timeout: 20_000 });
     const sources = await thumbSources(page);
 
     // Navigation is client-side (Astro's ClientRouter), so the page's JS — and
@@ -132,9 +141,9 @@ test.describe('PDF document layer behind the page thumbnails', () => {
 
   test('leaving while thumbnails are still rendering stops the work and releases everything', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/pdf-to-image');
+    await page.goto('/redact-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf48page);
-    await expect(page.getByTestId('page-thumb').first()).toBeVisible({ timeout: 20_000 });
+    await expect(thumbs(page).first()).toBeVisible({ timeout: 20_000 });
 
     await page.locator('header a[href="/"]').first().click();
     await expect(page).toHaveURL(/\/$/);
@@ -150,35 +159,32 @@ test.describe('PDF document layer behind the page thumbnails', () => {
     expect((await probe(page)).rasters.length).toBe(settled);
   });
 
-  test('a 48-page PDF shows its page count before the thumbnails, renders each page once, and publishes them in batches', async ({ page }, testInfo) => {
+  test('a 48-page PDF shows its first pages before the last is drawn, renders each page once, and publishes them in batches', async ({ page }, testInfo) => {
     await installProbe(page);
-    await page.goto('/pdf-to-image');
+    await page.goto('/redact-pdf');
     await expect(page.locator('[data-testid="dropzone"][data-hydrated="true"]').first()).toBeVisible();
 
     // Count the DOM updates that add thumbnails: each is one React commit of
-    // the grid. Also note how many thumbnails existed when the count appeared.
-    await page.evaluate(() => {
+    // the list. Also note how many pages had been rasterised when the first
+    // thumbnail appeared.
+    await page.evaluate((selector) => {
       const state = { commits: [] as number[], thumbsWhenCountShown: null as number | null, stop: () => observer.disconnect() };
-      const countThumbs = () => document.querySelectorAll('[data-testid="page-thumb"]').length;
       const observer = new MutationObserver((records) => {
-        if (state.thumbsWhenCountShown === null && /48 pages/.test(document.querySelector('[data-testid="file-info"]')?.textContent ?? '')) {
-          state.thumbsWhenCountShown = countThumbs();
-        }
         const addedThumb = records.some((r) =>
-          [...r.addedNodes].some((n) => n instanceof Element && (n.matches('[data-testid="page-thumb"]') || !!n.querySelector('[data-testid="page-thumb"]'))),
+          [...r.addedNodes].some((n) => n instanceof Element && (n.matches(selector) || !!n.querySelector(selector))),
         );
+        if (addedThumb && state.thumbsWhenCountShown === null) state.thumbsWhenCountShown = window.__pdfProbe.rasters.length;
         if (addedThumb) state.commits.push(performance.now());
       });
       observer.observe(document.body, { childList: true, subtree: true, characterData: true });
       window.__thumbCommits = state;
-    });
+    }, THUMB);
 
     const started = Date.now();
     await addSingleFileAndWait(page, FIXTURE.pdf48page);
-    await expect(page.getByTestId('file-info')).toContainText('48 pages');
-    await expect(page.getByTestId('page-thumb')).toHaveCount(48, { timeout: 60_000 });
+    await expect(thumbs(page)).toHaveCount(48, { timeout: 60_000 });
     const wallMs = Date.now() - started;
-    await expectImageRendered(page.getByTestId('page-thumb').last());
+    await expectImageRendered(thumbs(page).last());
 
     const { commits, thumbsWhenCountShown } = await page.evaluate(() => {
       window.__thumbCommits!.stop();
@@ -188,11 +194,11 @@ test.describe('PDF document layer behind the page thumbnails', () => {
     const spanMs = commits[commits.length - 1] - commits[0];
     testInfo.annotations.push({
       type: 'thumbnail-timing',
-      description: `48 pages: ${commits.length} grid commits over ${Math.round(spanMs)}ms, all thumbnails ${wallMs}ms after upload, ${thumbsWhenCountShown} thumbnails when the count appeared`,
+      description: `48 pages: ${commits.length} grid commits over ${Math.round(spanMs)}ms, all thumbnails ${wallMs}ms after upload, ${thumbsWhenCountShown} pages rasterised when the first thumbnail appeared`,
     });
-    console.log(`[pdf-doc-layer] ${testInfo.project.name}: ${commits.length} commits, span ${Math.round(spanMs)}ms, all thumbnails after ${wallMs}ms, ${thumbsWhenCountShown} thumbs when count shown, ${p.rasters.length} rasters`);
+    console.log(`[pdf-doc-layer] ${testInfo.project.name}: ${commits.length} commits, span ${Math.round(spanMs)}ms, all thumbnails after ${wallMs}ms, ${thumbsWhenCountShown} rasterised when first shown, ${p.rasters.length} rasters`);
 
-    // The count does not wait for rendering.
+    // The first pages are shown without waiting for the rest.
     expect(thumbsWhenCountShown).not.toBeNull();
     expect(thumbsWhenCountShown!).toBeLessThan(48);
 

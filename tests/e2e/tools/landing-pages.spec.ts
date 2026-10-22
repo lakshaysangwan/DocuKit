@@ -86,7 +86,7 @@ test.describe('Landing pages — the preset is applied', () => {
     await page.goto('/pdf-to-jpg/');
     await addSingleFileAndWait(page, FIXTURE.pdf1page);
     await expect(page.getByTestId('tool-action')).toBeEnabled({ timeout: 20_000 });
-    await expect(page.getByTestId('tool-action')).toHaveText('Convert to JPEG');
+    await expect(page.getByTestId('tool-action')).toHaveText('Convert 1 page to JPEG');
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });

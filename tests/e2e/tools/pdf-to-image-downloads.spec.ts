@@ -13,6 +13,7 @@ import {
   assertZip,
   assertImage,
 } from '../helpers/harness';
+import { openOptions } from '../helpers/pdf-to-image';
 
 /**
  * PDF to Image — getting the images out without a ZIP.
@@ -173,6 +174,8 @@ test.describe('PDF to Image — several images', () => {
     // The file called page-3 really is page 3: converting page 3 alone gives
     // the same bytes (the encoder is deterministic).
     const fromSelection = files.find((f) => f.name === expected[1])!;
+    // The options are behind Make changes once the images are ready.
+    await page.getByTestId('edit-again').click();
     await page.getByLabel('Page range to convert').fill('3');
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toHaveText('Download image', { timeout: 45_000 });
@@ -342,16 +345,19 @@ test.describe('PDF to Image — layout, memory and accessibility of the result',
       await addSingleFileAndWait(page, FIXTURE.pdf3page);
       const action = page.getByTestId('tool-action');
       await expect(action).toBeEnabled({ timeout: 20_000 });
-      // Thumbnails of the source pages load in above the button; wait for them
+      // Thumbnails of the source pages load in the document pane; wait for them
       // so only movement caused by the *result* is measured.
-      await expect(page.getByTestId('page-selector').getByTestId('page-thumb')).toHaveCount(3);
+      await expect(page.getByTestId('page-selector').getByTestId('p2i-page-image')).toHaveCount(3);
       const before = await docTop(action);
 
       await action.click();
       const primary = page.getByTestId('download-button');
       await expect(primary).toBeVisible({ timeout: 45_000 });
+      // The download takes the Convert button's place in the action slot.
+      expect(await docTop(primary), 'the download where Convert was').toBe(before);
+      // On a phone the result is in the Options panel.
+      await openOptions(page);
       await expect(page.getByTestId('result-card')).toHaveCount(3);
-      expect(await docTop(action), 'Convert button after the result appeared').toBe(before);
 
       // A status message arriving must not move the buttons or the cards.
       const firstCardButton = page.getByTestId('result-download').first();
@@ -427,7 +433,7 @@ test.describe('PDF to Image — layout, memory and accessibility of the result',
     }
   });
 
-  test('keyboard reaches Convert, the primary, the options and then each card in order', async ({ page, browserName }) => {
+  test('focus lands on the download after converting, and the options and each card follow in order', async ({ page, browserName }) => {
     // Safari does not Tab to buttons unless the user turns that on, and
     // Playwright's WebKit follows it — the order is asserted where Tab applies.
     test.skip(browserName === 'webkit', 'WebKit skips buttons on Tab by default');
@@ -437,18 +443,20 @@ test.describe('PDF to Image — layout, memory and accessibility of the result',
       Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => false });
     });
     await convert(page);
-    await page.getByTestId('tool-action').focus();
     const focusedId = () => page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
       return el?.getAttribute('aria-label') ?? el?.dataset.testid ?? el?.tagName ?? '';
     });
-    const order: string[] = [];
-    for (let i = 0; i < 5; i++) {
+    // The Convert button is replaced by the download, and focus goes with it.
+    await expect(page.getByTestId('download-button')).toBeFocused();
+
+    await page.getByTestId('download-zip').focus();
+    const order: string[] = [await focusedId()];
+    for (let i = 0; i < 3; i++) {
       await page.keyboard.press('Tab');
       order.push(await focusedId());
     }
     expect(order).toEqual([
-      'Download all (3 images)',
       'Download as ZIP: doc-3page-images.zip',
       `Download ${NAME_3(1)}`,
       `Download ${NAME_3(2)}`,

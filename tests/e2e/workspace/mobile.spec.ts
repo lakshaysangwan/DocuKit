@@ -1,10 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { openSign, readDrawnImages, signAndDownload, stampViewRect, expectSameRect } from '../helpers/sign';
-import { expectDownload } from '../helpers/harness';
+import { expectDownload, pngSize, readZipEntries } from '../helpers/harness';
 import { openImages, previewPages, readOutputPages, expectPreviewMatchesFile } from '../helpers/image-to-pdf';
 import { openEdit, objectViewRect, readDrawnObjects, selectedObject } from '../helpers/edit-pdf';
 import { openCompress, chooseLevel, settledPreview } from '../helpers/compress-pdf';
+import { openPdfToImage, openPreview } from '../helpers/pdf-to-image';
 import { MIGRATED } from './migrated';
 
 /**
@@ -333,5 +334,39 @@ test.describe('Compress PDF on a phone', () => {
       await page.getByTestId(`compare-mode-${mode}`).tap();
       expectPhoneLayout(await layout(page), `compare: ${mode}`);
     }
+  });
+});
+
+test.describe('PDF to Image on a phone', () => {
+  test('taps pick pages, the preview fits and shows the saved size, and the files are the pages tapped', async ({ page }) => {
+    await openPdfToImage(page, FIXTURE.pdf5page, 5);
+    expectPhoneLayout(await layout(page), 'on entry');
+    // Leave out pages 2 and 4 with taps; the field in Options says so.
+    await page.getByTestId('page-select-1').tap();
+    await page.getByTestId('page-select-3').tap();
+    await page.getByTestId('options-toggle').tap();
+    await expect(page.getByLabel('Page range to convert')).toHaveValue('1, 3, 5');
+    await page.getByRole('button', { name: '72 DPI (screen)' }).tap();
+    await page.getByTestId('options-toggle').tap();
+    await expect(page.getByTestId('tool-action')).toHaveText('Convert to PNG');
+
+    // The enlarged page fits the screen, and says the pixel size of the file.
+    const preview = await openPreview(page, 2, { format: 'png', dpi: 72 });
+    const dialog = page.getByTestId('page-preview-dialog');
+    const box = (await dialog.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    await expect(dialog.getByTestId('p2i-preview-size')).toHaveText(`${preview.width} × ${preview.height} px`);
+    await page.getByTestId('page-preview-close').tap();
+    await expect(dialog).toHaveCount(0);
+
+    await page.getByTestId('tool-action').tap();
+    await expect(page.getByTestId('download-button')).toHaveText('Download all (3 images)', { timeout: 45_000 });
+    expectPhoneLayout(await layout(page), 'done');
+    await page.getByTestId('options-toggle').tap();
+    const zip = await expectDownload(page, () => page.getByTestId('download-zip').tap());
+    const entries = await readZipEntries(zip.bytes);
+    expect(entries.map((e) => e.name)).toEqual(['doc-5page-page-1.png', 'doc-5page-page-3.png', 'doc-5page-page-5.png']);
+    expect(pngSize(entries[1].bytes)).toEqual({ width: preview.width, height: preview.height });
   });
 });

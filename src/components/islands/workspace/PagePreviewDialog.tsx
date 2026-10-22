@@ -21,6 +21,12 @@ export interface PagePreviewDialogProps {
    * when it opened; pass this when paging can leave that element stale.
    */
   returnFocus?: () => HTMLElement | null;
+  /**
+   * Give the content the whole area under the bar instead of a box of the
+   * page's proportions, for content that lays itself out (its own zoom and
+   * scrolling). The content then fills a positioned box.
+   */
+  fill?: boolean;
 }
 
 const pagerButton =
@@ -47,6 +53,7 @@ export default function PagePreviewDialog({
   onPrevious,
   onNext,
   returnFocus,
+  fill = false,
 }: PagePreviewDialogProps) {
   const opener = useRef<HTMLElement | null>(null);
 
@@ -127,13 +134,17 @@ export default function PagePreviewDialog({
 
           {/* The page, as large as fits: a size container, so the page can be
               the largest box of its own proportions inside it with CSS alone. */}
-          <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--color-background)] p-2 sm:p-3">
-            <div className="flex size-full items-center justify-center [container-type:size]">
-              <div style={{ width: `min(100cqw, calc(100cqh * ${aspect}))`, aspectRatio: String(aspect) }}>
-                {children}
+          {fill ? (
+            <div className="relative min-h-0 flex-1 bg-[var(--color-background)]">{children}</div>
+          ) : (
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--color-background)] p-2 sm:p-3">
+              <div className="flex size-full items-center justify-center [container-type:size]">
+                <div style={{ width: `min(100cqw, calc(100cqh * ${aspect}))`, aspectRatio: String(aspect) }}>
+                  {children}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
