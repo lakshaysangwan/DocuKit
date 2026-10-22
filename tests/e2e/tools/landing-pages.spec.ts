@@ -10,6 +10,7 @@ import {
   assertPdf,
   countPdfPages,
 } from '../helpers/harness';
+import { openOrganize, saveAndDownload, filePageOrder, fileRotations } from '../helpers/organize-pages';
 
 /**
  * Task landing pages are existing tools opened with a preset. Two things can
@@ -161,5 +162,16 @@ test.describe('Landing pages — the preset is applied', () => {
     assertPdf(bytes);
     expect(name).toBe('doc-5page-split.pdf');
     expect(countPdfPages(bytes)).toBe(2);
+  });
+
+  test('Rotate PDF: "Rotate all right" and one page turned back — the file has those turns', async ({ page }) => {
+    await openOrganize(page, FIXTURE.pdf3page, 3, '/rotate-pdf/');
+    await page.getByRole('button', { name: 'Rotate all right', exact: true }).click();
+    await page.getByRole('button', { name: 'Rotate page 2 left', exact: true }).click();
+    await expect(page.getByTestId('tool-action')).toHaveText('Save PDF (3 pages)');
+
+    const bytes = await saveAndDownload(page);
+    expect(await filePageOrder(bytes)).toEqual(['1', '2', '3']);
+    expect(await fileRotations(bytes)).toEqual([90, 0, 90]);
   });
 });
