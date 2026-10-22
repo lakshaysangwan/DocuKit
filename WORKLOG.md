@@ -148,10 +148,17 @@ now `/protect-pdf`. Not verified: real-device touch, the Flatten 24 MP cap on hu
 
 W7 notes: `PageCard` / `PageGrid` gained opt-in `actions`, `largeTouchTargets` and Shift modifiers;
 `shared/PageThumbnailGrid.tsx` removed (unused). History limit 100 steps (no number in the copy).
+| `4a8dc59`, `ca4a047`, `1174623` (W8) | PDF to Image in the workspace: selectable page grid synced with the range field (odd / even / last), "Not exported" marks, "You'll get N images" with real names and pixel sizes, a magnifier that renders each page exactly as it will be saved (same code path as the conversion; byte-identical at normal sizes; 100% zoom; 600 DPI capped at 12 MP / 6 MP on low-memory devices with an estimated size), downloads through the action slot; `shared/PageSelectorGrid.tsx` removed; PDF to Image and PDF to JPG copy updated | Clean worktree: 647 Chromium, 932 Firefox/WebKit, 55 mobile, 9 visual, 951 unit. Live: PDF to Image specs and the JPG landing tests against docukit.uk on three engines, phone selection and download names |
+
+W8 notes: `tests/e2e/tools/pdf-doc-layer.spec.ts` now drives `/redact-pdf` (the last user of
+`usePdfThumbnails`). The shared `MultiFileDownload` result gallery squeezes three columns into the
+narrow workspace result pane — fix once for all tools. 600 DPI on very large pages can exceed browser
+canvas limits during export (pre-existing).
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop) and W7 (Rearrange) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange) and W8 (PDF to Image)
+are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
