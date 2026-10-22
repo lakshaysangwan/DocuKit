@@ -116,6 +116,45 @@ export async function shownAreaFractions(original: Buffer, output: Buffer, pageI
   };
 }
 
+/**
+ * The box (fractions of the page) of strongly red or blue pixels in the page
+ * image the viewer shows, or null when there are almost none.
+ */
+export async function colourBoxInViewer(page: Page, colour: 'red' | 'blue') {
+  const image = page.getByTestId('page-image');
+  await expect(image).toBeVisible();
+  return image.evaluate(async (el: HTMLImageElement, want: string) => {
+    await el.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = el.naturalWidth;
+    canvas.height = el.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(el, 0, 0);
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let count = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+        const hit = want === 'red' ? r - Math.max(g, b) > 100 : b - Math.max(r, g) > 100;
+        if (hit) {
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x + 1);
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y + 1);
+          count++;
+        }
+      }
+    }
+    if (count < 20) return null;
+    return { x1: minX / width, y1: minY / height, x2: maxX / width, y2: maxY / height };
+  }, colour);
+}
+
 /** The raw /CropBox of every page, `[x, y, width, height]`. */
 export async function cropBoxes(bytes: Buffer): Promise<[number, number, number, number][]> {
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
