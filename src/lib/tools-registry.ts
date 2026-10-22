@@ -1,5 +1,5 @@
 export type ToolCategory = 'pdf' | 'image';
-export type WasmDep = 'pdf-lib' | 'pdfjs' | 'mupdf' | 'image-wasm';
+export type WasmDep = 'pdf-lib' | 'pdfjs' | 'mupdf' | 'qpdf' | 'image-wasm';
 
 export interface ToolFaq {
   q: string;
@@ -252,17 +252,18 @@ export const TOOLS: ToolDef[] = [
     metaDescription: 'Add password protection to PDF files online. AES-256 encryption, permission settings, strength meter. 100% browser-based.',
     h1: 'Password Protect PDF',
     relatedSlugs: ['unlock-pdf', 'sign-pdf', 'redact-pdf'],
-    wasmDeps: ['pdf-lib'],
+    wasmDeps: ['qpdf', 'pdfjs'],
     faqs: [
       { q: 'What encryption standard is used?', a: 'AES-256 encryption per the PDF 2.0 specification — the strongest available PDF encryption standard.' },
       { q: 'What is the difference between user and owner passwords?', a: 'The user password opens the PDF with the permissions you chose in force. The owner (permissions) password opens it with every permission. The two are always different: set your own permissions password, or a random one is generated and shown to you once.' },
       { q: 'Can I restrict printing or copying?', a: 'You can record in the file whether printing, copying, editing, form filling, commenting and page assembly are allowed. PDF readers that respect these permissions, such as Adobe Acrobat, hold to them. Some readers ignore them (the viewer built into Firefox does by default), and anyone who can open the file can remove them. To keep the content private, rely on the password that opens the file.' },
       { q: 'Is the password stored anywhere?', a: 'No. Your password is used only in-browser to encrypt the PDF and is never transmitted or stored.' },
+      { q: 'What if my PDF already has a password?', a: 'Protect PDF recognises it as soon as you add the file and will not encrypt it again. Remove the password (or the restrictions) with Unlock PDF first, then protect the unlocked copy.' },
     ],
     howToSteps: [
-      { title: 'Upload your PDF', description: 'Drop your PDF file into the upload area.' },
+      { title: 'Upload your PDF', description: 'Drop your PDF file into the upload area. Its pages are shown so you can check it is the right file.' },
       { title: 'Set your password', description: 'Enter a password (or generate a strong random one). Choose which permissions to allow, and optionally set your own permissions password.' },
-      { title: 'Download protected PDF', description: 'Click "Protect PDF", then download — your PDF is now encrypted with AES-256.' },
+      { title: 'Download protected PDF', description: 'Press "Protect PDF", then "Download PDF". The copy is encrypted with AES-256, and you can check it opens with your password before you download it.' },
     ],
     features: [
       'AES-256 encryption (PDF 2.0)',
@@ -277,7 +278,7 @@ export const TOOLS: ToolDef[] = [
     slug: 'unlock-pdf',
     name: 'Unlock PDF',
     shortDescription: 'Remove password from PDF',
-    longDescription: 'Remove password protection from PDF files. Enter the password to decrypt your PDF and download an unlocked version.',
+    longDescription: 'Remove the password or the restrictions from a PDF you can open. Enter its password, see its pages to check it is the right file, and download a copy that opens with no password. A file with restrictions only needs no password at all.',
     category: 'pdf',
     icon: '/icons/tools/unlock-pdf.svg',
     primaryKeyword: 'unlock pdf',
@@ -285,17 +286,17 @@ export const TOOLS: ToolDef[] = [
     metaDescription: 'Remove password protection from PDF files online. Enter the password, download unlocked PDF. 100% browser-based, private.',
     h1: 'Unlock PDF',
     relatedSlugs: ['protect-pdf', 'compress-pdf', 'merge-pdf'],
-    wasmDeps: ['pdf-lib'],
+    wasmDeps: ['qpdf', 'pdfjs'],
     faqs: [
-      { q: 'Do I need the original password to unlock?', a: 'Yes — you must know the PDF\'s password. This tool decrypts PDFs for which you have the password; it is not a password cracker.' },
-      { q: 'What does "unlock" do exactly?', a: 'It decrypts the PDF and saves a new version without password protection, so it can be opened without entering a password.' },
-      { q: 'What if the PDF has permission restrictions only (no open password)?', a: 'Upload the PDF without entering a password. If it has only permission restrictions (owner password), Docukit will remove those restrictions.' },
+      { q: 'Do I need the original password to unlock?', a: 'For a file that asks for a password, yes: the password that opens it, or its permissions password. This tool removes the encryption from PDFs you can open; it is not a password cracker.' },
+      { q: 'What does "unlock" do exactly?', a: 'It decrypts the PDF and saves a new copy with no encryption: it opens without a password and carries no restrictions. Your original file is not changed.' },
+      { q: 'What if the PDF has permission restrictions only (no open password)?', a: 'Add the PDF and leave the password empty. It opens without one, so its pages and its current restrictions are shown straight away; press "Unlock PDF" and the copy is saved without the restrictions. No password is needed for that.' },
       { q: 'Is this safe and private?', a: 'Yes — everything happens in your browser. Your PDF and password are never sent to any server.' },
     ],
     howToSteps: [
-      { title: 'Upload your encrypted PDF', description: 'Drop the password-protected PDF into the upload area. The encryption is detected automatically.' },
-      { title: 'Enter the password', description: 'Type the PDF\'s password. You can toggle visibility with the eye icon.' },
-      { title: 'Download unlocked PDF', description: 'Click "Unlock & Download" to get your password-free PDF.' },
+      { title: 'Upload your encrypted PDF', description: 'Drop the protected PDF into the upload area. Whether it asks for a password or only has restrictions is detected automatically.' },
+      { title: 'Enter the password', description: 'If the file asks for a password, type it and press Enter: its pages appear so you can check it is the right file. A file with restrictions only needs no password.' },
+      { title: 'Download unlocked PDF', description: 'Press "Unlock PDF", then "Download PDF" to save a copy with no password.' },
     ],
     features: [
       'Detects encryption automatically',
