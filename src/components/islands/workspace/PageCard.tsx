@@ -25,7 +25,8 @@ export interface PageMark {
 /** Makes the page itself a toggle (pick pages), instead of "view large". */
 export interface PageSelect {
   selected: boolean;
-  onToggle: () => void;
+  /** Called with the click's modifier keys, so Shift-click can pick a range. */
+  onToggle: (modifiers: { shiftKey: boolean }) => void;
   /** The toggle's accessible name: "Page 2". Its state is `aria-pressed`. */
   label: string;
   /** The toggle's test id. */
@@ -67,6 +68,14 @@ export interface PageCardProps {
   select?: PageSelect;
   /** Show the file name line. Off when every page comes from the same file. Defaults to true. */
   showName?: boolean;
+  /**
+   * More buttons for this page, in a row of their own under it ("Rotate left",
+   * "Duplicate"). Always visible, like the rest. Style them with
+   * `pageCardButtonClass`.
+   */
+  actions?: ReactNode;
+  /** Make every button on the card at least 44px square on a touch screen. */
+  largeTouchTargets?: boolean;
 }
 
 /**
@@ -75,7 +84,8 @@ export interface PageCardProps {
  */
 export const CARD_FRAME_ASPECT = 1 / 1.3;
 
-const cardButton =
+/** The look of a card's buttons, for callers adding their own with `actions`. */
+export const pageCardButtonClass =
   'flex shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-background)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50';
 
 const animateLayoutChanges: AnimateLayoutChanges = (args) => !(args.isSorting || args.wasDragging);
@@ -97,7 +107,7 @@ const animateLayoutChanges: AnimateLayoutChanges = (args) => !(args.isSorting ||
  *
  * Test ids: `file-card` (with `data-filename`, and `data-mark` /
  * `data-mark-state` when marked), `page-thumb`, `page-mark`, `page-label`,
- * `page-detail`, `page-reorder`, `page-open`, `file-remove`.
+ * `page-detail`, `page-reorder`, `page-open`, `file-remove`, `page-actions`.
  */
 export default function PageCard({
   id,
@@ -119,7 +129,10 @@ export default function PageCard({
   mark,
   select,
   showName = true,
+  actions,
+  largeTouchTargets = false,
 }: PageCardProps) {
+  const cardButton = pageCardButtonClass;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     animateLayoutChanges,
@@ -130,7 +143,7 @@ export default function PageCard({
   const width = Math.min(1, aspect / CARD_FRAME_ASPECT) * 100;
   const dragByPage =
     sortable && !disabled ? (listeners?.onPointerDown as PointerEventHandler<HTMLDivElement> | undefined) : undefined;
-  const buttonSize = compact ? 'size-7' : 'size-8';
+  const buttonSize = cn(compact ? 'size-7' : 'size-8', largeTouchTargets && 'pointer-coarse:size-11');
 
   return (
     <div
@@ -157,7 +170,14 @@ export default function PageCard({
               : 'border-[var(--color-border)] shadow-[var(--shadow-card)]',
       )}
     >
-      <div className={cn('flex min-h-0 items-center justify-between', compact ? 'gap-0.5 p-1' : 'gap-1 p-1.5')}>
+      <div
+        className={cn(
+          'flex min-h-0 items-center justify-between',
+          // Big touch targets may not fit one row on a narrow card: wrap rather than overflow.
+          largeTouchTargets && 'flex-wrap',
+          compact ? 'gap-0.5 p-1' : 'gap-1 p-1.5',
+        )}
+      >
         {mark?.label && !sortable ? (
           <span
             data-testid="page-mark"
@@ -191,7 +211,7 @@ export default function PageCard({
         ) : (
           <span aria-hidden="true" />
         )}
-        <div className={cn('flex', compact ? 'gap-0.5' : 'gap-1')}>
+        <div className={cn('flex', largeTouchTargets && 'flex-wrap', compact ? 'gap-0.5' : 'gap-1')}>
           {onOpen && (
             <button
               type="button"
@@ -245,7 +265,7 @@ export default function PageCard({
         return select ? (
           <button
             type="button"
-            onClick={select.onToggle}
+            onClick={(event) => select.onToggle({ shiftKey: event.shiftKey })}
             disabled={disabled}
             aria-pressed={select.selected}
             aria-label={select.label}
@@ -258,6 +278,18 @@ export default function PageCard({
           picture
         );
       })()}
+
+      {actions && (
+        <div
+          data-testid="page-actions"
+          className={cn(
+            'flex flex-wrap items-center justify-center border-t border-[var(--color-border)]',
+            compact ? 'gap-0.5 p-1' : 'gap-1 p-1.5',
+          )}
+        >
+          {actions}
+        </div>
+      )}
 
       <div className="flex min-w-0 flex-col gap-0.5 border-t border-[var(--color-border)] px-2.5 py-2">
         <div className="flex min-w-0 items-center gap-1.5">

@@ -176,10 +176,11 @@ test.describe('Copy-drift closures — rearrange', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await expect(page.getByTestId('page-thumb')).toHaveCount(3);
 
-    // Insert between pages 1 and 2.
+    // Insert between pages 1 and 2: it goes after the selected page.
+    await page.getByTestId('page-select-0').click();
     await page.locator('[data-testid="insert-blank"][data-position="1"]').click();
     await expect(page.getByTestId('page-thumb')).toHaveCount(4);
-    await expect(page.locator('[data-testid="page-thumb"][data-blank="true"]')).toHaveCount(1);
+    await expect(page.getByTestId('blank-page')).toHaveCount(1);
 
     await page.getByTestId('tool-action').click();
     const { bytes } = await expectDownload(
@@ -201,8 +202,7 @@ test.describe('Copy-drift closures — rearrange', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await expect(page.getByTestId('page-thumb')).toHaveCount(3);
 
-    await page.getByTestId('page-thumb').first().hover();
-    await page.getByTestId('duplicate-page').first().click();
+    await page.getByRole('button', { name: 'Duplicate page 1', exact: true }).click();
     await expect(page.getByTestId('page-thumb')).toHaveCount(4);
 
     await page.getByTestId('tool-action').click();
@@ -242,7 +242,7 @@ test.describe('Copy-drift closures — rearrange', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await expect(page.getByTestId('page-thumb')).toHaveCount(3);
 
-    await page.locator('[data-testid="insert-blank"][data-position="0"]').click();
+    await page.locator('[data-testid="insert-blank"][data-position="3"]').click();
     await expect(page.getByTestId('page-thumb')).toHaveCount(4);
 
     await page.keyboard.press('Control+z');

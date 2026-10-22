@@ -65,7 +65,8 @@ export interface PageGridProps<T extends { id: string }> {
    */
   selection?: {
     isSelected: (item: T, index: number) => boolean;
-    onToggle: (item: T, index: number) => void;
+    /** `shiftKey`: the click was a Shift-click (extend a range). */
+    onToggle: (item: T, index: number, modifiers: { shiftKey: boolean }) => void;
     /** The toggle's accessible name. Defaults to "Page 2". */
     getLabel?: (item: T, index: number) => string;
     getTestId?: (item: T, index: number) => string;
@@ -78,6 +79,10 @@ export interface PageGridProps<T extends { id: string }> {
   renderDivider?: (item: T, index: number) => ReactNode;
   /** Show the file name on every card. Off when all pages come from one file. Defaults to true. */
   showNames?: boolean;
+  /** More buttons on each card, in a row under the page (see `PageCard`'s `actions`). */
+  renderActions?: (item: T, index: number) => ReactNode;
+  /** Every card button at least 44px square on a touch screen. */
+  largeTouchTargets?: boolean;
 }
 
 const SIZES: { value: PageGridSize; text: string; name: string }[] = [
@@ -134,6 +139,8 @@ export default function PageGrid<T extends { id: string }>({
   selection,
   renderDivider,
   showNames = true,
+  renderActions,
+  largeTouchTargets = false,
 }: PageGridProps<T>) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -270,13 +277,15 @@ export default function PageGrid<T extends { id: string }>({
                           selection
                             ? {
                                 selected: selection.isSelected(item, index),
-                                onToggle: () => selection.onToggle(item, index),
+                                onToggle: (modifiers) => selection.onToggle(item, index, modifiers),
                                 label: selection.getLabel?.(item, index) ?? `Page ${index + 1}`,
                                 testId: selection.getTestId?.(item, index),
                               }
                             : undefined
                         }
                         showName={showNames}
+                        actions={renderActions?.(item, index)}
+                        largeTouchTargets={largeTouchTargets}
                       >
                         {renderPage(item, index, 'card')}
                       </PageCard>

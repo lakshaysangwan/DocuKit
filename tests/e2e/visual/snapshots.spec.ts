@@ -141,8 +141,11 @@ test.describe('P8 — visual regression: control surfaces', () => {
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await expect(page.getByTestId("page-thumb")).toHaveCount(3);
     await expect(page.locator("[data-testid='page-thumb'] img").first()).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId("page-select-0").click();
     await page.locator("[data-testid='insert-blank'][data-position='1']").click();
-    await expect(page.locator("[data-testid='page-thumb'][data-blank='true']")).toHaveCount(1);
+    await expect(page.getByTestId("blank-page")).toHaveCount(1);
+    // Pinned with nothing selected, so the snapshot is the grid alone.
+    await page.getByTestId("clear-selection").click();
     await expect(page.getByTestId("page-grid")).toHaveScreenshot("rearrange-blank-page.png", shot);
   });
 });

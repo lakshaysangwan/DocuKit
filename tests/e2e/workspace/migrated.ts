@@ -9,6 +9,7 @@ import { openCompress } from '../helpers/compress-pdf';
 import { openWatermark } from '../helpers/watermark';
 import { openPageNumbers } from '../helpers/page-numbers';
 import { openCrop } from '../helpers/crop-pdf';
+import { openOrganize } from '../helpers/organize-pages';
 
 /**
  * The tools that live in the shared workspace.
@@ -122,5 +123,14 @@ export const MIGRATED: MigratedTool[] = [
       await expect(action).toBeEnabled();
       await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     },
+  },
+  {
+    // An arrange-pages tool: the document pane is a sortable grid of every page
+    // with its own rotate / duplicate / delete buttons. Saving the pages as they
+    // are is allowed, so the action is available at once and there is no
+    // `makeReady`.
+    slug: 'rearrange-pdf-pages',
+    name: 'Rearrange PDF Pages',
+    enter: (page) => openOrganize(page, FIXTURE.pdf3page, 3),
   },
 ];

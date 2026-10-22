@@ -13,6 +13,20 @@ async function loadPdf(page: import('@playwright/test').Page, file: string, expe
   await expect(page.getByTestId('page-thumb')).toHaveCount(expectedPages, { timeout: 20_000 });
 }
 
+/** Rotation of every page in the output, read with a real parser. */
+async function pageRotations(bytes: Buffer): Promise<number[]> {
+  const { PDFDocument } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  return doc.getPages().map((p) => p.getRotation().angle);
+}
+
+async function applyAndReadRotations(page: import('@playwright/test').Page): Promise<number[]> {
+  await page.getByTestId('tool-action').click();
+  await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
+  const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
+  return pageRotations(bytes);
+}
+
 test.describe('Rearrange PDF Pages', () => {
   test('page loads with correct H1 and dropzone', async ({ page }) => {
     const diag = new PageDiagnostics(page);
@@ -41,10 +55,8 @@ test.describe('Rearrange PDF Pages', () => {
     await page.goto('/rearrange-pdf-pages');
     await loadPdf(page, FIXTURE.pdf5page, 5);
 
-    // Delete the first page (hover reveals the delete control).
-    const firstThumb = page.getByTestId('page-thumb').first();
-    await firstThumb.hover();
-    await firstThumb.getByRole('button', { name: 'Delete page' }).click();
+    // Delete the first page with the button on its card.
+    await page.getByRole('button', { name: 'Delete page 1', exact: true }).click();
     await expect(page.getByTestId('page-thumb')).toHaveCount(4);
 
     // Undo restores it.
@@ -52,8 +64,7 @@ test.describe('Rearrange PDF Pages', () => {
     await expect(page.getByTestId('page-thumb')).toHaveCount(5);
 
     // Delete again and apply -> 4-page output.
-    await page.getByTestId('page-thumb').first().hover();
-    await page.getByTestId('page-thumb').first().getByRole('button', { name: 'Delete page' }).click();
+    await page.getByRole('button', { name: 'Delete page 1', exact: true }).click();
     await expect(page.getByTestId('page-thumb')).toHaveCount(4);
 
     await page.getByTestId('tool-action').click();
@@ -63,35 +74,20 @@ test.describe('Rearrange PDF Pages', () => {
     expect(countPdfPages(bytes)).toBe(4);
   });
 
-  test('rotating a page still produces a valid PDF with all pages', async ({ page }) => {
+  test('rotating a page turns that page in the file, and only it', async ({ page }) => {
     await page.goto('/rearrange-pdf-pages');
     await loadPdf(page, FIXTURE.pdf3page, 3);
 
-    const firstThumb = page.getByTestId('page-thumb').first();
-    await firstThumb.hover();
-    await firstThumb.getByRole('button', { name: 'Rotate clockwise' }).click();
+    await page.getByRole('button', { name: 'Rotate page 1 right', exact: true }).click();
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
     const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertPdf(bytes);
     expect(countPdfPages(bytes)).toBe(3);
+    expect(await pageRotations(bytes)).toEqual([90, 0, 0]);
   });
 });
-
-/** Rotation of every page in the output, read with a real parser. */
-async function pageRotations(bytes: Buffer): Promise<number[]> {
-  const { PDFDocument } = await import('pdf-lib');
-  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
-  return doc.getPages().map((p) => p.getRotation().angle);
-}
-
-async function applyAndReadRotations(page: import('@playwright/test').Page): Promise<number[]> {
-  await page.getByTestId('tool-action').click();
-  await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
-  const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
-  return pageRotations(bytes);
-}
 
 test.describe('Rearrange PDF Pages — batch rotation', () => {
   test('"Rotate all right" turns every page', async ({ page }) => {
@@ -103,18 +99,16 @@ test.describe('Rearrange PDF Pages — batch rotation', () => {
     expect(await applyAndReadRotations(page)).toEqual([90, 90, 90]);
   });
 
-  test('rotating one page of a multi-selection rotates the whole selection, and only it', async ({ page }) => {
+  test('"Rotate selected right" turns the selected pages, and only them', async ({ page }) => {
     await page.goto('/rearrange-pdf-pages');
     await loadPdf(page, FIXTURE.pdf3page, 3);
 
     const thumbs = page.getByTestId('page-thumb');
     await thumbs.nth(0).click();
     await thumbs.nth(1).click({ modifiers: ['ControlOrMeta'] });
-    // With more than one page selected the toolbar acts on the selection.
-    await expect(page.getByRole('button', { name: /Rotate selected left/ })).toBeVisible();
+    await expect(page.getByTestId('selection-summary')).toHaveText('2 of 3 pages selected.');
 
-    await thumbs.nth(0).hover();
-    await thumbs.nth(0).getByRole('button', { name: 'Rotate clockwise' }).click();
+    await page.getByRole('button', { name: /Rotate selected right/ }).click();
 
     expect(await applyAndReadRotations(page)).toEqual([90, 90, 0]);
   });

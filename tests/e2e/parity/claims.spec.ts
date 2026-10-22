@@ -111,7 +111,7 @@ test.describe('P7 claims — PDF tools', () => {
     await expect(thumb).toBeVisible({ timeout: 30_000 });
 
     const widthAt = async (label: string) => {
-      await page.getByRole('button', { name: label, exact: true }).click();
+      await page.getByRole('button', { name: `${label === 'S' ? 'Small' : 'Large'} pages`, exact: true }).click();
       await page.waitForTimeout(300);
       return (await thumb.boundingBox())?.width ?? 0;
     };
