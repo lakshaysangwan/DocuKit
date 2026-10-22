@@ -221,6 +221,8 @@ export default function RedactPdfTool() {
 
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The mark just added, until it is first changed: it alone carries the how-to tag.
+  const [freshId, setFreshId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
   const [stripMetadata, setStripMetadata] = useState(false);
@@ -335,6 +337,7 @@ export default function RedactPdfTool() {
       const id = generateId();
       commit((current) => [...current, { id, pageIndex: page, rect }]);
       setSelectedId(id);
+      setFreshId(id);
       setAnnouncement(`Mark added to page ${page + 1}.`);
     },
     [commit],
@@ -364,6 +367,7 @@ export default function RedactPdfTool() {
       if (phase === 'cancel') cancelPreview();
       else if (phase === 'preview') preview(updateRect(mark.id, rect));
       else {
+        setFreshId(null);
         commit(updateRect(mark.id, rect), source === 'keyboard' ? { coalesce: `keys:${mark.id}` } : undefined);
         if (source === 'keyboard') setAnnouncement(describe(rect));
       }
@@ -583,7 +587,7 @@ export default function RedactPdfTool() {
             onDeselect={() => setSelectedId(null)}
             onRemove={() => removeMark(m.id)}
             onChange={(rect, phase, source) => onBoxChange(m, rect, phase, source)}
-            hint="Drag to move · corners to resize"
+            hint={m.id === freshId ? 'Drag to move · corners to resize' : undefined}
           >
             <span aria-hidden="true" data-testid="redact-mark" className="pointer-events-none block size-full bg-red-600/45" />
           </OverlayBox>

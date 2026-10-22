@@ -6,6 +6,7 @@ import { openImages, previewPages, readOutputPages, expectPreviewMatchesFile } f
 import { openEdit, objectViewRect, readDrawnObjects, selectedObject } from '../helpers/edit-pdf';
 import { openCompress, chooseLevel, settledPreview } from '../helpers/compress-pdf';
 import { openPdfToImage, openPreview } from '../helpers/pdf-to-image';
+import { drawMark, markViewRect, openOptions as openRedactOptions, openRedact, pageText } from '../helpers/redact-pdf';
 import { MIGRATED } from './migrated';
 
 /**
@@ -368,5 +369,39 @@ test.describe('PDF to Image on a phone', () => {
     const entries = await readZipEntries(zip.bytes);
     expect(entries.map((e) => e.name)).toEqual(['doc-5page-page-1.png', 'doc-5page-page-3.png', 'doc-5page-page-5.png']);
     expect(pngSize(entries[1].bytes)).toEqual({ width: preview.width, height: preview.height });
+  });
+});
+
+test.describe('Redact PDF on a phone', () => {
+  test('a finger draws a mark, the page shown afterwards is the redacted file, and it removed the text under the mark', async ({ page }) => {
+    await openRedact(page, FIXTURE.pdf3page);
+    // Drawing is on: the page layer keeps the finger; the pane around it still scrolls.
+    expect(await page.getByTestId('overlay-layer').evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
+    expect(await page.getByTestId('page-viewer').evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+    await drawMark(page, { x: 0.06, y: 0.07, width: 0.6, height: 0.06 }, 'touch');
+    const shown = await markViewRect(page);
+    expect(shown.width).toBeGreaterThan(0.5);
+    await expect(page.getByTestId('overlay-remove')).toBeVisible();
+    expectPhoneLayout(await layout(page), 'marked');
+
+    await openRedactOptions(page);
+    await page.getByTestId('confirm-redaction').tap();
+    await page.getByTestId('tool-action').tap();
+    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('page-image')).toHaveAttribute('alt', /^Redacted page 1/);
+    expectPhoneLayout(await layout(page), 'done');
+    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').tap());
+    const text = await pageText(bytes, 0);
+    expect(text).not.toContain('Test Document');
+    expect(text).toContain('Page 1 of 3');
+  });
+
+  test('with Draw marks off a finger scrolls the page instead of drawing', async ({ page }) => {
+    await openRedact(page, FIXTURE.pdf3page);
+    await page.getByTestId('draw-toggle').tap();
+    await expect(page.getByTestId('draw-toggle')).toHaveAttribute('aria-pressed', 'false');
+    expect(await page.getByTestId('overlay-layer').evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+    await page.getByTestId('add-mark').tap();
+    await expect(page.getByTestId('overlay-item')).toHaveCount(1);
   });
 });
