@@ -99,6 +99,8 @@ export async function generateSelfSignedCert(subject: CertSubject): Promise<Gene
 export const WRONG_CERT_PASSWORD_MESSAGE = 'That password does not open this certificate file. Check it and try again.';
 /** Shown when the file is not a PKCS#12 certificate file at all. */
 export const NOT_A_CERTIFICATE_MESSAGE = 'This file could not be read as a .p12 or .pfx certificate file.';
+/** Shown when the file is PKCS#12 but cannot be used, e.g. its key is not RSA. */
+export const UNSUPPORTED_CERTIFICATE_MESSAGE = 'This certificate file could not be used. Signing here needs a .p12 or .pfx file with an RSA key.';
 /** Shown when the file opens but holds no private key or no certificate. */
 export const NO_KEY_MESSAGE = 'This certificate file has no private key and certificate pair to sign with.';
 
@@ -118,7 +120,11 @@ export async function loadP12(
   try {
     p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
   } catch (err) {
-    throw new Error(WRONG_CERT_PASSWORD_MESSAGE, { cause: err });
+    // node-forge says "PKCS#12 MAC could not be verified. Invalid password?" for
+    // a wrong password; anything else is a file it cannot use (e.g. a non-RSA key).
+    const message = err instanceof Error ? err.message : '';
+    const wrong = /password|MAC/i.test(message);
+    throw new Error(wrong ? WRONG_CERT_PASSWORD_MESSAGE : UNSUPPORTED_CERTIFICATE_MESSAGE, { cause: err });
   }
 
   const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });

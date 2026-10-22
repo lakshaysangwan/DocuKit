@@ -51,7 +51,10 @@ test.describe('Digital Signature PDF', () => {
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('generates a self-signed cert and embeds a real PKCS#7 signature', async ({ page }) => {
+  test('generates a self-signed cert and embeds a real PKCS#7 signature', async ({ page, baseURL }) => {
+    // Nothing leaves the page: every request is to the site itself, and none sends data.
+    const requests: { url: string; method: string }[] = [];
+    page.on('request', (r) => requests.push({ url: r.url(), method: r.method() }));
     await openDigitalSignature(page, FIXTURE.pdf3page);
     // The action waits for a name, and says so.
     await expect(page.getByTestId('tool-action')).toBeDisabled();
@@ -83,6 +86,11 @@ test.describe('Digital Signature PDF', () => {
     await expect(page.getByTestId('check-digest')).toContainText('matches');
     await expect(page.getByTestId('check-rsa')).toContainText('verifies');
     await expect(page.getByTestId('download-p12')).toBeVisible();
+
+    const origin = new URL(baseURL!).origin;
+    const away = requests.filter((r) => !/^(blob|data):/.test(r.url) && new URL(r.url).origin !== origin);
+    expect(away, 'requests to other sites').toEqual([]);
+    expect(requests.filter((r) => r.method !== 'GET'), 'requests that send data').toEqual([]);
   });
 
   test('the default is a visible box at the old spot on page 1, written exactly where it is shown', async ({ page }) => {
