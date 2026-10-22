@@ -133,10 +133,16 @@ change; not tried on real Safari/iOS or a real 200-page scan.
 W4 notes: drag-to-position not built (nine presets); the preview draws glyphs with browser fonts
 stretched to the standard-font widths; not checked in a desktop PDF reader. The live run was cut off
 once by the session limit and resumed.
+| `dbf47e2`…`4a70b3f` (W5, 4 commits) | Add Page Numbers in the workspace: any page previewed with its own number from one layout function (`src/lib/page-number-layout.ts`) that also drives the writer (`page-number-write.ts`); skipped pages marked "No number on this page"; new margin sliders (mm); worker failures shown in the action slot; correct and upright on rotated, offset and unbalanced pages; copy corrected (no "first and last page", page range or "Apply & Download"). Shared `src/lib/standard-fonts.ts` and `src/lib/pdf/append-content.ts` extracted from Watermark (its output unchanged) | Clean worktree: 589 Chromium, 823 Firefox/WebKit, 48 mobile, 9 visual (Page Numbers baseline regenerated on purpose), 914 unit. Live: Page Numbers and Watermark placement specs against docukit.uk on three engines, phone |
+
+W5 notes: output on upright pages moves by at most ~0.3 pt (centred/right numbers now measured
+without kerning, as drawn). "of N" counts only the numbered pages and ignores the start number (start
+3 on 5 pages ends "Page 7 of 5") — kept as today's behaviour; asked Lakshay. No page range built. The
+gate's Chromium step took 8 hours of wall time because the laptop slept mid-run; nothing failed.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview) and W4 (Watermark) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+PDF preview), W4 (Watermark) and W5 (Page Numbers) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
