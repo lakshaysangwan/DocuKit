@@ -144,10 +144,14 @@ gate's Chromium step took 8 hours of wall time because the laptop slept mid-run;
 W6 notes: Crop keeps its own handles (not `OverlayBox`); `PageViewer` gained an optional `padding`;
 new `CropOptions` worker shape. The unmigrated-tool example in the contract and large-file specs is
 now `/protect-pdf`. Not verified: real-device touch, the Flatten 24 MP cap on huge pages.
+| `17fccb9`, `946a86d`, `a720076` (W7) | Rearrange / Rotate PDF pages in the workspace: rotate left/right, duplicate, delete, view larger and reorder always visible on every card (44 px on touch), click / Shift-click / Space selection with Rotate/Delete selected and Rotate all, blank pages, Undo/Redo, Reset, "Save PDF (N pages)" with the saved file re-rendered in the grid; turns now add to a page's own `/Rotate` (they overwrote it before), blank pages take the displayed shape of the page before them; tool and `/rotate-pdf/` copy corrected | Clean worktree: 630 Chromium, 898 Firefox/WebKit, 52 mobile, 9 visual (two Organize baselines regenerated on purpose), 945 unit. Live: Organize specs and the rotate-pdf landing test against docukit.uk on three engines, phone tap-to-rotate with `/Rotate` read back |
+
+W7 notes: `PageCard` / `PageGrid` gained opt-in `actions`, `largeTouchTargets` and Shift modifiers;
+`shared/PageThumbnailGrid.tsx` removed (unused). History limit 100 steps (no number in the copy).
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview), W4 (Watermark), W5 (Page Numbers) and W6 (Crop) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop) and W7 (Rearrange) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
