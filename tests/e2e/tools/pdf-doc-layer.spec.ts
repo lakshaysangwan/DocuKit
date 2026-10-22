@@ -72,6 +72,15 @@ async function installProbe(page: Page) {
 }
 
 const probe = (page: Page) => page.evaluate(() => window.__pdfProbe);
+/**
+ * Follow the header's link home and wait until the home page is the one shown.
+ * A trailing slash is not enough: on the live site the tool's own address ends
+ * in one too (/split-pdf/), so that would be true before the navigation began.
+ */
+async function goHome(page: Page) {
+  await page.locator('header a[href="/"]').first().click();
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe('/');
+}
 const liveDocuments = async (page: Page) => {
   const p = await probe(page);
   return p.opened - p.terminated;
@@ -139,11 +148,17 @@ test.describe('PDF document layer behind the page thumbnails', () => {
 
     // Navigation is client-side (Astro's ClientRouter), so the page's JS — and
     // anything it leaked — would survive it. The probe surviving proves that.
-    await page.locator('header a[href="/"]').first().click();
-    await expect(page).toHaveURL(/\/$/);
+    await goHome(page);
+    // The tool lets go as Astro swaps the new page in, which can land just
+    // after the address changes; so wait for it rather than look once.
+    await expect
+      .poll(async () => {
+        const { revoked } = await probe(page);
+        return sources.filter((url) => !revoked.includes(url));
+      }, { timeout: 10_000, message: 'thumbnails still held after leaving the tool' })
+      .toEqual([]);
     const p = await probe(page);
     expect(p.rasters.length, 'the document was not reloaded').toBeGreaterThanOrEqual(5);
-    for (const url of sources) expect(p.revoked).toContain(url);
     await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
   });
 
@@ -152,8 +167,7 @@ test.describe('PDF document layer behind the page thumbnails', () => {
     await openSplitWith(page, FIXTURE.pdf48page);
     await expect(thumbs(page).first()).toBeVisible({ timeout: 20_000 });
 
-    await page.locator('header a[href="/"]').first().click();
-    await expect(page).toHaveURL(/\/$/);
+    await goHome(page);
     await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
 
     // Whatever had been rendered is released, and rendering does not carry on.
