@@ -470,7 +470,7 @@ export default function CropPdfTool() {
         <p className="text-xs text-[var(--color-text-secondary)]">
           {mode === 'cropbox'
             ? 'Hides content outside the crop area. The data stays in the file and the crop can be undone.'
-            : 'Turns each cropped page into an image of the area kept, so the trimmed-away content is removed for good. Text on those pages stops being selectable.'}
+            : 'Turns each cropped page into an image of the area kept, so the trimmed-away content is removed for good. Text on those pages stops being selectable, and the file usually gets larger.'}
         </p>
       </section>
     </div>
