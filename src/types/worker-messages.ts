@@ -175,11 +175,10 @@ export type PageNumberOptions = PageNumberWriteOptions & {
 };
 
 export type CropOptions = {
-  mode: 'cropbox' | 'flatten';
-  margins: { top: number; right: number; bottom: number; left: number }; // in PDF points
-  applyTo: 'current' | 'all' | 'range';
-  pageIndex?: number;
-  pageRange?: number[];
+  /** Inward from the VISUAL top, right, bottom and left of each page as displayed, in points. */
+  margins: { top: number; right: number; bottom: number; left: number };
+  /** The pages to crop, each with the geometry pdf.js displayed it with (CropBox mode; Flatten runs on the main thread). */
+  pages: { pageIndex: number; geometry: PageGeometry }[];
 };
 
 export type RedactRegion = {

@@ -3,8 +3,15 @@
  *
  * Setting a /CropBox only *hides* the surrounding content — every byte of it
  * stays in the file and one editor command brings it back. Flatten mode instead
- * rasterises each cropped page at the crop rectangle and replaces the page with
- * that image, so the trimmed-away content is genuinely gone from the output.
+ * replaces each cropped page with a picture of just the area that was kept, so
+ * the trimmed-away content is genuinely gone from the output.
+ *
+ * The area is found exactly as CropBox mode finds it: the crop boxes are first
+ * written with `writeCropBoxes` (and so `viewMarginsToCropBox`) into a scratch
+ * copy, and pdf.js then renders those pages — which draws precisely the crop
+ * box, turned by the page's `/Rotate`. So a rotated scan or a page with an
+ * offset crop box is cut at the visual edges the visitor chose, and the
+ * flattened page is upright, the size the crop leaves.
  *
  * The cost is the page's text layer: a flattened page is a picture, so its text
  * is no longer selectable or searchable. Pages outside the crop selection are
@@ -16,82 +23,79 @@
  */
 import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 import { createCanvas2D, canvasToBlob } from '@/lib/canvas-2d';
+import { writeCropBoxes, type CropPageTarget } from '@/lib/crop-write';
+import type { CropMargins } from '@/lib/crop-layout';
 
-export interface FlattenCropMargins {
-  /** All in PDF points, measured inward from each edge. */
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
-
-/** ~216 DPI, matching the redact rasteriser's quality target. */
+/** ~216 DPI, matching the redact rasteriser's quality target… */
 const RENDER_SCALE = 3;
+/** …unless that would make a raster larger than this (large-format pages). */
+const MAX_PIXELS = 24_000_000;
+const MAX_EDGE_PX = 8192;
 
 export async function flattenCrop(
   buffer: ArrayBuffer,
-  margins: FlattenCropMargins,
-  targetPages: number[],
-  onProgress?: (pct: number) => void
+  pages: CropPageTarget[],
+  margins: CropMargins,
+  onProgress?: (pct: number) => void,
 ): Promise<ArrayBuffer> {
   const pdfjsLib = await getPdfjs();
   const { PDFDocument } = await import('pdf-lib');
 
-  // pdf.js takes ownership of the bytes it is handed and detaches the buffer, so
-  // pdf-lib's copy has to be taken *before* getDocument, not after.
   const srcBytes = new Uint8Array(buffer);
-  const srcDoc = await PDFDocument.load(srcBytes.slice(), { ignoreEncryption: true });
-  const pdfDoc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: srcBytes }).promise;
+  const srcDoc = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+
+  // A scratch copy with the crop boxes set: what CropBox mode would write.
+  const scratch = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+  writeCropBoxes(scratch, pages, margins);
+  const croppedBytes = await scratch.save({ useObjectStreams: false });
+
+  // pdf.js takes ownership of the bytes it is handed, so it gets its own copy.
+  const pdfDoc = await pdfjsLib.getDocument({ ...PDFJS_DOC_ASSETS, data: croppedBytes }).promise;
   const outDoc = await PDFDocument.create();
 
-  const targets = new Set(targetPages);
-  const total = pdfDoc.numPages;
+  const targets = new Set(pages.map((p) => p.pageIndex));
+  const total = srcDoc.getPageCount();
 
-  for (let i = 0; i < total; i++) {
-    onProgress?.(Math.round((i / total) * 90));
+  try {
+    for (let i = 0; i < total; i++) {
+      onProgress?.(Math.round((i / total) * 90));
 
-    if (!targets.has(i)) {
-      // Untouched pages are copied as-is so they keep selectable text.
-      const [copied] = await outDoc.copyPages(srcDoc, [i]);
-      outDoc.addPage(copied);
-      continue;
+      if (!targets.has(i)) {
+        // Untouched pages are copied as-is so they keep selectable text.
+        const [copied] = await outDoc.copyPages(srcDoc, [i]);
+        outDoc.addPage(copied);
+        continue;
+      }
+
+      const page = await pdfDoc.getPage(i + 1);
+      // At scale 1 the viewport is the crop area as displayed, in points.
+      const size = page.getViewport({ scale: 1 });
+      let scale = RENDER_SCALE;
+      const area = size.width * size.height * scale * scale;
+      if (area > MAX_PIXELS) scale *= Math.sqrt(MAX_PIXELS / area);
+      if (Math.max(size.width, size.height) * scale > MAX_EDGE_PX) scale = MAX_EDGE_PX / Math.max(size.width, size.height);
+      const vp = page.getViewport({ scale });
+
+      const { canvas, ctx } = createCanvas2D(Math.max(1, Math.round(vp.width)), Math.max(1, Math.round(vp.height)));
+      // JPEG has no alpha: start from white paper, as a viewer shows it.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({
+        canvasContext: ctx as unknown as CanvasRenderingContext2D,
+        viewport: vp,
+        canvas: canvas as unknown as HTMLCanvasElement,
+      }).promise;
+      page.cleanup();
+
+      const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+      const img = await outDoc.embedJpg(new Uint8Array(await blob.arrayBuffer()));
+
+      const outPage = outDoc.addPage([size.width, size.height]);
+      outPage.drawImage(img, { x: 0, y: 0, width: size.width, height: size.height });
     }
-
-    const page = await pdfDoc.getPage(i + 1);
-    const vp = page.getViewport({ scale: RENDER_SCALE });
-    const unscaled = page.getViewport({ scale: 1 });
-
-    // Crop rect in output points, clamped so a too-large margin can't invert it.
-    const cropWidth = Math.max(1, unscaled.width - margins.left - margins.right);
-    const cropHeight = Math.max(1, unscaled.height - margins.top - margins.bottom);
-
-    // Render the whole page, then copy just the crop window out of it. Going via
-    // a full-page render keeps pdf.js's own transform handling (rotation, user
-    // units) authoritative instead of reimplementing it in the viewport maths.
-    const { canvas: full, ctx: fullCtx } = createCanvas2D(vp.width, vp.height);
-    await page.render({
-      canvasContext: fullCtx as unknown as CanvasRenderingContext2D,
-      viewport: vp,
-      canvas: full as unknown as HTMLCanvasElement,
-    }).promise;
-
-    const sx = margins.left * RENDER_SCALE;
-    // Canvas y runs from the top; PDF margins name `top` from the top edge too.
-    const sy = margins.top * RENDER_SCALE;
-    const sw = cropWidth * RENDER_SCALE;
-    const sh = cropHeight * RENDER_SCALE;
-
-    const { canvas: cropped, ctx: cropCtx } = createCanvas2D(sw, sh);
-    cropCtx.drawImage(full as CanvasImageSource, sx, sy, sw, sh, 0, 0, sw, sh);
-
-    const blob = await canvasToBlob(cropped, 'image/jpeg', 0.92);
-    const img = await outDoc.embedJpg(new Uint8Array(await blob.arrayBuffer()));
-
-    const outPage = outDoc.addPage([cropWidth, cropHeight]);
-    outPage.drawImage(img, { x: 0, y: 0, width: cropWidth, height: cropHeight });
+  } finally {
+    await pdfDoc.destroy();
   }
-
-  pdfDoc.destroy();
   onProgress?.(95);
 
   const bytes = await outDoc.save({ useObjectStreams: false });

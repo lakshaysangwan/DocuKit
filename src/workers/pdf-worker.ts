@@ -521,27 +521,15 @@ async function crop(
   options: CropOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument } = await import('pdf-lib');
+  const [{ PDFDocument }, { writeCropBoxes }] = await Promise.all([import('pdf-lib'), import('../lib/crop-write')]);
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
-  const pages = doc.getPages();
-
-  const targetIndices =
-    options.applyTo === 'all'
-      ? pages.map((_, i) => i)
-      : options.applyTo === 'current' && options.pageIndex !== undefined
-        ? [options.pageIndex]
-        : options.pageRange ?? [];
-
-  const { top, right, bottom, left } = options.margins;
-
-  for (let i = 0; i < targetIndices.length; i++) {
-    sendProgress(10 + Math.round(((i + 1) / targetIndices.length) * 80));
-    const page = pages[targetIndices[i]];
-    const { width, height } = page.getSize();
-    page.setCropBox(left, bottom, width - left - right, height - bottom - top);
-  }
+  // The geometry is the one the crop box was drawn on, so the visual edges the
+  // visitor chose are the ones cut — on a rotated scan or an offset crop box too.
+  writeCropBoxes(doc, options.pages, options.margins, (done, total) =>
+    sendProgress(10 + Math.round((done / total) * 80), `Cropping page ${done}/${total}…`),
+  );
 
   sendProgress(95, 'Saving…');
   const bytes = await doc.save({ useObjectStreams: false });

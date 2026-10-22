@@ -12,9 +12,10 @@ declare global {
 const TEARDOWN_DELAY_MS = 3000;
 
 /**
- * Crop PDF's preview opens the file, draws page 1 and destroys its pdf.js
- * document without waiting. Flatten mode opens the file again the moment Crop is
- * clicked. If that second open lands while the worker is still acknowledging the
+ * Crop PDF destroys a pdf.js document without waiting — the output it was
+ * showing, once "Make changes" is pressed (until the workspace move, the page 1
+ * preview did the same on load). Flatten mode opens the file again the moment
+ * Crop is clicked. If that second open lands while the worker is still acknowledging the
  * teardown, pdf.js used to throw "PDFWorker.create - the worker is being
  * destroyed. Please remember to await PDFDocumentLoadingTask.destroy()-calls",
  * and the crop failed with that message.
@@ -43,13 +44,21 @@ test('Crop PDF Flatten works when clicked while the preview document is still be
 
   await page.goto('/crop-pdf');
   await addSingleFileAndWait(page, FIXTURE.pdf3page);
+  await page.getByLabel('top margin').fill('40');
 
-  // The preview has asked for its document to be destroyed; the worker has not
-  // been told yet.
-  await expect.poll(() => page.evaluate(() => window.__pdfTerminateRequests), { timeout: 20_000 }).toBeGreaterThan(0);
+  // A CropBox run opens its output as a document to show it; "Make changes"
+  // destroys that document. Then the worker has been asked to tear it down but
+  // has not been told yet.
+  const before = await page.evaluate(() => window.__pdfTerminateRequests);
+  await page.getByTestId('tool-action').click();
+  await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('edit-again').click();
+  await expect
+    .poll(() => page.evaluate(() => window.__pdfTerminateRequests), { timeout: 20_000 })
+    .toBeGreaterThan(before);
 
   await page.getByTestId('crop-mode-flatten').click();
-  await page.getByLabel('top margin').fill('40');
   await page.getByTestId('tool-action').click();
 
   // Either it finishes or it reports the race; fail on the message itself

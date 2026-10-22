@@ -8,6 +8,7 @@ import { openSplit } from '../helpers/split-pdf';
 import { openCompress } from '../helpers/compress-pdf';
 import { openWatermark } from '../helpers/watermark';
 import { openPageNumbers } from '../helpers/page-numbers';
+import { openCrop } from '../helpers/crop-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -103,5 +104,18 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'add-page-numbers',
     name: 'Add Page Numbers',
     enter: (page) => openPageNumbers(page, FIXTURE.pdf3page),
+  },
+  {
+    // A one-page-large tool with a box on the page: any page shown with the
+    // crop box over it. Nothing is cropped on entry, so the action waits (and
+    // says why) until an edge moves; `makeReady` nudges the top edge with the
+    // keyboard, which works the same on a phone.
+    slug: 'crop-pdf',
+    name: 'Crop PDF',
+    enter: (page) => openCrop(page, FIXTURE.pdf3page),
+    makeReady: async (page) => {
+      await page.getByTestId('overlay-handle-top').focus();
+      await page.keyboard.press('Shift+ArrowDown');
+    },
   },
 ];

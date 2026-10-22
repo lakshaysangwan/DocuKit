@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { FIXTURE } from '../fixtures/generate';
-import { addSingleFileAndWait, expectDownload, assertPdf } from '../helpers/harness';
+import { expectDownload, assertPdf } from '../helpers/harness';
+import { openCrop as openCropWorkspace, setUnit } from '../helpers/crop-pdf';
 
 /**
  * The crop box on the Crop PDF preview: what can be dragged, what the pointer
@@ -33,24 +34,29 @@ async function fixturePageSize(): Promise<{ width: number; height: number }> {
   return doc.getPage(0).getSize();
 }
 
-/** Load the fixture and bring the whole preview on screen, clear of the sticky header. */
+/** Load the fixture into the workspace; page 1 is shown large with the crop box on it. */
 async function openCrop(page: Page, unit: 'mm' | 'pt' = 'pt') {
-  await page.goto('/crop-pdf');
-  await addSingleFileAndWait(page, FIXTURE.pdf3page);
-  if (unit === 'pt') await page.getByRole('button', { name: 'pt', exact: true }).click();
-  const preview = page.getByTestId('crop-preview');
-  await expect(preview).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('overlay-handle-top')).toBeVisible();
+  await openCropWorkspace(page, FIXTURE.pdf3page);
+  if (unit === 'pt') await setUnit(page, 'pt');
+  await expect(page.getByTestId('crop-preview')).toBeVisible({ timeout: 20_000 });
   await centrePreview(page);
 }
 
 /**
- * Put the whole preview on screen. The site scrolls smoothly, so jump instead and
- * the boxes read next are final. Call again after typing in a margin field:
- * filling a field scrolls it into view and moves the preview.
+ * The workspace keeps the page on screen in its own pane, so nothing needs
+ * scrolling; this only waits for the page box to stop moving, so the boxes read
+ * next are final.
  */
 async function centrePreview(page: Page) {
-  await page.getByTestId('crop-preview').evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  let previous = '';
+  await expect
+    .poll(async () => {
+      const box = JSON.stringify(await page.getByTestId('crop-preview').boundingBox());
+      const settled = box === previous;
+      previous = box;
+      return settled;
+    }, { intervals: [100], timeout: 5_000 })
+    .toBe(true);
 }
 
 const field = (page: Page, side: Side) => page.locator(`#crop-margin-${side}`);

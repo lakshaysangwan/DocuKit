@@ -128,7 +128,7 @@ test.describe('UX: operation visibility', () => {
     const preview = page.getByTestId('crop-preview');
     await expect(preview).toBeVisible({ timeout: 20_000 });
     await expect
-      .poll(async () => preview.evaluate((c: HTMLCanvasElement) => c.width * c.height))
+      .poll(async () => { const b = await preview.boundingBox(); return b ? b.width * b.height : 0; })
       .toBeGreaterThan(0);
 
     const before = await preview.screenshot({ path: shot('crop-preview-before') });

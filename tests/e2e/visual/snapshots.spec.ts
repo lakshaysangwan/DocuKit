@@ -55,6 +55,11 @@ test.describe('P7 — visual regression: preview surfaces', () => {
   test('crop preview', async ({ page }) => {
     await page.goto('/crop-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    // The page in the workspace viewer with the crop box over it, 30pt off each side.
+    await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'pt', exact: true }).click();
+    for (const side of ['top', 'right', 'bottom', 'left']) await page.locator(`#crop-margin-${side}`).fill('30');
+    await expectImageRendered(page.getByTestId('page-image'));
     const preview = page.getByTestId('crop-preview');
     await expect(preview).toBeVisible({ timeout: 20_000 });
     await expect(preview).toHaveScreenshot('crop-preview.png', shot);

@@ -30,6 +30,8 @@ export interface PageViewerProps {
   footer?: ReactNode;
   /** Names the page for assistive tech and for the image alt: "Signed page". Defaults to "Page". */
   pageLabel?: string;
+  /** Space kept around the page inside the pane, in CSS pixels (default 16). Raise it for handles that sit on the page edge. */
+  padding?: number;
 }
 
 type Fit = { mode: 'page' } | { mode: 'width' } | { mode: 'zoom'; scale: number };
@@ -76,6 +78,7 @@ export default function PageViewer({
   toolbarEnd,
   footer,
   pageLabel = 'Page',
+  padding = PADDING,
 }: PageViewerProps) {
   const paneRef = useRef<HTMLDivElement>(null);
   const [pane, setPane] = useState({ width: 0, height: 0 });
@@ -117,8 +120,8 @@ export default function PageViewer({
   const geom = geometry && geometry.doc === doc && geometry.pageIndex === index ? geometry.geom : null;
 
   // Displayed size of the page in CSS pixels.
-  const availWidth = Math.max(pane.width - PADDING * 2, 40);
-  const availHeight = Math.max(pane.height - PADDING * 2, 40);
+  const availWidth = Math.max(pane.width - padding * 2, 40);
+  const availHeight = Math.max(pane.height - padding * 2, 40);
   let scale = 0;
   if (geom) {
     const pageFit = Math.min(availWidth / geom.widthPt, availHeight / geom.heightPt);
@@ -300,7 +303,7 @@ export default function PageViewer({
         ref={paneRef}
         data-testid="page-viewer"
         className="grid min-h-0 flex-1 overflow-auto"
-        style={{ padding: PADDING }}
+        style={{ padding }}
       >
         {ready ? (
           <div
