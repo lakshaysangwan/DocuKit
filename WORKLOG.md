@@ -128,10 +128,15 @@ stays until then), `doc-handle.renderPage` gained `format: 'png'` and `pixels`, 
 image on the previewed page is the soft mask of an image on another page; "Strip embedded fonts"
 still loses text (now labelled so); the probe copies the whole file to the worker on each page
 change; not tried on real Safari/iOS or a real 200-page scan.
+| `e918f97`, `2e79a88` (W4) | Watermark PDF in the workspace: one layout function (`src/lib/watermark-layout.ts`) draws the preview on any page and writes the file (`watermark-write.ts`, through page geometry, open graphics states closed); pages left out by "Apply to" badged "Not watermarked"; new Font, Spacing, "Distance from edge" and image-width controls; WebP re-encoded, SVG no longer accepted. Output changes, following what the preview showed: rotation is clockwise as on screen and pivots on the visual centre, single text is vertically centred, tiling uses one rule (default spacing 60 pt), images default to 50% of the page width | Clean worktree: 575 Chromium, 790 Firefox/WebKit, 46 mobile, 9 visual (Watermark baseline regenerated on purpose), 832 unit. Live: Watermark and placement specs against docukit.uk on three engines, source-check Watermark tests, phone |
+
+W4 notes: drag-to-position not built (nine presets); the preview draws glyphs with browser fonts
+stretched to the standard-font widths; not checked in a desktop PDF reader. The live run was cut off
+once by the session limit and resumed.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split) and T12 (Compress
-PDF preview) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
+PDF preview) and W4 (Watermark) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
