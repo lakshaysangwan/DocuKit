@@ -175,11 +175,14 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Crops the edges you see, on rotated and cropped pages too': CU(['src/lib/crop-layout.test.ts'], 'typed and dragged margins on the /Rotate 90 and offset-CropBox fixtures: each output CropBox, mapped to the original displayed page by pdf.js, is the area chosen to 0.5% of the page, in CropBox mode; Flatten is checked by pixels; the unit test writes the box on every /Rotate, an offset box and UserUnit', [T('crop-pdf-pages')]),
   },
   'redact-pdf': {
-    'True redaction — content permanently destroyed': C([T('redact-pdf')], 'marked text is gone from the text layer while surrounding text survives'),
-    'Find & Redact by text pattern': C([T('redact-pdf')]),
-    'Post-redaction verification': C([T('redact-pdf')]),
+    'True redaction: text and image pixels under a mark are removed, not covered': C([T('redact-pdf'), T('redact-pdf-marks')], 'text under each mark is gone from the downloaded file (pdf.js) while text beside it survives; the image data stored in the file (read with MuPDF) has the pixels under a mark blanked and the rest of the photo unchanged; a stroke the mark covers completely is gone from the drawing'),
+    'Mark with a mouse, a finger or a pen': C([T('redact-pdf-marks')], 'a mark drawn with a real mouse, and with pointer events of pointerType touch and pen, each removes exactly the text under it; the drawing layer is touch-action none only while Draw marks is on'),
+    'Find & mark every line that contains a phrase': C([T('redact-pdf'), T('redact-pdf-marks'), CLOSED], 'every match on every page is marked (rail badges on the right pages), removed from the file, and reported gone by the result panel; a phrase with no match says so'),
+    'Removes the area shown, on rotated and cropped pages too': C([T('redact-pdf-marks')], 'on a /Rotate 90 scan, an offset CropBox and a /UserUnit 2 page: the black area MuPDF renders from the downloaded file is the mark shown on screen to 0.5% of the page, and no text is left under it'),
+    'See the redacted pages before you download': C([T('redact-pdf'), T('redact-pdf-marks')], 'after Redact PDF the stage shows the output file (alt "Redacted page"), with Before/After; the result panel reports no text found under the marks and searched phrases gone'),
+    'Undo and redo': C([T('redact-pdf-marks')], 'remove, undo, redo, undo of a mark, then a move and a corner resize, are all reflected in the downloaded file'),
     'Full metadata strip option': C([CLOSED], 'against a fixture carrying Info fields, an XMP packet and an attachment: all three are gone from the output'),
-    'Two-step safety workflow': C([T('redact-pdf')], 'the confirm step is required before output'),
+    'Two-step safety workflow': C([T('redact-pdf'), T('redact-pdf-marks')], 'the action is disabled, saying why, until the confirmation is ticked; any change after a run (Make changes, then a move) invalidates the result'),
     'SHA-256 before/after comparison': C([T('redact-pdf')]),
   },
   'compress-image': {
