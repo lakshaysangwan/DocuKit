@@ -48,6 +48,7 @@ const I2P_PREVIEW = 'tools/image-to-pdf-preview.spec.ts';
 const EDIT = T('edit-pdf');
 const WM_PLACEMENT = T('watermark-pdf-placement');
 const PN_PLACEMENT = T('page-numbers-placement');
+const P2I_WS = T('pdf-to-image-workspace');
 const XBROWSER = 'xbrowser/capabilities.spec.ts';
 
 export const COVERAGE: Record<string, Record<string, Coverage>> = {
@@ -121,10 +122,10 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Instant decryption in-browser': C([T('protect-unlock-pdf'), GUARD]),
   },
   'pdf-to-image': {
-    'PNG, JPEG, WebP, AVIF output': P([T('pdf-to-image')], 'PNG, JPEG and AVIF tested; WebP is not'),
-    '72, 150, 300 or 600 DPI': P(['parity/claims.spec.ts'], 'the 600 DPI preset yields a markedly larger raster than 72 DPI; 150 and 300 are not measured. Copy corrected: there is no custom DPI field, only these four presets'),
-    'Single page, all pages, or page range': C([T('pdf-to-image')]),
-    'Page preview before download': C([SOURCED], 'built on the same discarded thumbnails as split; the grid shows which pages will be exported, clicking one removes it, and the export then contains exactly the pages still highlighted'),
+    'PNG, JPEG, WebP, AVIF output': C([T('pdf-to-image'), P2I_WS], 'a download in each of the four formats is checked by its magic bytes (WebP in the workspace spec, which also checks the WebP preview)'),
+    '72, 150, 300 or 600 DPI': C([P2I_WS, 'parity/claims.spec.ts'], 'at 72, 150 and 300 DPI three pages of a Letter PDF download at exactly the pixel sizes listed (612 × DPI / 72 wide), and at 600 DPI the downloaded image is the size listed. Copy corrected earlier: there is no custom DPI field, only these four presets'),
+    'Single page, all pages, or page range': C([T('pdf-to-image'), P2I_WS], 'clicking pages rewrites the range field and odd, even, last and mixed ranges drive the grid; the downloads contain exactly the pages chosen'),
+    'Each page previewed as the image you will get, with its pixel size and file size': C([P2I_WS, SOURCED], 'the enlarged page is drawn by the same function as the export: at 150 and 300 DPI its pixel size equals the downloaded PNG’s, its pixels match (mean difference under 1/255, in fact the same bytes), and the file size it shows is the downloaded file’s; a JPEG previewed at quality 20 is byte for byte the JPEG downloaded, and quality and format changes show in the preview. At 600 DPI the preview is drawn at a lower DPI within a 12-megapixel budget (6 on low-memory devices), says so, and labels its file size an estimate; the pixel size it reports is the downloaded image’s'),
     'A Download button on every converted image': C([T('pdf-to-image-downloads')], 'each card shows a decoded thumbnail of the output, its name, pixel size and file size, and its button downloads that page only — checked by rendering the downloaded PNG dimensions against the card'),
     'Download all as separate files, or as one ZIP': C([T('pdf-to-image-downloads'), T('pdf-to-image')], 'three pages give three download events with valid PNG bytes on Chromium, Firefox and WebKit; the ZIP entries are read back; above 10 images the ZIP is the primary. The browser permission prompt for several downloads does not appear under automation, so that step is unproven'),
     'Save to a folder or share sheet where the browser supports it': P([T('pdf-to-image-downloads')], 'both buttons are shown only when the API is present, and against a stubbed showDirectoryPicker / navigator.share the right files are written or shared, with cancel and write errors reported. The real folder picker and a real phone share sheet cannot be driven by automation'),
