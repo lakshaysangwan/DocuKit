@@ -7,6 +7,7 @@ import { openMerge } from '../helpers/merge-pdf';
 import { openSplit } from '../helpers/split-pdf';
 import { openCompress } from '../helpers/compress-pdf';
 import { openWatermark } from '../helpers/watermark';
+import { openPageNumbers } from '../helpers/page-numbers';
 
 /**
  * The tools that live in the shared workspace.
@@ -93,5 +94,14 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'watermark-pdf',
     name: 'Watermark PDF',
     enter: (page) => openWatermark(page, FIXTURE.pdf3page),
+  },
+  {
+    // A place-on-page tool like Watermark: any page large with that page's own
+    // number drawn on it from the layout the worker writes with. Every page is
+    // numbered on entry, so the action is available at once and there is no
+    // `makeReady`.
+    slug: 'add-page-numbers',
+    name: 'Add Page Numbers',
+    enter: (page) => openPageNumbers(page, FIXTURE.pdf3page),
   },
 ];

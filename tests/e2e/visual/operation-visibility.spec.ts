@@ -88,14 +88,13 @@ test.describe('UX: operation visibility', () => {
 
     const preview = page.getByTestId('page-numbers-preview');
     await expect(preview).toBeVisible({ timeout: 20_000 });
-    await expect
-      .poll(async () => preview.evaluate((c: HTMLCanvasElement) => c.width * c.height))
-      .toBeGreaterThan(0);
+    await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
 
     const before = await preview.screenshot({ path: shot('page-numbers-preview-before') });
 
     // Switch the number format — the rendered label must visibly change.
     await page.locator('input[type="radio"][value="roman"]').check();
+    await expect(preview).toHaveAttribute('data-text', 'i');
     await page.waitForTimeout(400);
     const after = await preview.screenshot({ path: shot('page-numbers-preview-after') });
 

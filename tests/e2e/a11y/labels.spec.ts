@@ -39,8 +39,9 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
 
   test('page-numbers — number/range/color inputs', async ({ page }) => {
     await page.goto('/add-page-numbers');
-    await addSingleFileAndWait(page, FIXTURE.pdf1page);
-    await expect(page.getByLabel('Start number')).toBeVisible();
+    await uploadFiles(page, FIXTURE.pdf1page);
+    await expect(page.getByLabel('Start number')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByLabel('From bottom edge')).toBeVisible();
     await assertAllLabelled(page);
   });
 

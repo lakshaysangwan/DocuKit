@@ -3,6 +3,7 @@ import { FIXTURE } from '../fixtures/generate';
 import {
   addFilesAndWait,
   addSingleFileAndWait,
+  uploadFiles,
   expectDownload,
   expectDownloads,
   assertImage,
@@ -96,7 +97,8 @@ test.describe('Source-check closures — page numbers', () => {
   test('the font selector changes the font embedded in the output', async ({ page }) => {
     const run = async (value: string) => {
       await page.goto('/add-page-numbers');
-      await addSingleFileAndWait(page, FIXTURE.pdf3page);
+      await uploadFiles(page, FIXTURE.pdf3page);
+      await expect(page.getByTestId('tool-action')).toBeEnabled({ timeout: 30_000 });
       await page.getByTestId('pn-font').selectOption(value);
       await page.getByTestId('tool-action').click();
       const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());

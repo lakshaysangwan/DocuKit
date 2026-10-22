@@ -44,11 +44,11 @@ test.describe('P7 — visual regression: preview surfaces', () => {
   test('page-numbers preview', async ({ page }) => {
     await page.goto('/add-page-numbers');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    // The page in the workspace viewer with its number drawn over it.
+    await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
     const preview = page.getByTestId('page-numbers-preview');
-    await expect(preview).toBeVisible({ timeout: 20_000 });
-    await expect
-      .poll(async () => preview.evaluate((c: HTMLCanvasElement) => c.width * c.height))
-      .toBeGreaterThan(0);
+    await expect(preview).toHaveAttribute('data-text', 'Page 1 of 3', { timeout: 20_000 });
+    await expectImageRendered(page.getByTestId('page-image'));
     await expect(preview).toHaveScreenshot('page-numbers-preview.png', shot);
   });
 

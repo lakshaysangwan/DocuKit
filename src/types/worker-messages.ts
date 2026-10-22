@@ -1,5 +1,6 @@
 import type { WatermarkWriteOptions } from '../lib/watermark-write';
 import type { PageGeometry } from '../lib/pdf/page-geometry';
+import type { PageNumberPageTarget, PageNumberWriteOptions } from '../lib/page-number-write';
 // ─── Request types (main thread → worker) ───────────────────────────────────
 
 export type MergeOptions = {
@@ -168,16 +169,9 @@ export type WatermarkOptions = Omit<WatermarkWriteOptions, 'imageBytes'> & {
   pages: { pageIndex: number; geometry: PageGeometry }[];
 };
 
-export type PageNumberOptions = {
-  position: 'bottom-center' | 'bottom-left' | 'bottom-right' | 'top-center' | 'top-left' | 'top-right';
-  format: 'n' | 'page-n' | 'page-n-of-total' | 'n-of-total' | 'roman' | 'alpha';
-  startNumber: number;
-  skipFirstN: number;
-  font: 'Helvetica' | 'Times-Roman' | 'Courier';
-  fontSize: number;
-  color: string;
-  marginX: number;  // mm
-  marginY: number;  // mm
+/** Add Page Numbers: the options the preview was drawn with, and every page's displayed geometry. */
+export type PageNumberOptions = PageNumberWriteOptions & {
+  pages: PageNumberPageTarget[];
 };
 
 export type CropOptions = {

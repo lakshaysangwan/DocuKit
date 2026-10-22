@@ -14,7 +14,7 @@ import { addSingleFileAndWait, uploadFiles } from '../helpers/harness';
 
 test.describe('P5.3 — large-file warning', () => {
   test('a >50MB file shows the heads-up', async ({ page }) => {
-    // 51 MB with a PDF header — Add Page Numbers reads bytes at load but doesn't parse,
+    // 51 MB with a PDF header — Crop PDF reads bytes at load but doesn't parse,
     // so the file registers and the size-based warning renders. Playwright caps
     // in-memory upload buffers at 50 MB, so stage it on disk and upload by path.
     const big = Buffer.alloc(51 * 1024 * 1024, 0x20);
@@ -23,7 +23,7 @@ test.describe('P5.3 — large-file warning', () => {
     await writeFile(tmp, big);
 
     try {
-      await page.goto('/add-page-numbers');
+      await page.goto('/crop-pdf');
       await uploadFiles(page, tmp);
       await expect(page.getByTestId('file-info')).toBeVisible();
       await expect(page.getByTestId('large-file-warning')).toBeVisible();
@@ -33,7 +33,7 @@ test.describe('P5.3 — large-file warning', () => {
   });
 
   test('a normal file stays quiet', async ({ page }) => {
-    await page.goto('/add-page-numbers');
+    await page.goto('/crop-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf1page);
     await expect(page.getByTestId('large-file-warning')).toHaveCount(0);
   });

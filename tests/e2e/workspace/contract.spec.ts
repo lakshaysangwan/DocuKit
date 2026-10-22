@@ -269,7 +269,7 @@ for (const tool of MIGRATED) {
 
     test('a tool that has not been migrated is not widened', async ({ page }) => {
       await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto('/add-page-numbers');
+      await page.goto('/crop-pdf');
       await uploadFiles(page, FIXTURE.pdf3page);
       await expect(page.getByTestId('tool-action')).toBeVisible();
       await expect(page.getByTestId('workspace')).toHaveCount(0);

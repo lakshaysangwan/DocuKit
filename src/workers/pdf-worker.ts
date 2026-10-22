@@ -44,30 +44,6 @@ function parseColor(hex: string): [number, number, number] {
   return [r, g, b];
 }
 
-function mmToPoints(mm: number): number {
-  return mm * 2.8346;
-}
-
-function romanize(num: number): string {
-  const vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
-  const syms = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I'];
-  let result = '';
-  for (let i = 0; i < vals.length; i++) {
-    while (num >= vals[i]) { result += syms[i]; num -= vals[i]; }
-  }
-  return result.toLowerCase();
-}
-
-function alphanumericPage(num: number): string {
-  let result = '';
-  while (num > 0) {
-    num--;
-    result = String.fromCharCode(97 + (num % 26)) + result;
-    num = Math.floor(num / 26);
-  }
-  return result;
-}
-
 // ─── Operations ──────────────────────────────────────────────────────────────
 
 function isEncryptionError(err: unknown): boolean {
@@ -526,60 +502,14 @@ async function addPageNumbers(
   options: PageNumberOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+  const [{ PDFDocument }, { writePageNumbers }] = await Promise.all([import('pdf-lib'), import('../lib/page-number-write')]);
 
   sendProgress(10, 'Loading document…');
   const doc = await PDFDocument.load(toUint8Array(buffer), { ignoreEncryption: true });
-  const pages = doc.getPages();
-  const total = pages.length;
-
-  // The three PDF base-14 families, so the output needs no embedded font file.
-  const STANDARD_FONTS = {
-    Helvetica: StandardFonts.Helvetica,
-    'Times-Roman': StandardFonts.TimesRoman,
-    Courier: StandardFonts.Courier,
-  } as const;
-  const fontKey = (options.font ?? 'Helvetica') as keyof typeof STANDARD_FONTS;
-  const font = await doc.embedFont(STANDARD_FONTS[fontKey] ?? StandardFonts.Helvetica);
-  const [r, g, b] = parseColor(options.color ?? '#000000');
-  const marginX = mmToPoints(options.marginX ?? 20);
-  const marginY = mmToPoints(options.marginY ?? 15);
-  const fontSize = options.fontSize ?? 10;
-
-  for (let i = options.skipFirstN ?? 0; i < total; i++) {
-    sendProgress(10 + Math.round(((i + 1) / total) * 80), `Numbering page ${i + 1}/${total}…`);
-    const page = pages[i];
-    const { width, height } = page.getSize();
-    const pageNum = i - (options.skipFirstN ?? 0) + (options.startNumber ?? 1);
-
-    let label: string;
-    switch (options.format) {
-      case 'n': label = String(pageNum); break;
-      case 'page-n': label = `Page ${pageNum}`; break;
-      case 'page-n-of-total': label = `Page ${pageNum} of ${total - (options.skipFirstN ?? 0)}`; break;
-      case 'n-of-total': label = `${pageNum}/${total - (options.skipFirstN ?? 0)}`; break;
-      case 'roman': label = romanize(pageNum); break;
-      case 'alpha': label = alphanumericPage(pageNum); break;
-      default: label = String(pageNum);
-    }
-
-    const textWidth = font.widthOfTextAtSize(label, fontSize);
-
-    let x: number;
-    let y: number;
-
-    switch (options.position) {
-      case 'bottom-center': x = width / 2 - textWidth / 2; y = marginY; break;
-      case 'bottom-left': x = marginX; y = marginY; break;
-      case 'bottom-right': x = width - marginX - textWidth; y = marginY; break;
-      case 'top-center': x = width / 2 - textWidth / 2; y = height - marginY - fontSize; break;
-      case 'top-left': x = marginX; y = height - marginY - fontSize; break;
-      case 'top-right': x = width - marginX - textWidth; y = height - marginY - fontSize; break;
-      default: x = width / 2 - textWidth / 2; y = marginY;
-    }
-
-    page.drawText(label, { x, y, size: fontSize, font, color: rgb(r, g, b) });
-  }
+  const { pages, ...rest } = options;
+  await writePageNumbers(doc, pages, rest, (done, total) =>
+    sendProgress(10 + Math.round((done / total) * 80), `Numbering page ${done}/${total}…`),
+  );
 
   sendProgress(95, 'Saving…');
   const bytes = await doc.save({ useObjectStreams: false });
