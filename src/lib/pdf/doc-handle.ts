@@ -261,7 +261,7 @@ export interface PdfDocHandle {
 
   /**
    * Tear down the pdf.js document but keep every URL already handed out alive.
-   * For a consumer that only needed rasters (the legacy thumbnail hook): the
+   * For a consumer that only needs rasters (no current caller does): the
    * file's bytes leave the worker as soon as rendering is done. Afterwards
    * `getThumb`/`subscribeThumb` still work; everything that needs the document
    * rejects with `PdfClosedError`. Resolves when pdf.js has finished.
