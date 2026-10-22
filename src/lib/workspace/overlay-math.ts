@@ -19,6 +19,7 @@ export const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-righ
 export const MIN_BOX_WIDTH = 0.03;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
+const clamp01 = (n: number) => clamp(n, 0, 1);
 
 /**
  * Bring a rectangle wholly onto the page. A box larger than the page is scaled
@@ -129,4 +130,24 @@ export function sameRect(a: RectNorm, b: RectNorm, epsilon = 1e-6): boolean {
     Math.abs(a.width - b.width) < epsilon &&
     Math.abs(a.height - b.height) < epsilon
   );
+}
+
+/** A drag shorter than this (as a fraction of the page) on either axis draws nothing. */
+export const MIN_DRAWN_SIZE = 0.005;
+
+/**
+ * The rectangle between two points of the page (fractions), whichever way the
+ * drag went, cut to the page. Null when it is too small to be a deliberate mark.
+ */
+export function rectFromPoints(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  minSize = MIN_DRAWN_SIZE,
+): RectNorm | null {
+  const x1 = clamp01(Math.min(a.x, b.x));
+  const x2 = clamp01(Math.max(a.x, b.x));
+  const y1 = clamp01(Math.min(a.y, b.y));
+  const y2 = clamp01(Math.max(a.y, b.y));
+  if (x2 - x1 < minSize || y2 - y1 < minSize) return null;
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
 }

@@ -1,16 +1,24 @@
 import { test, expect, type Page } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
-import { addSingleFileAndWait, expectImageRendered } from '../helpers/harness';
+import { expectImageRendered, uploadFiles } from '../helpers/harness';
 
 /**
- * The shared PDF document layer (src/lib/pdf) as the legacy thumbnail hook
- * exposes it today, in a real browser against the production build.
+ * The shared PDF document layer (src/lib/pdf) behind the page thumbnails, in a
+ * real browser against the production build.
  *
- * The hook's last caller is Redact PDF, so that is the page driven here (PDF to
- * Image, which these tests used to drive, now draws its pages through the
- * document handle directly). Redact asks for 800px on the long edge and does
- * not print a page count, so those two checks are adapted; what is proven is
- * the same.
+ * These tests used to drive the legacy `usePdfThumbnails` hook through Redact
+ * PDF. Redact now shows one page at a time through the document handle, the
+ * hook is gone, and the thumbnails every migrated tool shows come from
+ * `PdfDocHandle.requestThumb` via `usePageThumb`. Split PDF's page grid asks
+ * for every page, so it is driven here. What is proven is the same as before:
+ * blob: images that really decode, one pdf.js document, released when the file
+ * changes and when the visitor leaves, a 48-page file shows its page count
+ * before every thumbnail is drawn, and rendering is bounded (each page once, no
+ * rebuilding of the grid as thumbnails arrive).
+ *
+ * One thing is different by design: the handle keeps its document open while
+ * the tool shows the file (pages are drawn on demand), so "closed once the
+ * thumbnails are done" became "exactly one open while shown, none after".
  *
  * Nothing in the app is instrumented for this. The page is observed from the
  * outside instead:
@@ -32,12 +40,9 @@ interface Probe {
 declare global {
   interface Window {
     __pdfProbe: Probe;
-    __thumbCommits?: { commits: number[]; thumbsWhenCountShown: number | null; stop: () => void };
+    __countWatch?: { rastersWhenCountShown: number | null; stop: () => void };
   }
 }
-
-/** How often usePdfThumbnails publishes to React state (THUMBNAIL_FLUSH_INTERVAL_MS). */
-const FLUSH_INTERVAL_MS = 150;
 
 async function installProbe(page: Page) {
   await page.addInitScript(() => {
@@ -71,47 +76,51 @@ const liveDocuments = async (page: Page) => {
   const p = await probe(page);
   return p.opened - p.terminated;
 };
-/** Redact's page images: the hook's thumbnails. */
-const THUMB = '[data-testid="redact-page"] img';
-const thumbs = (page: Page) => page.locator(THUMB);
+/** Split's page thumbnails, from the document handle. */
+const thumbs = (page: Page) => page.getByTestId('split-page-image');
 const thumbSources = (page: Page) =>
   thumbs(page).evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).src));
 
+async function openSplitWith(page: Page, file: string) {
+  await page.goto('/split-pdf');
+  await uploadFiles(page, file);
+  await expect(page.getByTestId('workspace')).toBeVisible({ timeout: 20_000 });
+}
+
 test.describe('PDF document layer behind the page thumbnails', () => {
-  test('thumbnails are blob: images that really decode, from one document that is closed when they are done', async ({ page }) => {
+  test('thumbnails are blob: images that really decode, from one open document', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf5page);
+    await openSplitWith(page, FIXTURE.pdf5page);
 
     const images = thumbs(page);
     await expect(images).toHaveCount(5, { timeout: 20_000 });
     for (let i = 0; i < 5; i++) {
       await expectImageRendered(images.nth(i));
       expect(await images.nth(i).getAttribute('src')).toMatch(/^blob:/);
-      expect(await images.nth(i).getAttribute('alt')).toContain(`Page ${i + 1}`);
     }
-    // 800px on the long edge of a portrait Letter page, as the tool asks for.
+    // At the grid's thumbnail size: 320px on the long edge at the default (small) size.
     const size = await images.first().evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight]);
-    expect(Math.max(...size)).toBe(800);
+    expect(Math.max(...size)).toBe(320);
 
-    // Nothing needs the pdf.js document once the last page is drawn.
-    await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
+    // One pdf.js document, kept open while the file is shown.
+    await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(1);
     const p = await probe(page);
-    expect(p.rasters).toHaveLength(5);
-    expect(new Set(await thumbSources(page))).toEqual(new Set(p.rasters));
-    expect(p.revoked.filter((url) => p.rasters.includes(url))).toEqual([]);
+    expect(p.opened).toBe(1);
+    // Every thumbnail shown is a raster the page made, and none of them is released while shown.
+    const shown = new Set(await thumbSources(page));
+    for (const url of shown) expect(p.rasters).toContain(url);
+    expect(p.revoked.filter((url) => shown.has(url))).toEqual([]);
   });
 
-  test('loading another file releases the previous file’s thumbnails', async ({ page }) => {
+  test('loading another file releases the previous file’s thumbnails and document', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    await openSplitWith(page, FIXTURE.pdf3page);
     await expect(thumbs(page)).toHaveCount(3, { timeout: 20_000 });
     const first = await thumbSources(page);
 
     await page.getByRole('button', { name: 'Remove file' }).click();
-    await expect(page.getByTestId('file-info')).toHaveCount(0);
-    await addSingleFileAndWait(page, FIXTURE.pdf5page);
+    await expect(page.getByTestId('workspace')).toHaveCount(0);
+    await uploadFiles(page, FIXTURE.pdf5page);
     await expect(thumbs(page)).toHaveCount(5, { timeout: 20_000 });
     const second = await thumbSources(page);
 
@@ -119,13 +128,12 @@ test.describe('PDF document layer behind the page thumbnails', () => {
     for (const url of first) expect(p.revoked).toContain(url);
     for (const url of second) expect(p.revoked).not.toContain(url);
     await expectImageRendered(thumbs(page).first());
-    await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
+    await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(1);
   });
 
   test('leaving the tool releases its thumbnails and leaves no document open', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf5page);
+    await openSplitWith(page, FIXTURE.pdf5page);
     await expect(thumbs(page)).toHaveCount(5, { timeout: 20_000 });
     const sources = await thumbSources(page);
 
@@ -136,13 +144,12 @@ test.describe('PDF document layer behind the page thumbnails', () => {
     const p = await probe(page);
     expect(p.rasters.length, 'the document was not reloaded').toBeGreaterThanOrEqual(5);
     for (const url of sources) expect(p.revoked).toContain(url);
-    expect(p.opened - p.terminated).toBe(0);
+    await expect.poll(() => liveDocuments(page), { timeout: 10_000 }).toBe(0);
   });
 
   test('leaving while thumbnails are still rendering stops the work and releases everything', async ({ page }) => {
     await installProbe(page);
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf48page);
+    await openSplitWith(page, FIXTURE.pdf48page);
     await expect(thumbs(page).first()).toBeVisible({ timeout: 20_000 });
 
     await page.locator('header a[href="/"]').first().click();
@@ -159,55 +166,53 @@ test.describe('PDF document layer behind the page thumbnails', () => {
     expect((await probe(page)).rasters.length).toBe(settled);
   });
 
-  test('a 48-page PDF shows its first pages before the last is drawn, renders each page once, and publishes them in batches', async ({ page }, testInfo) => {
+  test('a 48-page PDF shows its page count before the thumbnails are drawn, renders each page once, and does not rebuild the grid', async ({ page }, testInfo) => {
     await installProbe(page);
-    await page.goto('/redact-pdf');
+    await page.goto('/split-pdf');
     await expect(page.locator('[data-testid="dropzone"][data-hydrated="true"]').first()).toBeVisible();
 
-    // Count the DOM updates that add thumbnails: each is one React commit of
-    // the list. Also note how many pages had been rasterised when the first
-    // thumbnail appeared.
-    await page.evaluate((selector) => {
-      const state = { commits: [] as number[], thumbsWhenCountShown: null as number | null, stop: () => observer.disconnect() };
-      const observer = new MutationObserver((records) => {
-        const addedThumb = records.some((r) =>
-          [...r.addedNodes].some((n) => n instanceof Element && (n.matches(selector) || !!n.querySelector(selector))),
-        );
-        if (addedThumb && state.thumbsWhenCountShown === null) state.thumbsWhenCountShown = window.__pdfProbe.rasters.length;
-        if (addedThumb) state.commits.push(performance.now());
+    // Note how many pages had been rasterised when "48 pages" first appeared.
+    await page.evaluate(() => {
+      const state = { rastersWhenCountShown: null as number | null, stop: () => observer.disconnect() };
+      const observer = new MutationObserver(() => {
+        if (state.rastersWhenCountShown !== null) return;
+        if (/\b48 pages\b/.test(document.querySelector('[data-testid="workspace"]')?.textContent ?? '')) {
+          state.rastersWhenCountShown = window.__pdfProbe.rasters.length;
+        }
       });
       observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-      window.__thumbCommits = state;
-    }, THUMB);
+      window.__countWatch = state;
+    });
 
     const started = Date.now();
-    await addSingleFileAndWait(page, FIXTURE.pdf48page);
+    await uploadFiles(page, FIXTURE.pdf48page);
+    await expect(page.getByTestId('split-page')).toHaveCount(48, { timeout: 30_000 });
+    // Tag every card; a grid rebuilt as thumbnails arrive would replace them.
+    await page.getByTestId('split-page').evaluateAll((cards) => cards.forEach((c) => ((c as HTMLElement).dataset.probe = 'kept')));
     await expect(thumbs(page)).toHaveCount(48, { timeout: 60_000 });
     const wallMs = Date.now() - started;
     await expectImageRendered(thumbs(page).last());
 
-    const { commits, thumbsWhenCountShown } = await page.evaluate(() => {
-      window.__thumbCommits!.stop();
-      return window.__thumbCommits!;
+    const rastersWhenCountShown = await page.evaluate(() => {
+      window.__countWatch!.stop();
+      return window.__countWatch!.rastersWhenCountShown;
     });
     const p = await probe(page);
-    const spanMs = commits[commits.length - 1] - commits[0];
     testInfo.annotations.push({
       type: 'thumbnail-timing',
-      description: `48 pages: ${commits.length} grid commits over ${Math.round(spanMs)}ms, all thumbnails ${wallMs}ms after upload, ${thumbsWhenCountShown} pages rasterised when the first thumbnail appeared`,
+      description: `48 pages: all thumbnails ${wallMs}ms after upload, ${rastersWhenCountShown} pages rasterised when the count was shown`,
     });
-    console.log(`[pdf-doc-layer] ${testInfo.project.name}: ${commits.length} commits, span ${Math.round(spanMs)}ms, all thumbnails after ${wallMs}ms, ${thumbsWhenCountShown} rasterised when first shown, ${p.rasters.length} rasters`);
 
-    // The first pages are shown without waiting for the rest.
-    expect(thumbsWhenCountShown).not.toBeNull();
-    expect(thumbsWhenCountShown!).toBeLessThan(48);
+    // The count is shown without waiting for the pages.
+    expect(rastersWhenCountShown).not.toBeNull();
+    expect(rastersWhenCountShown!).toBeLessThan(48);
 
-    // Each page is rasterised exactly once — nothing is rendered twice.
+    // Each page is rasterised exactly once, from one document.
     expect(p.rasters).toHaveLength(48);
     expect(p.opened).toBe(1);
 
-    // The grid is not committed once per page: after the first thumbnail, at
-    // most one commit per flush interval, however many pages arrive in it.
-    expect(commits.length).toBeLessThanOrEqual(Math.ceil(spanMs / FLUSH_INTERVAL_MS) + 2);
+    // No card was replaced while its thumbnail arrived.
+    const kept = await page.locator('[data-testid="split-page"][data-probe="kept"]').count();
+    expect(kept).toBe(48);
   });
 });

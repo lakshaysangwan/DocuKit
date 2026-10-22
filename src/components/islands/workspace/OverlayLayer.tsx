@@ -1,9 +1,10 @@
-import { createContext, useContext, useId, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useId, useRef, useState, type ReactNode } from 'react';
 import type { RectNorm } from '@/lib/pdf/page-geometry';
 import {
   CORNERS,
   MIN_BOX_WIDTH,
   moveRect,
+  rectFromPoints,
   resizeFromCorner,
   sameRect,
   scaleRect,
@@ -55,22 +56,84 @@ export interface OverlayLayerProps {
    * fractions of the page. Use it to deselect, or to move something there.
    */
   onBackgroundClick?: (point: { x: number; y: number }) => void;
+  /**
+   * Draw-to-create: a press on the page itself (not on a box) and a drag draws
+   * a rectangle, with a mouse, a finger or a pen; on release `onDraw` gets it.
+   * A press that hardly moves is a click instead. While this is set the layer
+   * takes touch gestures for itself (`touch-action: none`), so leave it unset
+   * when a finger should scroll the page.
+   */
+  onDraw?: (rect: RectNorm) => void;
+  /** Classes for the rectangle shown while drawing. */
+  draftClassName?: string;
   /** Stops all interaction (while the file is being written). */
   disabled?: boolean;
 }
 
-export function OverlayLayer({ children, onBackgroundClick, disabled = false }: OverlayLayerProps) {
+interface Draw {
+  pointerId: number;
+  start: { x: number; y: number };
+  rect: RectNorm | null;
+}
+
+export function OverlayLayer({ children, onBackgroundClick, onDraw, draftClassName, disabled = false }: OverlayLayerProps) {
   const layer = useRef<HTMLDivElement>(null);
   const helpId = useId();
+  const draw = useRef<Draw | null>(null);
+  const [draft, setDraft] = useState<RectNorm | null>(null);
+  // A drag that drew something ends in a click on the layer; that click is not a click.
+  const swallowClick = useRef(false);
+
+  const pointAt = (e: { clientX: number; clientY: number }) => {
+    const box = layer.current?.getBoundingClientRect();
+    if (!box || !box.width || !box.height) return null;
+    return { x: (e.clientX - box.left) / box.width, y: (e.clientY - box.top) / box.height };
+  };
 
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (swallowClick.current) {
+      swallowClick.current = false;
+      return;
+    }
     if (disabled || e.target !== e.currentTarget || !onBackgroundClick) return;
-    const box = e.currentTarget.getBoundingClientRect();
-    if (!box.width || !box.height) return;
-    onBackgroundClick({
-      x: (e.clientX - box.left) / box.width,
-      y: (e.clientY - box.top) / box.height,
-    });
+    const point = pointAt(e);
+    if (point) onBackgroundClick(point);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    swallowClick.current = false;
+    if (!onDraw || disabled || e.target !== e.currentTarget || e.button !== 0) return;
+    const start = pointAt(e);
+    if (!start) return;
+    // A pen or finger must not also start a text selection or a native drag.
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Not capturable (the pointer is gone); the drag works while it stays on the page.
+    }
+    draw.current = { pointerId: e.pointerId, start, rect: null };
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = draw.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const point = pointAt(e);
+    if (!point) return;
+    d.rect = rectFromPoints(d.start, point);
+    setDraft(d.rect);
+  };
+
+  const finishDraw = (e: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const d = draw.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    draw.current = null;
+    setDraft(null);
+    const point = pointAt(e);
+    const rect = point ? rectFromPoints(d.start, point) : d.rect;
+    if (cancelled || !rect || !onDraw) return;
+    swallowClick.current = true;
+    onDraw(rect);
   };
 
   return (
@@ -78,14 +141,39 @@ export function OverlayLayer({ children, onBackgroundClick, disabled = false }: 
       <div
         ref={layer}
         data-testid="overlay-layer"
-        className={cn('absolute inset-0', disabled && 'pointer-events-none')}
+        data-draw={onDraw && !disabled ? 'on' : undefined}
+        className={cn(
+          'absolute inset-0',
+          disabled && 'pointer-events-none',
+          onDraw && !disabled && 'cursor-crosshair touch-none',
+        )}
         onClick={onClick}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => finishDraw(e, false)}
+        onPointerCancel={(e) => finishDraw(e, true)}
       >
         <span id={helpId} className="sr-only">
           Arrow keys move it, Shift with an arrow moves it further, plus and minus resize it, Delete removes it,
           Escape deselects.
         </span>
         {children}
+        {draft && (
+          <div
+            aria-hidden="true"
+            data-testid="overlay-draft"
+            className={cn(
+              'pointer-events-none absolute outline-2 outline-dashed outline-[var(--color-primary)]',
+              draftClassName ?? 'bg-[var(--color-primary)]/20',
+            )}
+            style={{
+              left: percent(draft.x),
+              top: percent(draft.y),
+              width: percent(draft.width),
+              height: percent(draft.height),
+            }}
+          />
+        )}
       </div>
     </LayerContext.Provider>
   );

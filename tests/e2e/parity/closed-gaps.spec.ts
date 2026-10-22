@@ -336,7 +336,7 @@ test.describe('Copy-drift closures — crop, redact, unlock, sign', () => {
     // than a pointer drag: this test is about the metadata strip, and text search
     // marks deterministically instead of depending on drag geometry that behaves
     // differently across engines.
-    await expect(page.getByTestId('redact-page').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('overlay-layer')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('redact-search').fill('Quarterly');
     await page.getByTestId('redact-find').click();
     await expect(page.getByText(/area(s)? marked for redaction/)).toBeVisible({ timeout: 30_000 });

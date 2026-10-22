@@ -583,37 +583,6 @@ export async function readPdfMetadataArtifacts(bytes: Buffer): Promise<{
 }
 
 /**
- * Drag a redaction rectangle near the top of a redact-page element.
- *
- * The rendered page is taller than the viewport, so the drag is kept in a narrow
- * band near the top to stay on-screen — Firefox in particular registers nothing
- * when the coordinates fall outside. The pauses let React commit `drawStart` and
- * re-bind the mouseup handler between events. Shared rather than copied: a
- * near-identical local version with slightly different percentages silently
- * failed on Firefox only.
- */
-export async function drawRedactionMark(page: Page, pageEl = 0) {
-  const el = page.getByTestId('redact-page').nth(pageEl);
-  await expect(el.locator('img')).toBeVisible();
-  await expect.poll(async () => (await el.boundingBox())?.height ?? 0).toBeGreaterThan(100);
-  await el.scrollIntoViewIfNeeded();
-  const box = await el.boundingBox();
-  if (!box) throw new Error('redact page has no bounding box');
-  const x1 = box.x + box.width * 0.2;
-  const y1 = box.y + box.height * 0.06;
-  const x2 = box.x + box.width * 0.6;
-  const y2 = box.y + box.height * 0.18;
-  await page.mouse.move(x1, y1);
-  await page.mouse.down();
-  await page.waitForTimeout(120);
-  await page.mouse.move((x1 + x2) / 2, (y1 + y2) / 2, { steps: 5 });
-  await page.waitForTimeout(60);
-  await page.mouse.move(x2, y2, { steps: 5 });
-  await page.waitForTimeout(120);
-  await page.mouse.up();
-}
-
-/**
  * Each page's CropBox as [width, height] in points.
  *
  * Cropping in CropBox mode changes only this box, leaving the MediaBox and the

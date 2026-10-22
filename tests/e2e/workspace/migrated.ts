@@ -11,6 +11,7 @@ import { openPageNumbers } from '../helpers/page-numbers';
 import { openCrop } from '../helpers/crop-pdf';
 import { openOrganize } from '../helpers/organize-pages';
 import { openPdfToImage } from '../helpers/pdf-to-image';
+import { openRedact, openOptions as openRedactOptions } from '../helpers/redact-pdf';
 
 /**
  * The tools that live in the shared workspace.
@@ -142,5 +143,24 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'pdf-to-image',
     name: 'PDF to Image',
     enter: (page) => openPdfToImage(page, FIXTURE.pdf3page, 3),
+  },
+  {
+    // A place-on-page tool: one page large, a drag on it draws a mark. Nothing
+    // is marked on entry and the removal must be confirmed, so `makeReady`
+    // adds a mark with the button (as a keyboard or a finger can) and ticks the
+    // confirmation.
+    slug: 'redact-pdf',
+    name: 'Redact PDF',
+    enter: (page) => openRedact(page, FIXTURE.pdf3page),
+    makeReady: async (page) => {
+      await page.getByTestId('add-mark').click();
+      await expect(page.getByTestId('overlay-item')).toHaveCount(1);
+      await openRedactOptions(page);
+      await page.getByTestId('confirm-redaction').check();
+      // Let the action's fade-in finish, so what is checked next is the button as it settles.
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
   },
 ];

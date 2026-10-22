@@ -2,52 +2,17 @@ import { test, expect } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import {
   PageDiagnostics,
-  addSingleFileAndWait,
   expectDownload,
   assertPdf,
   countPdfPagesStrict,
   extractPdfText,
-  drawRedactionMark,
 } from '../helpers/harness';
+import { drawMark, openOptions, openRedact } from '../helpers/redact-pdf';
 
-/** Local alias — the drag lives in the harness so both specs share one copy. */
-const drawMark = drawRedactionMark;
-
-/**
- * Drag a full-width band across a page, from yTop% to yBottom% of its height.
- * Used to fully cover known lines of text for the true-redaction assertion.
- */
-async function drawBand(
-  page: import('@playwright/test').Page,
-  pageEl: number,
-  yTopPct: number,
-  yBottomPct: number,
-) {
-  const el = page.getByTestId('redact-page').nth(pageEl);
-  await expect(el.locator('img')).toBeVisible();
-  await expect.poll(async () => (await el.boundingBox())?.height ?? 0).toBeGreaterThan(100);
-  await el.scrollIntoViewIfNeeded();
-  const box = await el.boundingBox();
-  if (!box) throw new Error('redact page has no bounding box');
-  const x1 = box.x + box.width * 0.03;
-  const x2 = box.x + box.width * 0.97;
-  const y1 = box.y + box.height * yTopPct;
-  const y2 = box.y + box.height * yBottomPct;
-  await page.mouse.move(x1, y1);
-  await page.mouse.down();
-  await page.waitForTimeout(120);
-  await page.mouse.move((x1 + x2) / 2, (y1 + y2) / 2, { steps: 5 });
-  await page.waitForTimeout(60);
-  await page.mouse.move(x2, y2, { steps: 5 });
-  await page.waitForTimeout(120);
-  await page.mouse.up();
-}
+/** A mark near the top of page 1, over the title. */
+const MARK = { x: 0.2, y: 0.06, width: 0.4, height: 0.12 };
 
 test.describe('Redact PDF', () => {
-  // The full-resolution page preview is tall; a tall viewport keeps the drag
-  // target on-screen.
-  test.use({ viewport: { width: 1280, height: 2200 } });
-
   test('page loads with H1 and permanent-redaction warning', async ({ page }) => {
     const diag = new PageDiagnostics(page);
     await page.goto('/redact-pdf');
@@ -57,16 +22,15 @@ test.describe('Redact PDF', () => {
   });
 
   test('draws a redaction mark, confirms, and produces a redacted PDF', async ({ page }) => {
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf3page);
+    await openRedact(page, FIXTURE.pdf3page);
 
-    // Page overlays render for drawing.
-    await expect(page.getByTestId('redact-page').first()).toBeVisible({ timeout: 20_000 });
-    await drawMark(page, 0);
+    await drawMark(page, MARK);
+    await openOptions(page);
     await expect(page.getByText(/area(s)? marked for redaction/)).toBeVisible();
 
-    // Apply is gated on the confirmation checkbox.
+    // Apply is gated on the confirmation checkbox, and says so.
     await expect(page.getByTestId('tool-action')).toBeDisabled();
+    await expect(page.getByTestId('action-hint')).toHaveText('Tick the confirmation to redact');
     await page.getByTestId('confirm-redaction').check();
     await expect(page.getByTestId('tool-action')).toBeEnabled();
 
@@ -81,9 +45,7 @@ test.describe('Redact PDF', () => {
   });
 
   test('true redaction: removes marked text but keeps the rest of the text layer', async ({ page }) => {
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf3page);
-    await expect(page.getByTestId('redact-page').first()).toBeVisible({ timeout: 20_000 });
+    await openRedact(page, FIXTURE.pdf3page);
 
     // Sanity: the source really contains both the target and the survivor text.
     const original = await extractPdfText(await (await import('node:fs/promises')).readFile(FIXTURE.pdf3page));
@@ -91,7 +53,8 @@ test.describe('Redact PDF', () => {
     expect(original).toContain('sample body text');
 
     // Redact the top band (title + "Page 1 of 3") but not the body text below it.
-    await drawBand(page, 0, 0.06, 0.2);
+    await drawMark(page, { x: 0.03, y: 0.06, width: 0.94, height: 0.14 });
+    await openOptions(page);
     await expect(page.getByText(/area(s)? marked for redaction/)).toBeVisible();
     await page.getByTestId('confirm-redaction').check();
 
@@ -116,14 +79,14 @@ test.describe('Redact PDF', () => {
   });
 
   test('Find & Redact auto-marks every match; SHA-256 panel proves the file changed', async ({ page }) => {
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf3page);
-    await expect(page.getByTestId('redact-page').first()).toBeVisible({ timeout: 20_000 });
+    await openRedact(page, FIXTURE.pdf3page);
+    await openOptions(page);
 
     // Search for a phrase that appears on every page and auto-mark all matches.
     await page.getByTestId('redact-search').fill('Test Document');
     await page.getByTestId('redact-find').click();
     await expect(page.getByText(/area(s)? marked for redaction/)).toBeVisible();
+    await expect(page.getByTestId('search-note')).toHaveText('Marked 3 matches on 3 pages.');
 
     await page.getByTestId('confirm-redaction').check();
     await page.getByTestId('tool-action').click();
@@ -135,6 +98,10 @@ test.describe('Redact PDF', () => {
     expect(text).not.toContain('Test Document');
     expect(text).toContain('sample body text');
 
+    // The result pane checked the redacted file for the phrase too.
+    await expect(page.getByTestId('verify-phrase')).toHaveText('“Test Document” no longer appears in the file.');
+    await expect(page.getByTestId('verify-under-marks')).toHaveText('No text found under any of your 3 marks in the redacted file.');
+
     // The SHA-256 panel shows distinct before/after digests.
     await expect(page.getByTestId('sha-panel')).toBeVisible();
     const before = await page.getByTestId('sha-before').innerText();
@@ -145,14 +112,15 @@ test.describe('Redact PDF', () => {
   });
 
   test('a mark can be removed before applying', async ({ page }) => {
-    await page.goto('/redact-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf3page);
-    await expect(page.getByTestId('redact-page').first()).toBeVisible({ timeout: 20_000 });
+    await openRedact(page, FIXTURE.pdf3page);
 
-    await drawMark(page, 0);
+    await drawMark(page, MARK);
+    await openOptions(page);
     await expect(page.getByText(/1 area marked/)).toBeVisible();
-    await page.getByRole('button', { name: 'Remove mark' }).click();
-    // With no marks, the confirmation + apply controls disappear.
-    await expect(page.getByTestId('tool-action')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Remove mark 1 on page 1' }).click();
+    await expect(page.getByTestId('overlay-item')).toHaveCount(0);
+    // With no marks, the action stays where it is, disabled, and says why.
+    await expect(page.getByTestId('tool-action')).toBeDisabled();
+    await expect(page.getByTestId('action-hint')).toHaveText('Mark at least one area to redact first');
   });
 });

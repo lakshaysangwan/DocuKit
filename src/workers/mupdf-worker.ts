@@ -1,9 +1,16 @@
 /// <reference lib="webworker" />
 /**
  * True per-region redaction via MuPDF. For each marked rectangle we add a
- * `Redact` annotation and call `applyRedactions`, which physically removes the
- * underlying text/image/vector content beneath the mark and burns in a black
- * box — while leaving the rest of the page's text layer intact and selectable.
+ * `Redact` annotation and call `applyRedactions`, which removes from the file
+ * the text under the mark, the image pixels under it and vector shapes it
+ * covers entirely, and burns in a black box — while leaving the rest of the
+ * page's text layer intact and selectable.
+ *
+ * Marks arrive in PDF user space, already mapped from the displayed page by
+ * `page-geometry.ts` (which accounts for `/Rotate`, an offset CropBox and
+ * UserUnit). MuPDF annotation rectangles are in its own page space, so each
+ * rectangle goes through the page's transform here — no assumptions about
+ * where the page starts or which way up it is.
  *
  * This is lazy-loaded only on the redact route (the MuPDF WASM is ~10 MB), and
  * runs in its own worker so the heavy WASM never touches the main thread.
@@ -12,11 +19,26 @@ import type * as MuPDF from 'mupdf';
 
 interface RedactMark {
   pageIndex: number;
-  /** page-relative percent (0–100), top-left origin. */
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  /** The area in PDF user space: lower-left corner, y up. */
+  pdf: { x: number; y: number; width: number; height: number };
+}
+
+type Matrix = [number, number, number, number, number, number];
+
+/** User-space rectangle → the upright rectangle covering it in MuPDF page space. */
+function toPageSpace(m: Matrix, r: RedactMark['pdf']): [number, number, number, number] {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const [x, y] of [
+    [r.x, r.y],
+    [r.x + r.width, r.y],
+    [r.x, r.y + r.height],
+    [r.x + r.width, r.y + r.height],
+  ]) {
+    xs.push(m[0] * x + m[2] * y + m[4]);
+    ys.push(m[1] * x + m[3] * y + m[5]);
+  }
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
 interface Req {
@@ -47,27 +69,29 @@ self.onmessage = async (e: MessageEvent<Req>) => {
     }
 
     for (const [pageIndex, pageMarks] of byPage) {
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= doc.countPages()) {
+        throw new Error(`A mark is on page ${pageIndex + 1}, which this PDF does not have`);
+      }
       const page = doc.loadPage(pageIndex) as MuPDF.PDFPage;
-      // MuPDF annotation rects use the page's own space, which for these pages is
-      // top-left origin (y down) — the same convention as our percent marks.
-      const [bx0, by0, bx1, by1] = page.getBounds();
-      const w = bx1 - bx0;
-      const h = by1 - by0;
+      // User space → MuPDF page space (rotation, crop box origin and y-flip included).
+      const ctm = page.getTransform() as unknown as Matrix;
 
       for (const m of pageMarks) {
-        const x0 = bx0 + (m.x / 100) * w;
-        const y0 = by0 + (m.y / 100) * h;
-        const x1 = bx0 + ((m.x + m.width) / 100) * w;
-        const y1 = by0 + ((m.y + m.height) / 100) * h;
         const annot = page.createAnnotation('Redact');
-        annot.setRect([x0, y0, x1, y1]);
+        annot.setRect(toPageSpace(ctm, m.pdf));
         // Flush the annotation's rect before applying — page.update() alone does
         // not sync it, and applyRedactions would then find an empty rect.
         annot.update();
       }
 
-      // black_boxes = true; also strip images touched by a mark.
-      page.applyRedactions(true, mupdf.PDFPage.REDACT_IMAGE_REMOVE);
+      // Black boxes; the image pixels under a mark (not the whole image); vector
+      // shapes the mark covers entirely; every character under it.
+      page.applyRedactions(
+        true,
+        mupdf.PDFPage.REDACT_IMAGE_PIXELS,
+        mupdf.PDFPage.REDACT_LINE_ART_REMOVE_IF_COVERED,
+        mupdf.PDFPage.REDACT_TEXT_REMOVE,
+      );
     }
 
     // Strip document metadata — redacted files shouldn't leak author/title/etc.

@@ -153,12 +153,10 @@ test.describe('UX: operation visibility', () => {
   });
 
   test('Redact — a drawn mark is visibly overlaid before applying', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 2200 });
     await page.goto('/redact-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
-    const pageEl = page.getByTestId('redact-page').first();
-    await expectImageRendered(pageEl.locator('img'));
-    await pageEl.scrollIntoViewIfNeeded();
+    const pageEl = page.getByTestId('page-canvas');
+    await expectImageRendered(page.getByTestId('page-image'));
 
     const box = await pageEl.boundingBox();
     if (!box) throw new Error('no box');
@@ -168,13 +166,11 @@ test.describe('UX: operation visibility', () => {
     const y2 = box.y + box.height * 0.16;
     await page.mouse.move(x1, y1);
     await page.mouse.down();
-    await page.waitForTimeout(120);
     await page.mouse.move(x2, y2, { steps: 6 });
-    await page.waitForTimeout(120);
     await page.mouse.up();
 
-    // The red redaction overlay must be visible with a real size.
-    const overlay = pageEl.locator('div.bg-red-600\\/60');
+    // The redaction mark must be visible with a real size.
+    const overlay = pageEl.getByTestId('overlay-item');
     await expect(overlay).toBeVisible();
     const ob = await overlay.boundingBox();
     expect(ob && ob.width > 5 && ob.height > 5, 'redaction overlay has visible area').toBeTruthy();
