@@ -21,9 +21,10 @@
  *
  * Runs wherever pdf-lib runs (the PDF worker, and unit tests).
  */
-import { PDFArray, PDFName, StandardFonts, type PDFDocument, type PDFFont, type PDFImage } from 'pdf-lib';
-import { viewRectToPdfDraw, type PageGeometry, type RectNorm } from './pdf/page-geometry';
-import { encode, n, unclosedStates } from './edit-pdf/write';
+import { StandardFonts, type PDFDocument, type PDFFont, type PDFImage } from 'pdf-lib';
+import type { PageGeometry } from './pdf/page-geometry';
+import { appendToPage, hexToRgb01, placementMatrix } from './pdf/append-content';
+import { encode, n } from './edit-pdf/write';
 import { layoutWatermark, type WatermarkLayoutOptions } from './watermark-layout';
 import type { WatermarkFont } from './watermark-fonts';
 
@@ -50,21 +51,8 @@ const STANDARD: Record<WatermarkFont, StandardFonts> = {
   'Courier-Bold': StandardFonts.CourierBold,
 };
 
-function rgb(hex: string): [number, number, number] {
-  let h = hex.replace('#', '').trim();
-  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  const v = Number.parseInt(h || '000000', 16);
-  if (!Number.isFinite(v)) return [0, 0, 0];
-  return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
-}
-
 /** The `cm` that maps a copy's frame (displayed points, box bottom-left at 0,0) into user space. */
-export function placementMatrix(geom: PageGeometry, rect: RectNorm, rotation: number): number[] {
-  const draw = viewRectToPdfDraw(geom, rect, rotation);
-  const angle = (draw.rotateDeg * Math.PI) / 180;
-  const s = 1 / geom.userUnit;
-  return [Math.cos(angle) * s, Math.sin(angle) * s, -Math.sin(angle) * s, Math.cos(angle) * s, draw.x, draw.y];
-}
+export { placementMatrix };
 
 /**
  * Add the watermark to `targets` of `doc` (in place). `onPage` is called after
@@ -91,7 +79,7 @@ export async function writeWatermark(
   }
   const opacity = Math.min(1, Math.max(0, options.opacity));
   const alphaState = opacity < 1 ? context.register(context.obj({ Type: 'ExtGState', ca: opacity, CA: opacity })) : null;
-  const colour = rgb(options.color ?? '#000000').map(n).join(' ');
+  const colour = hexToRgb01(options.color ?? '#000000').map(n).join(' ');
   const encoded = font && options.text ? encode(font, options.text) : '';
 
   for (let t = 0; t < targets.length; t++) {
@@ -119,20 +107,7 @@ export async function writeWatermark(
     ops.push('Q');
     const drawing = ops.join('\n');
 
-    const raw = page.node.get(PDFName.of('Contents'));
-    const existing = raw instanceof PDFArray ? raw.asArray() : raw ? [raw] : [];
-    if (options.layer === 'behind') {
-      // Painted first, so everything on the page paints over it.
-      const stream = context.register(context.flateStream(`${drawing}\n`));
-      page.node.set(PDFName.of('Contents'), context.obj([stream, ...existing]));
-    } else {
-      // Close whatever the page's own content leaves open, so the watermark is
-      // drawn in the page's default coordinates.
-      const open = unclosedStates(doc, page);
-      const start = context.register(context.flateStream('q\n'));
-      const end = context.register(context.flateStream(`${'Q\n'.repeat(open + 1)}${drawing}\n`));
-      page.node.set(PDFName.of('Contents'), context.obj([start, ...existing, end]));
-    }
+    appendToPage(doc, page, drawing, options.layer);
     onPage?.(t + 1, targets.length);
   }
 }
