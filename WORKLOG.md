@@ -162,11 +162,16 @@ under a mark stay under the black box (copy claims only fully covered shapes). *
 PDF) fails on production on all three engines — only 1 of 5 thumbnail blob URLs revoked after the
 in-site link — while passing locally; either a timing race in the test or a real leak on client-side
 navigation. To investigate next.
+| `e017ce1`, `9b73cb8`, `e8f6cda` (W10) | Protect PDF and Unlock PDF in the workspace as two components (mode tabs gone): the document shown; Protect detects an already-encrypted file on upload and points to Unlock, and after a run offers "Check it opens"; Unlock shows a locked stage until the password opens the file, opens restrictions-only files with no password (qpdf removes them with an empty password), and gives precise errors (wrong password / not a PDF / could not be unlocked) instead of "Incorrect password" for everything; copy fixed ("password-free" and "Unlock & Download" gone, `wasmDeps` now qpdf + pdf.js). The production-only `pdf-doc-layer` failure was a test bug: `/split-pdf` → `/split-pdf/` redirect satisfied the "back on a trailing-slash URL" wait before navigating; no thumbnail leak | Clean worktree: 696 Chromium, 1026 Firefox/WebKit, 63 mobile, 9 visual, 969 unit. Live: protect/unlock and doc-layer specs against docukit.uk on three engines, phone protect → unlock round trip with no `/Encrypt` left |
+
+W10 notes: `qpdf-helper.ts` now captures qpdf's error output for every call (Compress included); no
+Before/After on Protect (the output needs its password — "Check it opens" stands in). The unmigrated
+example in the contract and large-file specs is now `/digital-signature-pdf`.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange), W8 (PDF to Image) and
-W9 (Redact) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange), W8 (PDF to Image),
+W9 (Redact) and W10 (Protect/Unlock) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
