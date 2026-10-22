@@ -154,11 +154,19 @@ W8 notes: `tests/e2e/tools/pdf-doc-layer.spec.ts` now drives `/redact-pdf` (the 
 `usePdfThumbnails`). The shared `MultiFileDownload` result gallery squeezes three columns into the
 narrow workspace result pane — fix once for all tools. 600 DPI on very large pages can exceed browser
 canvas limits during export (pre-existing).
+| `c104606`…`13e0fff` (W9, 4 commits) | Redact PDF in the workspace: marks drawn by mouse, touch or pen ("Draw marks" toggle so a finger can scroll), moved / resized / deleted as overlay boxes, Add mark, Smaller/Larger, mm fields, Undo/Redo, Find & mark all, the redacted output shown page by page before download with "No text found under any of your N marks"; marks mapped through page geometry (rotated / offset / UserUnit); MuPDF now removes only the image pixels under a mark (it removed whole images before); `usePdfThumbnails` deleted; copy no longer claims SSN/email/custom-pattern search, a warning dialog or "Apply Redactions" | Clean worktree: 669 Chromium, 975 Firefox/WebKit, 59 mobile, 9 visual, 966 unit. Live: Redact specs against docukit.uk on three engines, phone touch mark with the text under it gone from the downloaded file |
+
+W9 notes: search still marks the whole line containing a phrase (over-covers); shapes only partly
+under a mark stay under the black box (copy claims only fully covered shapes). **Open:**
+`tools/pdf-doc-layer.spec.ts:134` ("leaving the tool releases its thumbnails…", now driving Split
+PDF) fails on production on all three engines — only 1 of 5 thumbnail blob URLs revoked after the
+in-site link — while passing locally; either a timing race in the test or a real leak on client-side
+navigation. To investigate next.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange) and W8 (PDF to Image)
-are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange), W8 (PDF to Image) and
+W9 (Redact) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
