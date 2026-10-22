@@ -33,8 +33,20 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
 
   test('digital-signature — certificate fields', async ({ page }) => {
     await page.goto('/digital-signature-pdf');
+    // The certificate fields are in the workspace, once a PDF is added.
+    await uploadFiles(page, FIXTURE.pdf3page);
     // "Generate New" is the default cert source → CN/Org inputs are shown.
     await expect(page.getByPlaceholder('John Doe')).toBeVisible();
+    await expect(page.getByTestId('box-x')).toBeVisible();
+    await assertAllLabelled(page);
+    // Upload Existing: the certificate file and its password.
+    await page.getByTestId('cert-upload').click();
+    await page.getByTestId('pfx-upload').locator('input[type="file"]').setInputFiles({
+      name: 'cert.p12',
+      mimeType: 'application/x-pkcs12',
+      buffer: Buffer.from([0x30, 0x00]),
+    });
+    await expect(page.getByTestId('pfx-password')).toBeVisible();
     await assertAllLabelled(page);
   });
 

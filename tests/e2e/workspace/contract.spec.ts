@@ -269,8 +269,8 @@ for (const tool of MIGRATED) {
 
     test('a tool that has not been migrated is not widened', async ({ page }) => {
       await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto('/digital-signature-pdf');
-      await uploadFiles(page, FIXTURE.pdf3page);
+      await page.goto('/compress-image');
+      await uploadFiles(page, FIXTURE.jpg);
       await expect(page.getByTestId('tool-action')).toBeVisible();
       await expect(page.getByTestId('workspace')).toHaveCount(0);
       expect((await page.locator('.tool-shell').boundingBox())!.width).toBeLessThanOrEqual(1152);

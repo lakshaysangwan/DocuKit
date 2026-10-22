@@ -11,6 +11,16 @@
  * dependencies and polyfill risk for no correctness gain.
  */
 import type * as ForgeTypes from 'node-forge';
+import type { PageGeometry, RectNorm } from './pdf/page-geometry';
+import {
+  BOX_BORDER,
+  BOX_FILL,
+  BOX_OPACITY,
+  BOX_TEXT,
+  signatureBoxLines,
+  signatureTextLayout,
+  signatureWidgetPlacement,
+} from './pdf/signature-box';
 
 /** node-forge is CJS; normalize the default/namespace shape across Vite and Node. */
 async function getForge(): Promise<typeof ForgeTypes> {
@@ -85,14 +95,31 @@ export async function generateSelfSignedCert(subject: CertSubject): Promise<Gene
   return { privateKey, certificate, p12Buffer };
 }
 
+/** Shown when the password does not open the .p12/.pfx file. */
+export const WRONG_CERT_PASSWORD_MESSAGE = 'That password does not open this certificate file. Check it and try again.';
+/** Shown when the file is not a PKCS#12 certificate file at all. */
+export const NOT_A_CERTIFICATE_MESSAGE = 'This file could not be read as a .p12 or .pfx certificate file.';
+/** Shown when the file opens but holds no private key or no certificate. */
+export const NO_KEY_MESSAGE = 'This certificate file has no private key and certificate pair to sign with.';
+
 /** Extract the private key + certificate from an uploaded PKCS#12 (.p12/.pfx). */
 export async function loadP12(
   buffer: ArrayBuffer,
   password: string,
 ): Promise<{ privateKey: ForgeTypes.pki.rsa.PrivateKey; certificate: ForgeTypes.pki.Certificate }> {
   const forge = await getForge();
-  const p12Asn1 = forge.asn1.fromDer(forge.util.createBuffer(buffer));
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
+  let p12Asn1;
+  try {
+    p12Asn1 = forge.asn1.fromDer(forge.util.createBuffer(buffer));
+  } catch (err) {
+    throw new Error(NOT_A_CERTIFICATE_MESSAGE, { cause: err });
+  }
+  let p12;
+  try {
+    p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
+  } catch (err) {
+    throw new Error(WRONG_CERT_PASSWORD_MESSAGE, { cause: err });
+  }
 
   const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
   const privateKey = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [])[0]?.key as
@@ -102,24 +129,57 @@ export async function loadP12(
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
   const certificate = (certBags[forge.pki.oids.certBag] ?? [])[0]?.cert;
 
-  if (!privateKey || !certificate) throw new Error('Could not extract key/cert from .p12 file');
+  if (!privateKey || !certificate) throw new Error(NO_KEY_MESSAGE);
   return { privateKey, certificate };
 }
 
+/** "Signature1", or the first "SignatureN" no field of the form already has. */
+export function uniqueFieldName(taken: string[]): string {
+  const names = new Set(taken);
+  let i = 1;
+  while (names.has(`Signature${i}`)) i++;
+  return `Signature${i}`;
+}
+
+/** The certificate's Common Name, or "Signer" when it has none. */
+export function certificateName(certificate: ForgeTypes.pki.Certificate): string {
+  const cn = certificate.subject.getField('CN')?.value;
+  return typeof cn === 'string' && cn.trim() ? cn : 'Signer';
+}
+
+/** Where the visible box goes: a page, that page's geometry, and the box on the displayed page. */
+export interface VisibleSignature {
+  pageIndex: number;
+  geometry: PageGeometry;
+  rect: RectNorm;
+}
+
+export interface SignOptions {
+  /** The visible box, or null for an invisible signature (no box on any page). */
+  visible: VisibleSignature | null;
+  /** When the document is signed: the signature's time, and the date in the box. Defaults to now. */
+  date?: Date;
+}
+
 /**
- * Sign a PDF with a PKCS#7 detached signature. Adds a visible signature box on
- * page 1, a signature dictionary + AcroForm field, computes the ByteRange over
- * the saved bytes, signs the covered ranges, and embeds the DER blob.
+ * Sign a PDF with a PKCS#7 detached signature. Adds a signature dictionary and
+ * its AcroForm field — with a visible box as the field's appearance when
+ * `visible` is set, or a zero-size widget when it is not — computes the
+ * ByteRange over the saved bytes, signs the covered ranges, and embeds the DER
+ * blob. The signer's name is the certificate's Common Name.
  */
 export async function signPdfWithPkcs7(
   pdfBuffer: ArrayBuffer,
   privateKey: ForgeTypes.pki.rsa.PrivateKey,
   certificate: ForgeTypes.pki.Certificate,
-  signerName: string,
+  options: SignOptions = { visible: null },
 ): Promise<ArrayBuffer> {
-  const { PDFDocument, StandardFonts, rgb, PDFName, PDFString, PDFHexString, PDFArray, PDFNumber } =
+  const { PDFDocument, StandardFonts, PDFName, PDFString, PDFHexString, PDFArray, PDFNumber } =
     await import('pdf-lib');
   const forge = await getForge();
+  const signerName = certificateName(certificate);
+  const date = options.date ?? new Date();
+  const text = (s: string) => (/^[\x20-\x7e]*$/.test(s) ? PDFString.of(s) : PDFHexString.fromText(s));
 
   let doc;
   try {
@@ -130,68 +190,88 @@ export async function signPdfWithPkcs7(
     }
     doc = await PDFDocument.load(new Uint8Array(pdfBuffer), { ignoreEncryption: true });
   }
-  const font = await doc.embedFont(StandardFonts.HelveticaBold);
-  const page = doc.getPage(0);
-  const { width } = page.getSize();
-
-  const sigText = [
-    `Digitally signed by: ${signerName}`,
-    `Date: ${new Date().toISOString().split('T')[0]}`,
-    `Algorithm: RSA-SHA256 (PKCS#7)`,
-  ];
-
-  page.drawRectangle({
-    x: width - 250 - 20,
-    y: 20,
-    width: 250,
-    height: 60,
-    color: rgb(0.95, 0.97, 1),
-    borderColor: rgb(0.2, 0.4, 0.8),
-    borderWidth: 1,
-    opacity: 0.9,
-  });
-  sigText.forEach((line, i) => {
-    page.drawText(line, { x: width - 250 - 14, y: 20 + 44 - i * 16, size: 7, font, color: rgb(0.1, 0.2, 0.5) });
-  });
-
   const context = doc.context;
+  const visible = options.visible;
+  const pageIndex = visible ? visible.pageIndex : 0;
+  if (pageIndex < 0 || pageIndex >= doc.getPageCount()) throw new Error('The page chosen for the signature box is not in this PDF.');
+  const page = doc.getPage(pageIndex);
 
   const sigDict = context.obj({});
-  (sigDict as any).set(PDFName.of('Type'), PDFName.of('Sig'));
-  (sigDict as any).set(PDFName.of('Filter'), PDFName.of('Adobe.PPKLite'));
-  (sigDict as any).set(PDFName.of('SubFilter'), PDFName.of('adbe.pkcs7.detached'));
-  (sigDict as any).set(PDFName.of('M'), PDFString.of(formatPdfDate(new Date())));
-  (sigDict as any).set(PDFName.of('Name'), PDFString.of(signerName));
-  (sigDict as any).set(PDFName.of('Reason'), PDFString.of('Document digitally signed'));
+  sigDict.set(PDFName.of('Type'), PDFName.of('Sig'));
+  sigDict.set(PDFName.of('Filter'), PDFName.of('Adobe.PPKLite'));
+  sigDict.set(PDFName.of('SubFilter'), PDFName.of('adbe.pkcs7.detached'));
+  sigDict.set(PDFName.of('M'), PDFString.of(formatPdfDate(date)));
+  sigDict.set(PDFName.of('Name'), text(signerName));
+  sigDict.set(PDFName.of('Reason'), PDFString.of('Document digitally signed'));
 
   const byteRangeArray = PDFArray.withContext(context);
   byteRangeArray.push(PDFNumber.of(0));
   byteRangeArray.push(PDFNumber.of(9999999999));
   byteRangeArray.push(PDFNumber.of(9999999999));
   byteRangeArray.push(PDFNumber.of(9999999999));
-  (sigDict as any).set(PDFName.of('ByteRange'), byteRangeArray);
+  sigDict.set(PDFName.of('ByteRange'), byteRangeArray);
 
   const contentsPlaceholder = '0'.repeat(CONTENTS_HEX_LENGTH);
-  (sigDict as any).set(PDFName.of('Contents'), PDFHexString.of(contentsPlaceholder));
+  sigDict.set(PDFName.of('Contents'), PDFHexString.of(contentsPlaceholder));
 
   const sigRef = context.register(sigDict);
 
   const acroForm = doc.catalog.getOrCreateAcroForm();
   const sigFieldDict = context.obj({});
-  (sigFieldDict as any).set(PDFName.of('Type'), PDFName.of('Annot'));
-  (sigFieldDict as any).set(PDFName.of('Subtype'), PDFName.of('Widget'));
-  (sigFieldDict as any).set(PDFName.of('FT'), PDFName.of('Sig'));
-  (sigFieldDict as any).set(PDFName.of('T'), PDFString.of('Signature1'));
-  (sigFieldDict as any).set(PDFName.of('V'), sigRef);
-  (sigFieldDict as any).set(PDFName.of('F'), PDFNumber.of(132));
+  sigFieldDict.set(PDFName.of('Type'), PDFName.of('Annot'));
+  sigFieldDict.set(PDFName.of('Subtype'), PDFName.of('Widget'));
+  sigFieldDict.set(PDFName.of('FT'), PDFName.of('Sig'));
+  sigFieldDict.set(PDFName.of('T'), PDFString.of(uniqueFieldName(acroForm.getAllFields().map(([f]) => f.getFullyQualifiedName() ?? ''))));
+  sigFieldDict.set(PDFName.of('V'), sigRef);
+  // Print + Locked.
+  sigFieldDict.set(PDFName.of('F'), PDFNumber.of(132));
+  sigFieldDict.set(PDFName.of('P'), page.ref);
+
+  let rect: [number, number, number, number] = [0, 0, 0, 0];
+  if (visible) {
+    // The box is the field's appearance, drawn where the visitor placed it and
+    // turned with the page so it reads upright.
+    const placement = signatureWidgetPlacement(visible.geometry, visible.rect);
+    rect = [placement.rect.x, placement.rect.y, placement.rect.x + placement.rect.width, placement.rect.y + placement.rect.height];
+    const font = await doc.embedFont(StandardFonts.HelveticaBold);
+    const lines = signatureBoxLines(signerName, date);
+    const longest = Math.max(...lines.map((l) => font.widthOfTextAtSize(l, 1)));
+    const { width: w, height: h } = placement;
+    const layout = signatureTextLayout(w, h, longest, lines.length);
+    const n = (v: number) => Number(v.toFixed(4)).toString();
+    const rgbOp = (c: readonly number[], op: string) => `${c.map(n).join(' ')} ${op}`;
+    const ops = [
+      'q',
+      '/GS0 gs',
+      rgbOp(BOX_FILL, 'rg'),
+      rgbOp(BOX_BORDER, 'RG'),
+      '1 w',
+      `0.5 0.5 ${n(Math.max(0, w - 1))} ${n(Math.max(0, h - 1))} re B`,
+      rgbOp(BOX_TEXT, 'rg'),
+      'BT',
+      `/F0 ${n(layout.fontSize)} Tf`,
+      ...lines.map((line, i) => `1 0 0 1 ${n(layout.x)} ${n(h - layout.baselines[i])} Tm ${font.encodeText(line).toString()} Tj`),
+      'ET',
+      'Q',
+    ];
+    const gs = context.obj({ Type: 'ExtGState', ca: BOX_OPACITY, CA: BOX_OPACITY });
+    const appearance = context.stream(ops.join('\n'), {
+      Type: 'XObject',
+      Subtype: 'Form',
+      BBox: [0, 0, w, h],
+      Matrix: placement.matrix,
+      Resources: { Font: { F0: font.ref }, ExtGState: { GS0: gs } },
+    });
+    sigFieldDict.set(PDFName.of('AP'), context.obj({ N: context.register(appearance) }));
+  }
   const rectArray = PDFArray.withContext(context);
-  [0, 0, 0, 0].forEach((v) => rectArray.push(PDFNumber.of(v)));
-  (sigFieldDict as any).set(PDFName.of('Rect'), rectArray);
-  (sigFieldDict as any).set(PDFName.of('P'), page.ref);
+  rect.forEach((v) => rectArray.push(PDFNumber.of(v)));
+  sigFieldDict.set(PDFName.of('Rect'), rectArray);
 
   const sigFieldRef = context.register(sigFieldDict);
 
-  const annots = page.node.get(PDFName.of('Annots'));
+  // Existing arrays may be indirect objects: look them up rather than replace them.
+  const annots = page.node.lookup(PDFName.of('Annots'));
   if (annots instanceof PDFArray) {
     annots.push(sigFieldRef);
   } else {
@@ -200,8 +280,8 @@ export async function signPdfWithPkcs7(
     page.node.set(PDFName.of('Annots'), annotsArray);
   }
 
-  const acroDict = (acroForm as any).dict ?? acroForm;
-  const fields = acroDict.get(PDFName.of('Fields'));
+  const acroDict = acroForm.dict;
+  const fields = acroDict.lookup(PDFName.of('Fields'));
   if (fields instanceof PDFArray) {
     fields.push(sigFieldRef);
   } else {
@@ -246,7 +326,7 @@ export async function signPdfWithPkcs7(
     digestAlgorithm: forge.pki.oids.sha256,
     authenticatedAttributes: [
       { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
-      { type: forge.pki.oids.signingTime, value: new Date() as unknown as string },
+      { type: forge.pki.oids.signingTime, value: date as unknown as string },
       { type: forge.pki.oids.messageDigest },
     ],
   });

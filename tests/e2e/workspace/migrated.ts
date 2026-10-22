@@ -14,6 +14,7 @@ import { openOrganize } from '../helpers/organize-pages';
 import { openPdfToImage } from '../helpers/pdf-to-image';
 import { openRedact, openOptions as openRedactOptions } from '../helpers/redact-pdf';
 import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
+import { openDigitalSignature } from '../helpers/digital-signature';
 
 /**
  * The tools that live in the shared workspace.
@@ -202,6 +203,22 @@ export const MIGRATED: MigratedTool[] = [
       await page.getByTestId('unlock-password').fill('contract-pw');
       await page.getByTestId('unlock-password').press('Enter');
       await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
+  },
+  {
+    // A whole-file transform with a box on the page: the page large with the
+    // visible signature box on it where it will be written. The action waits
+    // for a certificate (and says so); `makeReady` types a name for the
+    // self-signed one, opening Options on a phone first.
+    slug: 'digital-signature-pdf',
+    name: 'Digital Signature PDF',
+    enter: (page) => openDigitalSignature(page, FIXTURE.pdf3page),
+    makeReady: async (page) => {
+      await openRedactOptions(page);
+      await page.getByPlaceholder('John Doe').fill('Ada Lovelace');
       const action = page.getByTestId('tool-action');
       await expect(action).toBeEnabled();
       await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');

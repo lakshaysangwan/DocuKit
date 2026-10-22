@@ -14,16 +14,17 @@ import { addSingleFileAndWait, uploadFiles } from '../helpers/harness';
 
 test.describe('P5.3 — large-file warning', () => {
   test('a >50MB file shows the heads-up', async ({ page }) => {
-    // 51 MB with a PDF header — Digital Signature reads bytes at load but doesn't parse,
-    // so the file registers and the size-based warning renders. Playwright caps
-    // in-memory upload buffers at 50 MB, so stage it on disk and upload by path.
+    // 51 MB with a PNG signature — Lock Image reads the bytes at load but does
+    // not decode them, so the file registers and the size-based warning renders.
+    // Playwright caps in-memory upload buffers at 50 MB, so stage it on disk and
+    // upload by path.
     const big = Buffer.alloc(51 * 1024 * 1024, 0x20);
-    Buffer.from('%PDF-1.7\n').copy(big);
-    const tmp = path.join(tmpdir(), `docukit-huge-${Date.now()}.pdf`);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(big);
+    const tmp = path.join(tmpdir(), `docukit-huge-${Date.now()}.png`);
     await writeFile(tmp, big);
 
     try {
-      await page.goto('/digital-signature-pdf');
+      await page.goto('/lock-image');
       await uploadFiles(page, tmp);
       await expect(page.getByTestId('file-info')).toBeVisible();
       await expect(page.getByTestId('large-file-warning')).toBeVisible();
@@ -33,8 +34,8 @@ test.describe('P5.3 — large-file warning', () => {
   });
 
   test('a normal file stays quiet', async ({ page }) => {
-    await page.goto('/digital-signature-pdf');
-    await addSingleFileAndWait(page, FIXTURE.pdf1page);
+    await page.goto('/lock-image');
+    await addSingleFileAndWait(page, FIXTURE.png);
     await expect(page.getByTestId('large-file-warning')).toHaveCount(0);
   });
 });
