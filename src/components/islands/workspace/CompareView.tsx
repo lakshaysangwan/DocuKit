@@ -50,6 +50,10 @@ export interface CompareViewProps {
   toolbarStart?: ReactNode;
   /** Shown over the view while the "after" image is being made. */
   busy?: boolean;
+  /** Draw a checkerboard behind the images, so transparency shows (images); otherwise white (pages). */
+  checkerboard?: boolean;
+  /** Shown in the placeholder while `before` is null. Defaults to "Loading page…". */
+  placeholder?: string;
   className?: string;
 }
 
@@ -64,6 +68,12 @@ const toolButton =
 const pressed = 'bg-[var(--color-primary)]/10 font-semibold text-[var(--color-primary)]';
 const chip =
   'pointer-events-none absolute top-2 z-10 rounded bg-black/65 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-white';
+
+/** Grey and white squares, 8 CSS px each: what shows through a transparent pixel. */
+const CHECKERBOARD: React.CSSProperties = {
+  backgroundImage: 'conic-gradient(#d4d4d4 25%, #ffffff 0 50%, #d4d4d4 0 75%, #ffffff 0)',
+  backgroundSize: '16px 16px',
+};
 
 const ZOOMS: { value: CompareZoom; label: string; id: string }[] = [
   { value: 'fit', label: 'Fit', id: 'fit' },
@@ -101,6 +111,8 @@ export default function CompareView({
   onDisplayWidth,
   toolbarStart,
   busy = false,
+  checkerboard = false,
+  placeholder = 'Loading page…',
   className,
 }: CompareViewProps) {
   const [mode, setMode] = useState<CompareMode>('split');
@@ -222,7 +234,8 @@ export default function CompareView({
     <div
       ref={ref}
       className="relative m-auto shrink-0 select-none bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2),0_8px_24px_-8px_rgba(0,0,0,0.25)]"
-      style={{ width, height }}
+      data-backdrop={checkerboard ? 'checkerboard' : 'white'}
+      style={checkerboard ? { width, height, ...CHECKERBOARD } : { width, height }}
     >
       {children}
     </div>
@@ -261,7 +274,7 @@ export default function CompareView({
       beforeLabel,
       box(
         <span data-testid="compare-loading" className="absolute inset-0 flex items-center justify-center text-xs text-neutral-500">
-          Loading page…
+          {placeholder}
         </span>,
       ),
     );
