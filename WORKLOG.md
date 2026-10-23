@@ -181,22 +181,7 @@ it conflicts with the "no tracking scripts" promise on the privacy page.
 
 Session stopped here on 2026-10-23 at Lakshay's request (weekly token limit at ~91%).
 
-Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
-T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
-PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange), W8 (PDF to Image),
-W9 (Redact), W10 (Protect/Unlock), W11 (Digital Signature) and W12 (Compress Image) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
-served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
-context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
-- **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
-  file can show "PDFWorker.create - the worker is being destroyed"; a second click works. 2 in 30 runs
-  of `parity/closed-gaps.spec.ts:258`, with or without T16. Likely `CropPreview.tsx` calling
-  `doc.destroy()` without awaiting it while `src/lib/pdf-flatten-crop.ts` opens a document.
-- **Lost clicks in WebKit/Firefox tests:** the "waiting for event download" flakes are clicks landing
-  while the target sits under the sticky header after a smooth scroll (site-wide
-  `scroll-behavior: smooth`). About 4% per run on `tools/crop-pdf.spec.ts`. Worth a harness fix.
-- **Crop copy still false:** "inches" is listed but only mm and pt exist; an FAQ names a "Numeric
-  Input mode"; the how-to names a "Crop & Download" button. Box move is mouse-only.
-- **Homepage search:** add `searchKeywords` to registry entries for synonyms ("join", "esign").
+Folded into HANDOFF.md on 2026-10-23.
 
 T11 notes: `ux/home-search.spec.ts:311` is flaky on Firefox (the test holds back the island script and
 then waits for `load`, which Firefox sometimes blocks on) — fix with `waitUntil: 'domcontentloaded'`.
