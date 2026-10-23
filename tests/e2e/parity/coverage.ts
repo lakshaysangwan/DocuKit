@@ -187,11 +187,11 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'SHA-256 before/after comparison': C([T('redact-pdf')]),
   },
   'compress-image': {
-    'Quality slider and target file size mode': C([T('compress-image')]),
-    'JPEG, PNG, WebP, AVIF, HEIC support': P([T('compress-image')], 'the JPEG path is tested; HEIC input is not'),
-    'Before/after size comparison': C([T('compress-image')]),
-    'EXIF metadata stripping': C(['parity/claims.spec.ts'], 'a fixture carrying a real EXIF APP1 segment comes back stripped'),
-    'Batch compression with ZIP download': C([T('compress-image')]),
+    'Quality slider and target file size mode': C([T('compress-image'), T('compress-image-preview')], 'quality 20 is smaller than 80; a target is met with the quality it needed reported, and a missed target reports the smallest size reached, which is the file'),
+    'JPEG, PNG, WebP, AVIF, HEIC support': C([T('compress-image'), T('compress-image-preview')], 'JPEG, PNG and HEIC inputs compress; JPEG, WebP, AVIF and PNG outputs are checked by signature and name, and by pixel size where they are compressed'),
+    'See the quality before you download: original and compressed side by side, uncropped, with zoom': C([T('compress-image-preview')], 'the compare view’s after image is byte-for-byte the downloaded file (live preview, Target size); live update settles on the last slider value; 100% is one image pixel per CSS pixel'),
+    'Re-encoded images carry no EXIF metadata': C(['parity/claims.spec.ts', T('compress-image-preview')], 'a fixture carrying a real EXIF APP1 segment comes back stripped, as WebP and as JPEG'),
+    'Batch compression: separate downloads or one ZIP': C([T('compress-image'), T('compress-image-preview')], 'three images download as three files of the right format and size; two also as one ZIP'),
   },
   'resize-image': {
     'Exact dimensions, percentage, or one-side resize': P([T('resize-image')], 'exact dimensions tested; percentage and one-side are not'),

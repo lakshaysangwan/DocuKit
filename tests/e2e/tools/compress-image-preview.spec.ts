@@ -168,6 +168,10 @@ test.describe('Compress Image — the file that downloads', () => {
     await page.getByTestId('preview-quality').click();
     await settledPreview(page);
     await expect(status).toContainText('AVIF at quality 75');
+    await compressImages(page);
+    const { bytes, name } = await download(page);
+    assertImage(bytes, 'avif');
+    expect(name).toBe('photo-compressed.avif');
   });
 
   test('batch of 3: one image at a time on the stage, facts for each, separate downloads', async ({ page }) => {
@@ -216,6 +220,32 @@ test.describe('Compress Image — the file that downloads', () => {
     assertImage(bytes, 'jpeg');
     expect(bytes.toString('latin1')).not.toContain('Exif\0\0');
     expect(bytes.toString('latin1')).not.toContain('GPSLatitude');
+  });
+
+  test('PNG output: no quality slider, a Preview button, and a PNG file', async ({ page }) => {
+    await openCompressImage(page, FIXTURE.png);
+    await chooseFormat(page, 'png');
+    await expect(page.getByLabel('Quality', { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('stage-status')).toHaveAttribute('data-live', 'false');
+    await page.getByTestId('preview-quality').click();
+    await settledPreview(page);
+    await compressImages(page);
+    const { bytes, name } = await download(page);
+    assertImage(bytes, 'png');
+    expect(name).toBe('graphic-compressed.png');
+    const kept = (await page.getByTestId('fact-original').count()) > 0;
+    if (kept) expect(bytes.equals(await readFile(FIXTURE.png))).toBe(true);
+    else await expect(page.getByTestId('fact-quality')).toContainText('lossless');
+  });
+
+  test('a HEIC photo is shown and compressed', async ({ page }) => {
+    await openCompressImage(page, FIXTURE.heic);
+    await compressImages(page);
+    const { bytes, name } = await download(page);
+    assertImage(bytes, 'webp');
+    expect(name).toBe('photo-compressed.webp');
+    const decoded = await decodeImage(page, bytes);
+    expect([decoded.width, decoded.height]).toEqual([600, 400]);
   });
 
   test('any change after a run drops the result', async ({ page }) => {
