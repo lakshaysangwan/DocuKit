@@ -1,314 +1,754 @@
-import { useState, useCallback } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import DropZone from '@/components/islands/shared/DropZone';
-import FileInfoCard from '@/components/islands/shared/FileInfoCard';
-import FileList, { type FileItem } from '@/components/islands/shared/FileList';
-import DownloadButton from '@/components/islands/shared/DownloadButton';
-import BeforeAfterSlider from '@/components/islands/shared/BeforeAfterSlider';
-import ProcessingOverlay from '@/components/islands/shared/ProcessingOverlay';
 import NextStep from '@/components/islands/shared/NextStep';
-import { useWorker } from '@/hooks/use-worker';
-import { fileToArrayBuffer } from '@/lib/file-utils';
-import { createZipAndDownload } from '@/lib/download';
+import MultiFileDownload, { useMultiFileDownload, type MultiFile } from '@/components/islands/shared/MultiFileDownload';
+import ToolWorkspace from '@/components/islands/workspace/ToolWorkspace';
+import ActionBar from '@/components/islands/workspace/ActionBar';
+import WorkspaceFileBar from '@/components/islands/workspace/WorkspaceFileBar';
+import ImageStage from '@/components/islands/workspace/ImageStage';
+import { useToolRun } from '@/components/islands/workspace/use-tool-run';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { downloadBlob } from '@/lib/download';
 import { formatBytes, generateId, cn } from '@/lib/utils';
-import type { WorkerResponse, CompressImageOptions } from '@/types/worker-messages';
+import {
+  TARGET_MAX_QUALITY,
+  TARGET_MIN_QUALITY,
+  buildImageFacts,
+  canPreviewLive,
+  formatLabel,
+  formatName,
+  hasQuality,
+  outputFileName,
+  savedPercent,
+  targetLabel,
+  uniqueNames,
+  type ImageFacts,
+} from '@/lib/compress-image';
+import type { CompressImageFormat, CompressImageOptions, CompressImageStats } from '@/types/worker-messages';
+import { useImagePreview } from './use-image-preview';
+import { loadImage, type LoadedImage } from './load-image';
 
-type OutputFormat = 'original' | 'jpeg' | 'webp' | 'png' | 'avif';
-type Mode = 'quality' | 'target-size';
-type Status = 'idle' | 'processing' | 'done' | 'error';
+/**
+ * Compress Image, in the shared workspace.
+ *
+ * The image is shown large on a checkerboard, at Fit, 100% or 200%. For JPEG
+ * and WebP at a normal size, moving the quality slider compresses the shown
+ * image (debounced, latest wins) so Original vs Compressed updates as you go;
+ * AVIF, PNG and large images wait for "Preview". Target size shows its result
+ * after the run. Facts under the comparison come from the real output.
+ *
+ * Several images: a strip above the stage chooses which is shown; the run
+ * compresses them all with the same settings and hands them over with
+ * `MultiFileDownload`.
+ */
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/avif', 'image/heic', 'image/heif'];
+const FORMATS: CompressImageFormat[] = ['jpeg', 'webp', 'avif', 'png'];
+const NO_FILES: MultiFile[] = [];
 
-const outMimeFor = (f: OutputFormat) =>
-  f === 'jpeg' ? 'image/jpeg' : f === 'png' ? 'image/png' : f === 'avif' ? 'image/avif' : 'image/webp';
-const extFor = (mime: string) =>
-  mime === 'image/webp' ? 'webp' : mime === 'image/png' ? 'png' : mime === 'image/avif' ? 'avif' : 'jpg';
-
-interface CompressImageToolProps {
-  /** Start in Target Size mode at this many KB — set by the size-specific landing pages. */
-  initialTargetKb?: number;
-  /** Pre-selected output format. Upload forms with a size limit usually want a JPG. */
-  initialFormat?: OutputFormat;
+interface Item {
+  id: string;
+  file: File;
+  info: LoadedImage | null;
+  failed: boolean;
 }
 
-export default function CompressImageTool({ initialTargetKb, initialFormat = 'original' }: CompressImageToolProps) {
-  // Single-file state (rich preview + before/after). Used when exactly one file.
-  const [file, setFile] = useState<File | null>(null);
-  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
-  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
+interface Output {
+  itemId: string;
+  name: string;
+  blob: Blob;
+  url: string;
+  stats: CompressImageStats;
+  originalBytes: number;
+  facts: ImageFacts;
+}
 
-  // Batch state (2+ files → ZIP). Kept separate so the single-file UX is unchanged.
-  const [batch, setBatch] = useState<FileItem[]>([]);
-  const [batchResults, setBatchResults] = useState<{ name: string; blob: Blob }[]>([]);
-  const [batchPct, setBatchPct] = useState(0);
+interface RunResult {
+  outputs: Output[];
+  files: MultiFile[];
+}
 
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>(initialFormat);
-  const [mode, setMode] = useState<Mode>(initialTargetKb ? 'target-size' : 'quality');
+interface CompressImageToolProps {
+  /** Start in Target size mode at this many KB — set by the size-specific landing pages. */
+  initialTargetKb?: number;
+  /** Pre-selected output format. Upload forms with a size limit usually want a JPG. */
+  initialFormat?: CompressImageFormat;
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const choice = (on: boolean) =>
+  cn(
+    'h-9 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+    on
+      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]'
+      : 'border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-background)]',
+  );
+
+function FactList({ facts, testId }: { facts: ImageFacts; testId: string }) {
+  return (
+    <ul data-testid={testId} className="flex flex-col gap-1 text-sm text-[var(--color-text-secondary)]">
+      {facts.facts.map((f) => (
+        <li
+          key={f.key}
+          data-testid={`fact-${f.key}`}
+          className={cn(
+            (f.key === 'target-missed' || f.key === 'original') && 'font-medium text-[var(--color-text-primary)]',
+          )}
+        >
+          {f.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export default function CompressImageTool({ initialTargetKb, initialFormat = 'webp' }: CompressImageToolProps) {
+  const [items, setItems] = useState<Item[]>([]);
+  const [selected, setSelected] = useState(0);
+  const [format, setFormat] = useState<CompressImageFormat>(initialFormat);
+  const [mode, setMode] = useState<'quality' | 'target-size'>(initialTargetKb ? 'target-size' : 'quality');
   const [quality, setQuality] = useState(75);
-  const [targetKb, setTargetKb] = useState(initialTargetKb ?? 200);
-  const [status, setStatus] = useState<Status>('idle');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [targetKb, setTargetKb] = useState<number>(initialTargetKb ?? 200);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [step, setStep] = useState({ index: 0, count: 1 });
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const phone = useMediaQuery('(max-width: 767px)');
+  const run = useToolRun<RunResult>();
+  const { invalidate } = run;
 
-  const { isRunning, progress, progressLabel, run, cancel } = useWorker();
-  const isBatch = batch.length > 0;
+  const active = items.length > 0;
+  const batch = items.length > 1;
+  const index = Math.min(selected, Math.max(0, items.length - 1));
+  const item = items[index] ?? null;
+  const targetBytes = Math.round(targetKb * 1024);
+  const targetInvalid = mode === 'target-size' && !(targetBytes >= 1024);
+  const effectiveFormat: CompressImageFormat = mode === 'target-size' && format === 'png' ? 'webp' : format;
 
-  const resetSingle = () => {
-    if (originalUrl) URL.revokeObjectURL(originalUrl);
-    if (resultUrl) URL.revokeObjectURL(resultUrl);
-    setFile(null); setBuffer(null); setOriginalUrl(null); setResultBlob(null); setResultUrl(null);
-  };
+  const options = useMemo<CompressImageOptions>(
+    () =>
+      mode === 'target-size'
+        ? { format: effectiveFormat, mode, targetBytes }
+        : { format: effectiveFormat, mode, quality: hasQuality(effectiveFormat) ? quality : undefined },
+    [effectiveFormat, mode, quality, targetBytes],
+  );
 
-  const handleFiles = useCallback(async (files: File[]) => {
-    if (files.length === 0) return;
-    setStatus('idle'); setErrorMsg(null); setBatchResults([]);
+  /* ── Files ────────────────────────────────────────────────────────────── */
 
-    if (files.length > 1) {
-      // Batch mode.
-      resetSingle();
-      setBatch(files.map((f) => ({ id: generateId(), file: f })));
-      return;
+  // Object URLs of the images on screen, revoked when an image leaves.
+  const urls = useRef(new Map<string, string>());
+  useEffect(() => {
+    const map = urls.current;
+    return () => {
+      for (const url of map.values()) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  const read = useCallback((added: Item[]) => {
+    for (const it of added) {
+      loadImage(it.file).then(
+        (info) => {
+          urls.current.set(it.id, info.url);
+          setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, info } : p)));
+        },
+        () => setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, failed: true } : p))),
+      );
     }
+  }, []);
 
-    // Single-file mode.
-    setBatch([]);
-    const f = files[0];
-    resetSingle();
-    setFile(f);
-    try {
-      const buf = await fileToArrayBuffer(f);
-      setBuffer(buf);
-      setOriginalUrl(URL.createObjectURL(new Blob([buf], { type: f.type })));
-    } catch { toast.error('Failed to read image'); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originalUrl, resultUrl]);
+  const drop = useCallback((gone: Item[]) => {
+    for (const it of gone) {
+      const url = urls.current.get(it.id);
+      if (url) URL.revokeObjectURL(url);
+      urls.current.delete(it.id);
+    }
+  }, []);
 
-  const handleRemoveFile = useCallback(() => {
-    resetSingle(); setStatus('idle'); setErrorMsg(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originalUrl, resultUrl]);
+  const addFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+      invalidate();
+      const added = files.map((file) => ({ id: generateId(), file, info: null, failed: false }));
+      setItems((prev) => {
+        if (prev.length === 0) setSelected(0);
+        return [...prev, ...added];
+      });
+      read(added);
+    },
+    [invalidate, read],
+  );
 
-  const optionsFor = (): CompressImageOptions => ({
-    format: outputFormat === 'original' ? 'webp' : outputFormat,
-    mode,
-    quality,
-    targetBytes: mode === 'target-size' ? targetKb * 1024 : undefined,
+  const replaceFile = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+      invalidate();
+      const added = files.map((file) => ({ id: generateId(), file, info: null, failed: false }));
+      setItems((prev) => {
+        drop(prev);
+        return added;
+      });
+      setSelected(0);
+      read(added);
+    },
+    [invalidate, read, drop],
+  );
+
+  const removeAll = useCallback(() => {
+    invalidate();
+    setItems((prev) => {
+      drop(prev);
+      return [];
+    });
+    setSelected(0);
+  }, [invalidate, drop]);
+
+  const removeOne = useCallback(
+    (id: string) => {
+      invalidate();
+      setItems((prev) => {
+        drop(prev.filter((p) => p.id === id));
+        return prev.filter((p) => p.id !== id);
+      });
+    },
+    [invalidate, drop],
+  );
+
+  /** Wrap a setter so any change makes the result stale. */
+  const change =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      invalidate();
+      set(value);
+    };
+
+  /* ── Preview ──────────────────────────────────────────────────────────── */
+
+  const pixels = item?.info ? item.info.width * item.info.height : 0;
+  const live = canPreviewLive(effectiveFormat, pixels);
+  const running = run.phase === 'running';
+  const done = run.phase === 'done' && !!run.result;
+  const preview = useImagePreview({
+    item: item?.info ? { id: item.id, file: item.file } : null,
+    options: mode === 'quality' ? options : null,
+    live,
+    paused: running || done,
+  });
+  const previewFacts = preview.shown ? buildImageFacts(item!.file.size, preview.shown.blob.size, preview.shown.stats) : null;
+
+  /* ── The run ──────────────────────────────────────────────────────────── */
+
+  const compress = useCallback(() => {
+    if (!active || targetInvalid) return;
+    const used = options;
+    const list = items;
+    void run.start(async (work) => {
+      // Let "Compressing…" paint, even when every image's preview can be reused.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const outputs: Output[] = [];
+      for (const [i, it] of list.entries()) {
+        setStep({ index: i, count: list.length });
+        let blob: Blob;
+        let stats: CompressImageStats;
+        // The preview of this image at these settings is the same pass: reuse its bytes.
+        const cached = used.mode === 'quality' ? preview.lookup(it.id, used) : undefined;
+        if (cached) {
+          blob = cached.blob;
+          stats = cached.stats;
+        } else {
+          const buffer = await it.file.arrayBuffer();
+          const response = await work(
+            'image',
+            { op: 'compress-image', buffer, options: used, progressPort: undefined as never },
+            [buffer],
+          );
+          if (!response) return null;
+          if (response.status === 'error') throw new Error(`${it.file.name} could not be compressed: ${response.message}`);
+          if (response.status !== 'success' || !response.stats?.image) throw new Error(`${it.file.name} could not be compressed.`);
+          stats = response.stats.image;
+          blob = new Blob([response.result], { type: stats.mime });
+        }
+        outputs.push({
+          itemId: it.id,
+          name: outputFileName(it.file.name, stats.mime),
+          blob,
+          url: URL.createObjectURL(blob),
+          stats,
+          originalBytes: it.file.size,
+          facts: buildImageFacts(it.file.size, blob.size, stats),
+        });
+      }
+      const names = uniqueNames(outputs.map((o) => o.name));
+      outputs.forEach((o, i) => (o.name = names[i]));
+      return {
+        outputs,
+        files: outputs.map((o) => ({ name: o.name, blob: o.blob, width: o.stats.width, height: o.stats.height })),
+      };
+    });
+  }, [active, targetInvalid, options, items, run, preview]);
+
+  // The outputs' object URLs live as long as the result.
+  const result = run.result;
+  useEffect(() => {
+    if (!result) return;
+    return () => {
+      for (const o of result.outputs) URL.revokeObjectURL(o.url);
+    };
+  }, [result]);
+
+  const resultFiles = result?.files ?? NO_FILES;
+  const downloads = useMultiFileDownload({
+    files: resultFiles,
+    zipName: 'compressed-images.zip',
+    noun: { one: 'image', other: 'images' },
+    folderStartIn: 'pictures',
   });
 
-  /** Compress one buffer through the worker; returns the output blob. */
-  const compressOne = useCallback(async (buf: ArrayBuffer): Promise<Blob | null> => {
-    const { port1, port2 } = new MessageChannel();
-    const bufCopy = buf.slice(0);
-    const response: WorkerResponse | null = await run(
-      'image',
-      { op: 'compress-image', buffer: bufCopy, options: optionsFor(), progressPort: port2 },
-      [bufCopy, port2]
-    );
-    port1.close();
-    if (!response || response.status !== 'success' || !response.result) {
-      if (response?.status === 'error') throw new Error(response.message);
-      return null;
-    }
-    // Typed from the bytes themselves: the original may have come back, or another format.
-    return new Blob([response.result], { type: response.stats?.image?.mime ?? outMimeFor(outputFormat) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, outputFormat, mode, quality, targetKb]);
+  const output = done ? result!.outputs.find((o) => o.itemId === item?.id) ?? null : null;
 
-  const handleCompress = useCallback(async () => {
-    setErrorMsg(null);
-    try {
-      if (isBatch) {
-        setStatus('processing'); setBatchPct(0);
-        const out: { name: string; blob: Blob }[] = [];
-        for (let i = 0; i < batch.length; i++) {
-          setBatchPct(Math.round(((i + 1) / batch.length) * 100));
-          const buf = await fileToArrayBuffer(batch[i].file);
-          const blob = await compressOne(buf);
-          if (blob) {
-            const base = batch[i].file.name.replace(/\.[^.]+$/, '');
-            out.push({ name: `${base}-compressed.${extFor(blob.type)}`, blob });
-          }
-        }
-        setBatchResults(out);
-        setStatus('done');
-        toast.success(`Compressed ${out.length} image${out.length !== 1 ? 's' : ''}`);
-        return;
+  /* ── Stage ────────────────────────────────────────────────────────────── */
+
+  const tried =
+    effectiveFormat === 'png' ? 'a lossless PNG' : `${formatLabel(effectiveFormat)} at quality ${quality}`;
+  let source: 'original' | 'preview' | 'output' = 'original';
+  let stageStatus: string;
+  if (!item) stageStatus = '';
+  else if (item.failed) stageStatus = `${item.file.name} could not be read as an image.`;
+  else if (!item.info) stageStatus = 'Reading the image…';
+  else if (running) stageStatus = batch ? `Compressing ${step.index + 1} of ${step.count}…` : 'Compressing…';
+  else if (output) {
+    source = 'output';
+    stageStatus = `${output.name}: ${formatName(output.stats.mime)} · ${formatBytes(output.originalBytes)} → ${formatBytes(output.blob.size)} · ${output.facts.outcome}`;
+  } else if (mode === 'target-size')
+    stageStatus = `Your original. Target size shows the result after you press ${batch ? `Compress ${items.length} images` : 'Compress image'}.`;
+  else if (preview.status === 'ready' && previewFacts) {
+    source = 'preview';
+    stageStatus = `Preview, ${tried}: ${formatBytes(item.file.size)} → ${formatBytes(preview.shown!.blob.size)} · ${previewFacts.outcome}`;
+  } else if (preview.status === 'working') {
+    source = preview.shown ? 'preview' : 'original';
+    stageStatus = `Making the preview as ${tried}…`;
+  } else if (preview.status === 'error') stageStatus = `The preview could not be made: ${preview.error}`;
+  else
+    stageStatus = `Your original. Press Preview to see it as ${tried}${live ? '' : effectiveFormat === 'avif' ? ' (AVIF is slow to encode, so it waits to be asked)' : pixels > 12_000_000 ? ' (a large image, so it waits to be asked)' : ''}.`;
+
+  const showPreviewButton = !!item?.info && !done && !running && mode === 'quality' && !live;
+  const afterSrc = output ? output.url : source === 'preview' ? (preview.shown?.url ?? null) : null;
+
+  const stage = item ? (
+    <ImageStage
+      src={item.info?.url ?? null}
+      alt={`Original: ${item.file.name}`}
+      naturalWidth={item.info?.width ?? 0}
+      naturalHeight={item.info?.height ?? 0}
+      resultSrc={afterSrc}
+      resultAlt={`Compressed: ${item.file.name}`}
+      beforeLabel="Original"
+      afterLabel="Compressed"
+      busy={!done && preview.status === 'working'}
+      placeholder={item.failed ? 'This file could not be read as an image' : 'Reading the image…'}
+      items={items.map((it, i) => ({
+        id: it.id,
+        name: it.file.name,
+        thumbSrc: it.info?.url ?? null,
+        badge:
+          done && result!.outputs[i]?.facts.warning ? (
+            <span
+              title="Not what was asked for — see the facts"
+              className="flex size-4 items-center justify-center rounded-full bg-[var(--color-warning)] text-[10px] font-bold text-white"
+            >
+              !
+            </span>
+          ) : null,
+      }))}
+      selected={index}
+      onSelect={setSelected}
+      footer={
+        <div className="flex items-center gap-2">
+          <p
+            data-testid="stage-status"
+            data-source={source}
+            data-live={live && mode === 'quality' ? 'true' : 'false'}
+            data-preview={preview.status}
+            aria-live="polite"
+            className="line-clamp-2 min-w-0 flex-1 text-xs text-[var(--color-text-secondary)]"
+          >
+            {stageStatus}
+          </p>
+          {showPreviewButton && (
+            <button
+              type="button"
+              onClick={preview.request}
+              disabled={preview.status === 'working' || preview.current}
+              data-testid="preview-quality"
+              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {preview.status === 'working' ? 'Making preview…' : 'Preview'}
+            </button>
+          )}
+        </div>
       }
+    />
+  ) : null;
 
-      if (!buffer || !file) { toast.error('Upload an image first'); return; }
-      setStatus('processing');
-      const blob = await compressOne(buffer);
-      if (!blob) { setStatus('idle'); return; }
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
-      setResultBlob(blob);
-      setResultUrl(URL.createObjectURL(blob));
-      setStatus('done');
-      const savedPct = Math.round(((file.size - blob.size) / file.size) * 100);
-      toast[savedPct > 0 ? 'success' : 'info'](savedPct > 0 ? `Compressed! Reduced by ${savedPct}%` : 'Image is already well-optimized. Original returned.');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Compression failed';
-      setStatus('error'); setErrorMsg(msg); toast.error(msg);
-    }
-  }, [isBatch, batch, buffer, file, resultUrl, compressOne]);
+  /* ── Controls ─────────────────────────────────────────────────────────── */
 
-  const handleDownload = useCallback(async () => {
-    if (isBatch) {
-      if (batchResults.length === 0) return;
-      const fileList = await Promise.all(batchResults.map(async (r) => ({ name: r.name, buffer: await r.blob.arrayBuffer() })));
-      await createZipAndDownload(fileList, 'compressed-images.zip');
-      return;
-    }
-    if (!resultBlob || !file) return;
-    const name = file.name.replace(/\.[^.]+$/, '') + '-compressed.' + extFor(resultBlob.type);
-    const url = URL.createObjectURL(resultBlob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [isBatch, batchResults, resultBlob, file]);
+  const heading = 'text-sm font-semibold text-[var(--color-text-primary)]';
+  const note = 'text-xs leading-5 text-[var(--color-text-secondary)]';
 
-  const savedPct = file && resultBlob ? Math.round(((file.size - resultBlob.size) / file.size) * 100) : 0;
-
-  // Shared options panel (format + mode + quality/target).
-  const optionsPanel = (
-    <div className="flex flex-col gap-5">
-      <div>
-        <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">Output Format</label>
-        <div className="flex flex-wrap gap-2">
-          {(['original', 'jpeg', 'webp', 'avif', 'png'] as OutputFormat[]).map((f) => (
-            <button key={f} onClick={() => {
-              setOutputFormat(f);
-              if (f === 'png') toast.info('PNG is lossless — file size may increase. Use JPEG/WebP/AVIF for smaller files.');
-            }}
-              className={cn('rounded-lg border px-4 py-2 text-sm font-medium uppercase transition-colors',
-                outputFormat === f ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
-              )}>
-              {f === 'original' ? 'Best (WebP)' : f.toUpperCase()}
+  const controls = (
+    <div className="flex flex-col gap-5 p-3 sm:p-4" inert={running}>
+      <section className="flex flex-col gap-2" aria-labelledby="ci-format-heading">
+        <h3 id="ci-format-heading" className={heading}>
+          Output format
+        </h3>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Output format">
+          {FORMATS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={effectiveFormat === f}
+              disabled={f === 'png' && mode === 'target-size'}
+              data-testid={`format-${f}`}
+              onClick={() => change(setFormat)(f)}
+              className={choice(effectiveFormat === f)}
+            >
+              {formatLabel(f)}
             </button>
           ))}
         </div>
-      </div>
-      <div>
-        <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">Compression Mode</label>
-        <div className="flex gap-2">
-          {([['quality', 'By Quality'], ['target-size', 'Target Size']] as const).map(([v, l]) => (
-            <button key={v} onClick={() => setMode(v)}
-              className={cn('rounded-lg border px-4 py-2 text-sm transition-colors',
-                mode === v ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]' : 'border-[var(--color-border)]'
-              )}>
-              {l}
-            </button>
-          ))}
+        {effectiveFormat === 'jpeg' && (
+          <p data-testid="jpeg-background-note" className={note}>
+            JPEG cannot store transparency: transparent areas become white.
+          </p>
+        )}
+        {effectiveFormat === 'png' && (
+          <p data-testid="png-note" className={note}>
+            PNG is lossless: every pixel is kept, so there is no quality to choose. The image is saved again as PNG, which
+            for photos is usually larger than JPEG or WebP. If it does not come out smaller, your original is kept.
+          </p>
+        )}
+        {effectiveFormat === 'avif' && <p className={note}>AVIF is often the smallest at a given quality, but slow to encode.</p>}
+        {mode === 'target-size' && <p className={note}>PNG has no quality to lower, so it cannot aim at a size.</p>}
+      </section>
+
+      <section className="flex flex-col gap-2" aria-labelledby="ci-mode-heading">
+        <h3 id="ci-mode-heading" className={heading}>
+          Compression
+        </h3>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Compression mode">
+          <button type="button" aria-pressed={mode === 'quality'} onClick={() => change(setMode)('quality')} className={choice(mode === 'quality')}>
+            By quality
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'target-size'}
+            onClick={() => change(setMode)('target-size')}
+            className={choice(mode === 'target-size')}
+          >
+            Target size
+          </button>
         </div>
         {mode === 'quality' ? (
-          <div className="mt-3">
-            <label htmlFor="ci-quality" className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
-              <span>Quality</span><span className="tabular-nums">{quality}%</span>
-            </label>
-            <input id="ci-quality" type="range" min={1} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))}
-              className="w-full accent-[var(--color-primary)]" />
-          </div>
+          hasQuality(effectiveFormat) ? (
+            <div>
+              <div className="mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]">
+                <label htmlFor="ci-quality">Quality</label>
+                <output htmlFor="ci-quality" className="tabular-nums" data-testid="quality-value">
+                  {quality}
+                </output>
+              </div>
+              <input
+                id="ci-quality"
+                type="range"
+                min={1}
+                max={100}
+                value={quality}
+                onChange={(e) => change(setQuality)(Number(e.target.value))}
+                className="w-full accent-[var(--color-primary)]"
+              />
+              <p className={note}>
+                {live
+                  ? 'Lower is smaller with more visible loss. The comparison updates as you move it.'
+                  : 'Lower is smaller with more visible loss. Press Preview under the image to see it.'}
+              </p>
+            </div>
+          ) : null
         ) : (
-          <div className="mt-3">
-            <label htmlFor="ci-target-kb" className="mb-1 block text-xs text-[var(--color-text-secondary)]">Target Size (KB)</label>
-            <input id="ci-target-kb" type="number" min={1} value={targetKb} onChange={(e) => setTargetKb(Math.max(1, Number(e.target.value)))}
-              className="w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none" />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="ci-target-kb" className="text-xs text-[var(--color-text-secondary)]">
+              Target size (KB)
+            </label>
+            <input
+              id="ci-target-kb"
+              type="number"
+              min={1}
+              value={Number.isFinite(targetKb) ? targetKb : ''}
+              onChange={(e) => change(setTargetKb)(e.target.value === '' ? NaN : Number(e.target.value))}
+              className="w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            />
+            <p className={note}>
+              Tries qualities from {TARGET_MAX_QUALITY} down to {TARGET_MIN_QUALITY} and keeps the highest whose file fits.
+              The pixel size is not changed; if even quality {TARGET_MIN_QUALITY} does not fit, you are told the smallest
+              size it reached.
+            </p>
           </div>
         )}
-      </div>
+      </section>
+
+      {previewFacts && !done && (
+        <section data-testid="preview-facts-section" aria-labelledby="ci-preview-heading" className="flex flex-col gap-1.5">
+          <h3 id="ci-preview-heading" className={heading}>
+            Preview{preview.current ? '' : ' (updating…)'}
+          </h3>
+          <FactList facts={previewFacts} testId="preview-facts" />
+        </section>
+      )}
+
+      {batch && (
+        <section className="flex flex-col gap-2" aria-labelledby="ci-files-heading">
+          <h3 id="ci-files-heading" className={heading}>
+            Images ({items.length})
+          </h3>
+          <ul className="flex flex-col gap-1">
+            {items.map((it, i) => (
+              <li key={it.id} data-testid="file-row" className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSelected(i)}
+                  aria-current={i === index ? 'true' : undefined}
+                  className={cn(
+                    'min-w-0 flex-1 truncate rounded px-1 py-1 text-left',
+                    i === index ? 'font-semibold text-[var(--color-primary)]' : 'text-[var(--color-text-primary)]',
+                  )}
+                >
+                  {it.file.name}
+                </button>
+                <span className="shrink-0 tabular-nums text-[var(--color-text-secondary)]">{formatBytes(it.file.size)}</span>
+                <button
+                  type="button"
+                  onClick={() => removeOne(it.id)}
+                  aria-label={`Remove ${it.file.name}`}
+                  data-testid="file-remove"
+                  className="flex size-7 shrink-0 items-center justify-center rounded text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <DropZone accept={ACCEPTED} multiple onFiles={addFiles} compact compactLabel="Add images" hint="JPEG, PNG, WebP, AVIF, HEIC" />
+
+      <p className={note}>
+        Compressing re-encodes the image from its pixels, so EXIF and other metadata (camera, location, date) are not
+        copied into the new file. A file kept as your original is unchanged.
+      </p>
     </div>
   );
 
+  /* ── Result ───────────────────────────────────────────────────────────── */
+
+  const totalBefore = result ? result.outputs.reduce((s, o) => s + o.originalBytes, 0) : 0;
+  const totalAfter = result ? result.outputs.reduce((s, o) => s + o.blob.size, 0) : 0;
+  const missed = !!output?.stats.target && !output.stats.target.met;
+
+  const resultPanel =
+    done && result ? (
+      <div className="flex flex-col gap-4 p-3 sm:p-4" data-testid="result-panel">
+        {output && (
+          <section aria-labelledby="ci-facts-heading" className="flex flex-col gap-1.5">
+            <h3 id="ci-facts-heading" className={heading} data-testid="facts-heading">
+              {batch ? `${output.name}: ` : ''}
+              {output.facts.outcome}
+            </h3>
+            <FactList facts={output.facts} testId="image-facts" />
+          </section>
+        )}
+
+        {batch && (
+          <section aria-labelledby="ci-batch-heading" className="flex flex-col gap-1.5">
+            <h3 id="ci-batch-heading" className={heading}>
+              {plural(result.outputs.length, 'image')}: {formatBytes(totalBefore)} → {formatBytes(totalAfter)}
+              {savedPercent(totalBefore, totalAfter) > 0 ? ` (${savedPercent(totalBefore, totalAfter)}% smaller)` : ''}
+            </h3>
+            <ul data-testid="batch-facts" className="flex flex-col gap-0.5 text-xs">
+              {result.outputs.map((o, i) => (
+                <li key={o.itemId}>
+                  <button
+                    type="button"
+                    data-testid="batch-fact"
+                    onClick={() => setSelected(i)}
+                    aria-current={i === index ? 'true' : undefined}
+                    className={cn(
+                      'w-full rounded px-1 py-1 text-left',
+                      i === index ? 'font-semibold text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]',
+                    )}
+                  >
+                    {o.name} · {formatBytes(o.originalBytes)} → {formatBytes(o.blob.size)} · {o.facts.outcome}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <MultiFileDownload
+              files={resultFiles}
+              zipName="compressed-images.zip"
+              noun={{ one: 'image', other: 'images' }}
+              listLabel="Your compressed images"
+              folderStartIn="pictures"
+              controller={downloads}
+              hidePrimary
+            />
+          </section>
+        )}
+
+        {missed ? (
+          <NextStep href="/resize-image/" label="Resize Image">
+            Still too large? Make it smaller in pixels with
+          </NextStep>
+        ) : (
+          <NextStep href="/resize-image/" label="Resize Image">
+            Need different dimensions? Try
+          </NextStep>
+        )}
+      </div>
+    ) : undefined;
+
+  /* ── What the visitor is told ─────────────────────────────────────────── */
+
+  const actionLabel = batch ? `Compress ${items.length} images` : 'Compress image';
+  const beside = wide ? 'on the right' : 'below';
+  const anyFailed = items.find((it) => it.failed);
+  const loading = items.some((it) => !it.info && !it.failed);
+
+  let prompt: string;
+  let promptTone: 'info' | 'success' | 'error' = 'info';
+  if (loading) prompt = batch ? 'Reading your images…' : 'Reading your image…';
+  else if (anyFailed) {
+    prompt = `${anyFailed.file.name} could not be read as an image. Remove it or choose another file.`;
+    promptTone = 'error';
+  } else if (running) prompt = batch ? 'Compressing your images…' : 'Compressing your image…';
+  else if (run.phase === 'error') {
+    prompt = 'The image could not be compressed. Try again.';
+    promptTone = 'error';
+  } else if (done) {
+    const missedAny = result!.outputs.some((o) => o.stats.target && !o.stats.target.met);
+    const keptAll = result!.outputs.every((o) => o.stats.returnedOriginal);
+    if (missedAny) {
+      prompt = batch
+        ? `Not every image could be brought under ${targetLabel(targetBytes)} — see the facts, then download or make changes.`
+        : `This image could not be brought under ${targetLabel(targetBytes)}. See the smallest size reached, then download or make changes.`;
+      promptTone = 'error';
+    } else if (keptAll && !batch) {
+      prompt = 'Compressing did not make this image smaller, so your original is kept. Download it, or make changes.';
+    } else {
+      prompt = batch
+        ? 'Choose an image above to compare it with its original, then download them.'
+        : 'Compare the compressed image with your original, then download it.';
+      promptTone = 'success';
+    }
+  } else if (phone && !optionsOpen) {
+    prompt = `Open Options to choose the format and ${mode === 'target-size' ? 'target size' : 'quality'}, then press ${actionLabel}.`;
+  } else if (mode === 'target-size') {
+    prompt = `Enter the largest file size you can accept ${beside}, then press ${actionLabel}.`;
+  } else if (live) {
+    prompt = `Choose the format and quality ${beside}; the comparison updates as you go. Then press ${actionLabel}.`;
+  } else {
+    prompt = `Choose the format ${beside}, press Preview to see the result, then press ${actionLabel}.`;
+  }
+
+  const hint =
+    mode === 'target-size'
+      ? `Finds the highest ${formatLabel(effectiveFormat)} quality that fits under ${targetInvalid ? 'the size you enter' : targetLabel(targetBytes)}.`
+      : effectiveFormat === 'png'
+        ? 'Saves a lossless PNG at the same pixel size, or keeps your original if that is smaller.'
+        : `Saves ${formatLabel(effectiveFormat)} at quality ${quality}, same pixel size — or keeps your original if that is smaller.`;
+
+  const disabledReason = loading
+    ? 'Reading the image…'
+    : anyFailed
+      ? `${anyFailed.file.name} could not be read as an image`
+      : targetInvalid
+        ? 'Enter a target size of at least 1 KB'
+        : null;
+
+  const progress = Math.round(((step.index + run.progress / 100) / Math.max(1, step.count)) * 100);
+
+  let summary: string | undefined;
+  if (result && !batch && result.outputs[0]) {
+    const o = result.outputs[0];
+    summary = `${o.name} · ${formatBytes(o.blob.size)} · ${o.facts.outcome}`;
+  } else if (result) {
+    summary = `${plural(result.outputs.length, 'image')} · ${formatBytes(totalBefore)} → ${formatBytes(totalAfter)}`;
+  }
+
+  const single = result && result.outputs.length === 1 ? result.outputs[0] : null;
+  const download = single
+    ? {
+        label: 'Download',
+        onDownload: () => downloadBlob(single.blob, single.name),
+        ariaLabel: `Download ${single.name}`,
+      }
+    : {
+        label: downloads.primaryLabel,
+        onDownload: downloads.handlePrimary,
+        ariaLabel: downloads.primaryAriaLabel,
+        busyLabel: downloads.primaryBusyLabel,
+        doneLabel: downloads.primaryDoneLabel,
+      };
+
   return (
-    <div className="flex flex-col gap-6">
-      <DropZone accept={ACCEPTED} multiple onFiles={handleFiles}
-        hint="JPEG, PNG, WebP, AVIF, HEIC · single or batch" compact={isBatch || !!file} />
-
-      {/* Batch view */}
-      {isBatch && (
-        <>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-[var(--color-text-secondary)]">
-              {batch.length} images · {formatBytes(batch.reduce((s, f) => s + f.file.size, 0))}
-            </span>
-            <button onClick={() => { setBatch([]); setBatchResults([]); setStatus('idle'); }}
-              className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)]">Clear all</button>
-          </div>
-          <FileList files={batch}
-            onReorder={(fromId, toId) => setBatch((prev) => {
-              const fi = prev.findIndex((x) => x.id === fromId); const ti = prev.findIndex((x) => x.id === toId);
-              if (fi === -1 || ti === -1) return prev;
-              const next = [...prev]; const [m] = next.splice(fi, 1); next.splice(ti, 0, m); return next;
-            })}
-            onRemove={(id) => setBatch((prev) => prev.filter((x) => x.id !== id))}
-            variant="cards" />
-          {optionsPanel}
-        </>
-      )}
-
-      {/* Single-file view */}
-      {!isBatch && file && <FileInfoCard file={file} onRemove={handleRemoveFile} />}
-
-      {!isBatch && file && originalUrl && (
-        <>
-          <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-            <img src={originalUrl} alt={file.name} className="mx-auto max-h-64 object-contain" />
-          </div>
-          {optionsPanel}
-        </>
-      )}
-
-      {isRunning || status === 'processing' ? (
-        <ProcessingOverlay
-          progress={isBatch ? batchPct : progress}
-          label={progressLabel || (isBatch ? 'Compressing images…' : 'Compressing image…')}
-          onCancel={() => { cancel(); setStatus('idle'); }}
+    <ToolWorkspace
+      toolId="compress-image"
+      active={active}
+      empty={<DropZone accept={ACCEPTED} multiple onFiles={addFiles} hint="JPEG, PNG, WebP, AVIF, HEIC · single or batch" />}
+      title={batch ? 'Compress these images' : 'Compress this image'}
+      prompt={prompt}
+      promptTone={promptTone}
+      optionsOpen={optionsOpen}
+      onOptionsOpenChange={setOptionsOpen}
+      fileBar={
+        batch ? (
+          <WorkspaceFileBar
+            files={items.map((it) => it.file)}
+            noun="image"
+            onAdd={addFiles}
+            onRemove={removeAll}
+            accept={ACCEPTED}
+            disabled={running}
+          />
+        ) : item ? (
+          <WorkspaceFileBar
+            file={item.file}
+            extra={item.info ? `${item.info.width} × ${item.info.height} px` : undefined}
+            onRemove={removeAll}
+            onReplace={replaceFile}
+            accept={ACCEPTED}
+            disabled={running}
+          />
+        ) : null
+      }
+      stage={stage}
+      controls={controls}
+      result={resultPanel}
+      action={
+        <ActionBar
+          phase={run.phase}
+          label={actionLabel}
+          runningLabel="Compressing…"
+          onRun={compress}
+          disabledReason={disabledReason}
+          hint={hint}
+          progress={progress}
+          progressLabel={batch ? `Compressing ${step.index + 1} of ${step.count}` : run.progressLabel}
+          onCancel={run.cancel}
+          download={download}
+          summary={summary}
+          onEditAgain={invalidate}
+          error={run.error}
         />
-      ) : null}
-
-      {status === 'error' && errorMsg && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
-      )}
-
-      {/* Single-file before/after comparison */}
-      {!isBatch && status === 'done' && originalUrl && resultUrl && (
-        <BeforeAfterSlider
-          beforeSrc={originalUrl}
-          afterSrc={resultUrl}
-          beforeLabel={`Original (${formatBytes(file?.size ?? 0)})`}
-          afterLabel={`Compressed (${formatBytes(resultBlob?.size ?? 0)})`}
-          className="aspect-video"
-        />
-      )}
-
-      {status !== 'processing' && !isRunning && (isBatch || file) && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleCompress} data-testid="tool-action"
-            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto">
-            {isBatch ? `Compress ${batch.length} images` : 'Compress Image'}
-          </button>
-          {status === 'done' && (isBatch ? batchResults.length > 0 : resultBlob) && (
-            <DownloadButton onClick={handleDownload}
-              label={isBatch ? `Download ZIP (${batchResults.length} files)` : 'Download'} />
-          )}
-        </div>
-      )}
-
-      {!isBatch && status === 'done' && resultBlob && file && (
-        <div className={`rounded-lg border p-4 ${savedPct > 0 ? 'border-[var(--color-success)]/30 bg-[var(--color-success)]/5' : 'border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5'}`}>
-          <p className={`text-sm font-medium ${savedPct > 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'}`}>
-            {savedPct > 0 ? `Reduced by ${savedPct}%!` : 'No size reduction — original returned'}
-          </p>
-          <div className="mt-1 flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
-            <span>{formatBytes(file.size)}</span><span>→</span><span>{formatBytes(resultBlob.size)}</span>
-          </div>
-        </div>
-      )}
-
-      {status === 'done' && (isBatch ? batchResults.length > 0 : resultBlob) && (
-        <NextStep href="/resize-image/" label="Resize Image">Need different dimensions? Try</NextStep>
-      )}
-    </div>
+      }
+    />
   );
 }

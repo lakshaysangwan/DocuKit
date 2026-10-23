@@ -5,6 +5,7 @@ import {
   addSingleFileAndWait,
   addFilesAndWait,
   expectDownload,
+  expectDownloads,
   assertImage,
   assertZip,
   expectImageRendered,
@@ -26,16 +27,16 @@ test.describe('Compress Image', () => {
     // Uploaded image preview is visibly rendered.
     await expectImageRendered(page.locator('#main-content img').first());
 
-    // Default: Best (WebP) format, By Quality mode.
+    // Default: WebP format, By quality mode.
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 30_000 });
 
-    // The before/after comparison slider appears (a real operation preview).
-    await expect(page.getByText(/Original \(/)).toBeVisible();
-    await expect(page.getByText(/Compressed \(/)).toBeVisible();
+    // Original vs Compressed in the compare view (a real operation preview).
+    await expectImageRendered(page.getByTestId('compare-before'));
+    await expectImageRendered(page.getByTestId('compare-after'));
 
     const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    // 'Best (WebP)' encodes to WebP.
+    // The default output is WebP.
     assertImage(bytes, 'webp');
     expect(name).toMatch(/-compressed\.webp$/);
   });
@@ -52,13 +53,15 @@ test.describe('Compress Image', () => {
     assertImage(bytes, 'jpeg');
   });
 
-  test('batch: multiple images compress to a ZIP', async ({ page }) => {
+  test('batch: multiple images download separately, or as one ZIP', async ({ page }) => {
     await page.goto('/compress-image');
     await addFilesAndWait(page, [FIXTURE.jpg, FIXTURE.png], 2);
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
-    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
+    const files = await expectDownloads(page, () => page.getByTestId('download-button').click(), 2);
+    for (const f of files) assertImage(f.bytes, 'webp');
+    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-zip').click());
     assertZip(bytes);
     expect(name).toMatch(/compressed-images\.zip$/);
   });

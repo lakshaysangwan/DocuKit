@@ -15,6 +15,7 @@ import { openPdfToImage } from '../helpers/pdf-to-image';
 import { openRedact, openOptions as openRedactOptions } from '../helpers/redact-pdf';
 import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
 import { openDigitalSignature } from '../helpers/digital-signature';
+import { openCompressImage } from '../helpers/compress-image';
 
 /**
  * The tools that live in the shared workspace.
@@ -223,5 +224,13 @@ export const MIGRATED: MigratedTool[] = [
       await expect(action).toBeEnabled();
       await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     },
+  },
+  {
+    // The first image tool: the image large on a checkerboard, Original vs
+    // Compressed in the compare view. WebP at quality 75 is chosen on entry, so
+    // the action is available once the image has been read — no `makeReady`.
+    slug: 'compress-image',
+    name: 'Compress Image',
+    enter: (page) => openCompressImage(page, FIXTURE.jpg),
   },
 ];
