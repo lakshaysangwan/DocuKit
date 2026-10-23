@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { workerPool } from '@/workers/worker-pool';
+import { displayUrlFor } from './load-image';
 import type { CompressImageOptions, CompressImageStats, WorkerResponse } from '@/types/worker-messages';
 
 /**
@@ -103,11 +104,16 @@ export function useImagePreview({
         if (response.status === 'error') throw new Error(response.message || 'The preview could not be made.');
         if (response.status !== 'success' || !response.stats?.image || ctrl.signal.aborted) return;
         const blob = new Blob([response.result], { type: response.stats.image.mime });
+        const url = await displayUrlFor(blob);
+        if (ctrl.signal.aborted) {
+          URL.revokeObjectURL(url);
+          return;
+        }
         const result: ImagePreviewResult = {
           key: job.key,
           itemId: job.item.id,
           blob,
-          url: URL.createObjectURL(blob),
+          url,
           stats: response.stats.image,
         };
         const map = cache.current;

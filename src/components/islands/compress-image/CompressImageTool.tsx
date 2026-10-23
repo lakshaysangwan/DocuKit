@@ -27,7 +27,7 @@ import {
 } from '@/lib/compress-image';
 import type { CompressImageFormat, CompressImageOptions, CompressImageStats } from '@/types/worker-messages';
 import { useImagePreview } from './use-image-preview';
-import { loadImage, type LoadedImage } from './load-image';
+import { displayUrlFor, loadImage, type LoadedImage } from './load-image';
 
 /**
  * Compress Image, in the shared workspace.
@@ -262,7 +262,10 @@ export default function CompressImageTool({ initialTargetKb, initialFormat = 'we
             { op: 'compress-image', buffer, options: used, progressPort: undefined as never },
             [buffer],
           );
-          if (!response) return null;
+          if (!response) {
+            for (const o of outputs) URL.revokeObjectURL(o.url);
+            return null;
+          }
           if (response.status === 'error') throw new Error(`${it.file.name} could not be compressed: ${response.message}`);
           if (response.status !== 'success' || !response.stats?.image) throw new Error(`${it.file.name} could not be compressed.`);
           stats = response.stats.image;
@@ -272,7 +275,7 @@ export default function CompressImageTool({ initialTargetKb, initialFormat = 'we
           itemId: it.id,
           name: outputFileName(it.file.name, stats.mime),
           blob,
-          url: URL.createObjectURL(blob),
+          url: await displayUrlFor(blob),
           stats,
           originalBytes: it.file.size,
           facts: buildImageFacts(it.file.size, blob.size, stats),
