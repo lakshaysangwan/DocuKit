@@ -177,11 +177,14 @@ live site:** besides the blocked Web Analytics beacon, Cloudflare injects its bo
 because it is same-origin — and WebKit logs "access control checks" errors on every page alongside
 it. This is a Cloudflare dashboard setting (Bot Fight Mode / JavaScript detections), Lakshay's call;
 it conflicts with the "no tracking scripts" promise on the privacy page.
+| `c15d520`…`3e06511` (W12, 5 commits) | Compress Image in the workspace with a new shared `workspace/ImageStage.tsx`: live Original vs Compressed `CompareView` (debounced for JPEG/WebP up to 12 MP, a Preview button for AVIF, PNG and larger images), facts from the real output; bugs fixed — download extension matches the real format, transparent PNG → JPEG flattened onto white, missed target reported with the smallest size reached, unused `stripExif`/`percentage` removed (re-encoding drops EXIF, copy says so), PNG quality slider hidden, PNG not offered in Target size; HEIC input decoded; default format WebP | Clean worktree: 734 Chromium, 1101 Firefox/WebKit, 67 mobile, 9 visual, 1013 unit. Live: `compress-image-preview.spec.ts` against docukit.uk 30/30 on Chromium and WebKit (short check — account near its weekly limit) |
+
+Session stopped here on 2026-10-23 at Lakshay's request (weekly token limit at ~91%).
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
 PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange), W8 (PDF to Image),
-W9 (Redact), W10 (Protect/Unlock) and W11 (Digital Signature) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+W9 (Redact), W10 (Protect/Unlock), W11 (Digital Signature) and W12 (Compress Image) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
