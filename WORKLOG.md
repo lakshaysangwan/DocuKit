@@ -167,11 +167,21 @@ navigation. To investigate next.
 W10 notes: `qpdf-helper.ts` now captures qpdf's error output for every call (Compress included); no
 Before/After on Protect (the output needs its password — "Check it opens" stands in). The unmigrated
 example in the contract and large-file specs is now `/digital-signature-pdf`.
+| `d7bc04b`, `3df690a` (W11) | Digital Signature PDF in the workspace: the PDF shown first, certificate generate/upload after it, an explicit "Visible signature box" / "Invisible signature" choice with the box placed on any page as an overlay (default unchanged: bottom-right of page 1), written as the widget's appearance through page geometry; result pane checks the byte range, digest and RSA signature (and says trust is not checked); signer name taken from the certificate used; existing `/Annots` and `/Fields` kept; copy no longer claims PAdES, Acrobat verification or legal standing | Clean worktree: 712 Chromium, 1066 Firefox/WebKit (run hung after its last test; that batch re-ran 6/6), 65 mobile, 9 visual, 997 unit. Live: Digital Signature and Sign specs against docukit.uk on three engines (functional checks all pass), phone sign with `/ByteRange` ending at the file length |
+
+W11 notes: signing re-saves the whole file, so an earlier signature is invalidated (as before);
+OpenSSL 3 (AES) .p12 files untested; the Sign PDF FAQ question "Is this a legally binding
+signature?" stays but its answer should say plainly that we cannot say — copy sweep. **Found on the
+live site:** besides the blocked Web Analytics beacon, Cloudflare injects its bot-detection script
+(`/cdn-cgi/challenge-platform/.../jsd/oneshot`), which POSTs browser signals — not blocked by the CSP
+because it is same-origin — and WebKit logs "access control checks" errors on every page alongside
+it. This is a Cloudflare dashboard setting (Bot Fight Mode / JavaScript detections), Lakshay's call;
+it conflicts with the "no tracking scripts" promise on the privacy page.
 
 Queue changes since `HANDOFF.md` was last rewritten (fold these in at its next update): T11, T16,
 T15, W1, W2, W3, T19 (Edit PDF sizing, in the workspace), T1 (Merge), T2 (Split), T12 (Compress
 PDF preview), W4 (Watermark), W5 (Page Numbers), W6 (Crop), W7 (Rearrange), W8 (PDF to Image),
-W9 (Redact) and W10 (Protect/Unlock) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
+W9 (Redact), W10 (Protect/Unlock) and W11 (Digital Signature) are done; the workspace's step 1c (splitting `pdf-worker.ts`) is dropped because it only
 served parallel agents. Lakshay said to keep working in the same chat until he says stop, so the "hand off at half
 context" rule in HANDOFF section 4 and its kickoff prompt no longer applies. New items found:
 - **Crop Flatten race (real, user-visible):** clicking Crop in Flatten mode very soon after loading a
