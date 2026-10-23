@@ -90,7 +90,7 @@ node scripts/sync-pdfjs-worker.mjs        # REQUIRED — see gotchas
 When it finishes, the agent stops its server and removes **only the junction**, leaving the worktree:
 
 ```bash
-cmd //c "rmdir D:\Project\docukit-wt\\<id>\\node_modules"
+cmd //c "rmdir D:\\Project\\docukit-wt\\<id>\\node_modules"
 ls D:/Project/DocuKit/node_modules | wc -l     # must still be populated (746 entries on 2026-10-11)
 ```
 
@@ -261,9 +261,6 @@ Resize and Convert do.
 - Copy truth sweep for anything not yet migrated.
 - `src/types/worker-messages.ts` declares an unused `redact` op.
 - Untrack the nine fixtures under `tests/e2e/fixtures/files/` and ignore the folder.
-- `tools/pdf-doc-layer.spec.ts:134` fails on production on all engines (thumbnail URLs not revoked after in-site navigation) — test race or real leak; investigate (W9).
-- Lost clicks under the sticky header after smooth scroll cause WebKit/Firefox download flakes — harness fix.
-- Confirm two older items are gone: the Crop Flatten "worker is being destroyed" race (likely fixed by W1's shared worker) and the false Crop copy ("Numeric Input mode", "Crop & Download").
 
 ### 3. Older backlog still open
 
