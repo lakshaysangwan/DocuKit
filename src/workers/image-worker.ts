@@ -18,8 +18,12 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
 
   try {
     if (msg.op === 'compress-image') {
-      const result = await compressImage(msg.buffer, msg.options, sendProgress);
-      const response: WorkerResponse = { status: 'success', result };
+      const { buffer: result, stats } = await compressImage(msg.buffer, msg.options, sendProgress);
+      const response: WorkerResponse = {
+        status: 'success',
+        result,
+        stats: { originalSize: msg.buffer.byteLength, outputSize: result.byteLength, image: stats },
+      };
       (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
     } else if (msg.op === 'resize-image') {
       const result = await resizeImage(msg.buffer, msg.mimeType, msg.options, sendProgress);

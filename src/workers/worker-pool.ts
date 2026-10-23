@@ -189,7 +189,13 @@ class WorkerPool {
       const { compressImage, convertImage, resizeImage } = await import('../lib/image-ops');
       let result: ArrayBuffer;
       if (message.op === 'compress-image') {
-        result = await compressImage(message.buffer, message.options, sendProgress);
+        const out = await compressImage(message.buffer, message.options, sendProgress);
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        return {
+          status: 'success',
+          result: out.buffer,
+          stats: { originalSize: message.buffer.byteLength, outputSize: out.buffer.byteLength, image: out.stats },
+        };
       } else if (message.op === 'resize-image') {
         result = await resizeImage(message.buffer, message.mimeType, message.options, sendProgress);
       } else if (message.op === 'convert-image') {

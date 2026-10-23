@@ -90,7 +90,7 @@ export default function CompressImageTool({ initialTargetKb, initialFormat = 'or
   }, [originalUrl, resultUrl]);
 
   const optionsFor = (): CompressImageOptions => ({
-    format: outputFormat,
+    format: outputFormat === 'original' ? 'webp' : outputFormat,
     mode,
     quality,
     targetBytes: mode === 'target-size' ? targetKb * 1024 : undefined,
@@ -110,7 +110,8 @@ export default function CompressImageTool({ initialTargetKb, initialFormat = 'or
       if (response?.status === 'error') throw new Error(response.message);
       return null;
     }
-    return new Blob([response.result], { type: outMimeFor(outputFormat) });
+    // Typed from the bytes themselves: the original may have come back, or another format.
+    return new Blob([response.result], { type: response.stats?.image?.mime ?? outMimeFor(outputFormat) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, outputFormat, mode, quality, targetKb]);
 

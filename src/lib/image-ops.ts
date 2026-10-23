@@ -14,7 +14,21 @@
  */
 import { createCanvas2D, type AnyCanvas, type AnyCanvas2D } from './canvas-2d';
 import { bufferToImageData, encodeImageData, type ImageFormat } from './image-codec';
-import type { CompressImageOptions, ConvertImageOptions, ResizeImageOptions } from '../types/worker-messages';
+import type {
+  CompressImageFormat,
+  CompressImageOptions,
+  CompressImageStats,
+  ConvertImageOptions,
+  ResizeImageOptions,
+} from '../types/worker-messages';
+import {
+  flattenOnWhite,
+  hasQuality,
+  hasTransparency,
+  mimeForFormat,
+  searchTargetQuality,
+  sniffImageMime,
+} from './compress-image';
 
 export type ProgressFn = (pct: number, label?: string) => void;
 
@@ -82,69 +96,100 @@ export async function resizeImage(
   return out;
 }
 
+export interface CompressImageResult {
+  buffer: ArrayBuffer;
+  stats: CompressImageStats;
+}
+
+/**
+ * Compress an image at a quality, or to fit a target size.
+ *
+ * The image is decoded to pixels and re-encoded, so nothing but pixels is
+ * carried over (no EXIF). For JPEG, transparent pixels are composited onto
+ * white first. Nothing is resized.
+ *
+ * The input's own bytes come back instead of the encode when the encode is not
+ * smaller — in quality mode always, and in target mode only when the original
+ * already fits, is the same format that was asked for, and is smaller. The
+ * returned `stats.mime` is sniffed from the bytes returned, so it is always
+ * their real format.
+ */
 export async function compressImage(
   buffer: ArrayBuffer,
   options: CompressImageOptions,
   sendProgress: ProgressFn,
-): Promise<ArrayBuffer> {
+): Promise<CompressImageResult> {
   sendProgress(5, 'Decoding image…');
+  const format: CompressImageFormat = options.format;
+  const originalMime = sniffImageMime(new Uint8Array(buffer));
+  const data = await bufferToImageData(buffer);
+  const { width, height } = data;
 
-  const bitmap = await createImageBitmap(new Blob([buffer]));
-  const { canvas, ctx } = createCanvas2D(bitmap.width, bitmap.height);
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
+  let flattenedOnWhite = false;
+  if (format === 'jpeg' && hasTransparency(data.data)) {
+    flattenOnWhite(data.data);
+    flattenedOnWhite = true;
+  }
 
-  const quality = options.quality ?? 75;
-  const format = normalizeFormat(options.format);
+  const base = { width, height, flattenedOnWhite, encodedFormat: format };
+  const original = (encoded: ArrayBuffer, quality: number | null, target?: CompressImageStats['target']): CompressImageResult => ({
+    buffer,
+    stats: {
+      ...base,
+      mime: originalMime ?? 'application/octet-stream',
+      encodedQuality: quality,
+      encodedBytes: encoded.byteLength,
+      returnedOriginal: true,
+      target,
+    },
+  });
+  const encodedResult = (encoded: ArrayBuffer, quality: number | null, target?: CompressImageStats['target']): CompressImageResult => ({
+    buffer: encoded,
+    stats: {
+      ...base,
+      mime: sniffImageMime(new Uint8Array(encoded)) ?? mimeForFormat(format),
+      encodedQuality: quality,
+      encodedBytes: encoded.byteLength,
+      returnedOriginal: false,
+      target,
+    },
+  });
 
-  if (options.mode === 'target-size' && options.targetBytes) {
-    return compressToTargetSize(canvas, ctx, buffer, format, options.targetBytes, sendProgress);
+  if (options.mode === 'target-size' && options.targetBytes && hasQuality(format)) {
+    const targetBytes = options.targetBytes;
+    let tries = 0;
+    const found = await searchTargetQuality(async (q) => {
+      sendProgress(Math.min(90, 15 + tries++ * 9), `Trying quality ${q}…`);
+      return encodeImageData(data, format, q);
+    }, targetBytes);
+    sendProgress(95, 'Finalizing…');
+    const sameFormat = originalMime === mimeForFormat(format);
+    const originalSmaller = buffer.byteLength < found.bytes.byteLength;
+    if (found.met) {
+      if (sameFormat && originalSmaller && buffer.byteLength <= targetBytes) {
+        return original(found.bytes, found.quality, { bytes: targetBytes, met: true });
+      }
+      return encodedResult(found.bytes, found.quality, { bytes: targetBytes, met: true });
+    }
+    // Missed: hand back the smallest reached — the original, where that is allowed.
+    if (sameFormat && originalSmaller) {
+      return original(found.bytes, found.quality, { bytes: targetBytes, met: buffer.byteLength <= targetBytes });
+    }
+    return encodedResult(found.bytes, found.quality, { bytes: targetBytes, met: false });
   }
 
   sendProgress(30, 'Compressing…');
-  const outputBytes = await encodeCanvas(canvas, ctx, format, quality);
+  const quality = hasQuality(format) ? Math.max(1, Math.min(100, Math.round(options.quality ?? 75))) : null;
+  const encoded = await encodeImageData(data, format, quality ?? undefined);
   sendProgress(90, 'Finalizing…');
-
-  // Return the smaller of original vs compressed.
-  return outputBytes.byteLength >= buffer.byteLength ? buffer : outputBytes;
-}
-
-async function compressToTargetSize(
-  canvas: AnyCanvas,
-  ctx: AnyCanvas2D,
-  originalBuffer: ArrayBuffer,
-  format: ImageFormat,
-  targetBytes: number,
-  sendProgress: ProgressFn,
-): Promise<ArrayBuffer> {
-  // Force a lossy format for target-size (PNG can't target a size).
-  const actualFormat: ImageFormat = format === 'png' ? 'webp' : format;
-
-  let lo = 5;
-  let hi = 95;
-  let bestResult: ArrayBuffer | null = null;
-
-  // Binary search for the quality that hits the target size.
-  for (let i = 0; i < 10 && hi - lo > 2; i++) {
-    const mid = Math.round((lo + hi) / 2);
-    sendProgress(20 + i * 7, `Trying quality ${mid}%…`);
-
-    const encoded = await encodeCanvas(canvas, ctx, actualFormat, mid);
-    if (encoded.byteLength <= targetBytes) {
-      lo = mid;
-      bestResult = encoded;
-    } else {
-      hi = mid;
-    }
-  }
-
-  if (bestResult && bestResult.byteLength <= targetBytes) {
-    return bestResult;
-  }
-
-  // Try the lowest quality as a last resort.
-  const lastResort = await encodeCanvas(canvas, ctx, actualFormat, lo);
-  return lastResort.byteLength < originalBuffer.byteLength ? lastResort : originalBuffer;
+  // PNG cannot aim at a size; in target mode it still reports whether it fits.
+  const target =
+    options.mode === 'target-size' && options.targetBytes
+      ? { bytes: options.targetBytes, met: Math.min(encoded.byteLength, buffer.byteLength) <= options.targetBytes }
+      : undefined;
+  return encoded.byteLength >= buffer.byteLength && originalMime
+    ? original(encoded, quality, target)
+    : encodedResult(encoded, quality, target && { ...target, met: encoded.byteLength <= target.bytes });
 }
 
 /**

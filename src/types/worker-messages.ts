@@ -211,14 +211,37 @@ export type ImagesToPdfOptions = {
   backgroundColor?: string;
 };
 
+export type CompressImageFormat = 'jpeg' | 'webp' | 'png' | 'avif';
+
 export type CompressImageOptions = {
-  format: 'original' | 'jpeg' | 'webp' | 'png' | 'avif';
-  mode: 'quality' | 'target-size' | 'percentage';
-  quality?: number;       // 1-100 for quality mode
-  targetBytes?: number;   // for target-size mode
-  percentage?: number;    // 0-100 reduction for percentage mode
-  stripExif?: boolean;
+  format: CompressImageFormat;
+  mode: 'quality' | 'target-size';
+  /** 1–100, quality mode. Ignored for PNG, which is lossless. */
+  quality?: number;
+  /** Target size mode: the most bytes the output may have. */
+  targetBytes?: number;
 };
+
+/** What a Compress Image run actually produced, for the facts shown beside the compare view. */
+export interface CompressImageStats {
+  /** MIME type of the bytes returned — the real format, whatever was asked for. */
+  mime: string;
+  /** Pixel size of the output (always the input's: nothing is resized). */
+  width: number;
+  height: number;
+  /** The format that was encoded. With `returnedOriginal` the bytes are not this. */
+  encodedFormat: CompressImageFormat;
+  /** Quality of that encode; null for PNG (lossless). */
+  encodedQuality: number | null;
+  /** Size of that encode, in bytes. */
+  encodedBytes: number;
+  /** The encode was not smaller, so the input's own bytes came back unchanged. */
+  returnedOriginal: boolean;
+  /** The input had transparent pixels and was flattened onto white (JPEG has no transparency). */
+  flattenedOnWhite: boolean;
+  /** Target size mode: the limit and whether the returned bytes are within it. */
+  target?: { bytes: number; met: boolean };
+}
 
 export type ResizeImageOptions = {
   width?: number;
@@ -283,6 +306,8 @@ export interface ProcessingStats {
   images?: CompressImageOutcome[];
   /** compress-pdf: the result was not smaller, so the original bytes came back. */
   returnedOriginal?: boolean;
+  /** compress-image: what was produced. */
+  image?: CompressImageStats;
 }
 
 export type WorkerResponse =
