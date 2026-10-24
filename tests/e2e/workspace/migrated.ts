@@ -17,6 +17,7 @@ import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
 import { openDigitalSignature } from '../helpers/digital-signature';
 import { openCompressImage } from '../helpers/compress-image';
 import { openResize, openOptions as openResizeOptions } from '../helpers/resize-image';
+import { openConvert } from '../helpers/convert-image';
 
 /**
  * The tools that live in the shared workspace.
@@ -250,5 +251,14 @@ export const MIGRATED: MigratedTool[] = [
       await expect(action).toBeEnabled();
       await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     },
+  },
+  {
+    // An image tool like Compress Image: the image large on a checkerboard,
+    // Original vs Converted in the compare view. WebP at quality 85 is chosen on
+    // entry, so the action is available once the image has been read — no
+    // `makeReady`.
+    slug: 'convert-image',
+    name: 'Convert Image',
+    enter: (page) => openConvert(page, FIXTURE.jpg),
   },
 ];

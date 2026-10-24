@@ -1,6 +1,6 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
-import { addFilesAndWait } from '../helpers/harness';
+import { addFilesAndWait, uploadFiles } from '../helpers/harness';
 
 /**
  * Once files are queued, nothing below the upload box may move on its own.
@@ -32,7 +32,16 @@ async function settledY(locator: Locator): Promise<number> {
 for (const { route, file } of CASES) {
   test(`${route}: the action button stays put after the "Files added" flash ends`, async ({ page }) => {
     await page.goto(route);
-    await addFilesAndWait(page, file, 1);
+    if (route === '/convert-image') {
+      // An image tool's workspace: one image opens it, and the flash to watch is
+      // the compact "Add images" box in its options, when a second is added there.
+      await uploadFiles(page, file);
+      await expect(page.getByTestId('workspace')).toBeVisible();
+      await page.getByTestId('dropzone').locator('xpath=preceding-sibling::input[1]').setInputFiles(FIXTURE.jpg);
+      await expect(page.getByTestId('image-strip-item')).toHaveCount(2);
+    } else {
+      await addFilesAndWait(page, file, 1);
+    }
 
     const dropzone = page.getByTestId('dropzone');
     const action = page.getByTestId('tool-action');

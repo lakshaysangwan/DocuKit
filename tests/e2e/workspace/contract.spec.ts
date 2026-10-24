@@ -278,7 +278,7 @@ for (const tool of MIGRATED) {
 
     test('a tool that has not been migrated is not widened', async ({ page }) => {
       await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto('/convert-image');
+      await page.goto('/lock-image');
       await uploadFiles(page, FIXTURE.png);
       await expect(page.getByTestId('tool-action')).toBeVisible();
       await expect(page.getByTestId('workspace')).toHaveCount(0);

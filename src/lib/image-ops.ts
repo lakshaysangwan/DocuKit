@@ -19,6 +19,7 @@ import type {
   CompressImageOptions,
   CompressImageStats,
   ConvertImageOptions,
+  ConvertImageStats,
   ResizeImageOptions,
 } from '../types/worker-messages';
 import {
@@ -32,18 +33,6 @@ import {
 import { BACKGROUND_CSS, RESIZE_QUALITY, backgroundFor, outputMimeFor, resizeLayout } from './resize-image';
 
 export type ProgressFn = (pct: number, label?: string) => void;
-
-/** Map a format option to a jSquash output format. */
-export function normalizeFormat(format: string): ImageFormat {
-  switch (format) {
-    case 'jpeg': return 'jpeg';
-    case 'png': return 'png';
-    case 'avif': return 'avif';
-    case 'webp':
-    case 'original':
-    default: return 'webp';
-  }
-}
 
 /** Encode a canvas's pixels via jSquash (mozjpeg/libwebp/png/avif). */
 async function encodeCanvas(
@@ -205,26 +194,48 @@ export async function compressImage(
 }
 
 /**
- * Convert an image to another format. Transparency is flattened onto white when
- * the target cannot store alpha.
+ * Convert an image to another format: decode it as it is shown (EXIF
+ * orientation applied; HEIC and AVIF through their codecs where the browser
+ * cannot), then encode its pixels as the target. Nothing is resized.
  *
- * Decoding goes through `bufferToImageData`, which falls back to libheif for
- * HEIC/HEIF — that fallback is why this stayed on the main thread longer than
- * the other image ops, but it is worker-safe (libheif is WASM and the 'bitmap'
- * target uses createImageBitmap, which workers have).
+ * Transparency is kept where the target can store it (PNG, WebP, AVIF). JPEG
+ * cannot, so transparent pixels are composited onto white there, and only
+ * there. Quality applies to JPEG, WebP and AVIF; PNG is lossless. Only pixels
+ * are written: EXIF and other metadata are not copied. The stats are read from
+ * the bytes returned, so they are true of the file that downloads.
  */
 export async function convertImage(
   buffer: ArrayBuffer,
   options: ConvertImageOptions,
   sendProgress: ProgressFn,
-): Promise<ArrayBuffer> {
+): Promise<ConvertImageResult> {
   sendProgress(10, 'Decoding image…');
-  const format = normalizeFormat(options.format);
-  const background = format !== 'png' ? '#FFFFFF' : undefined;
-  const data = await bufferToImageData(buffer, background);
+  const format = options.format;
+  const inputMime = sniffImageMime(new Uint8Array(buffer));
+  const data = await bufferToImageData(buffer);
+  const hadTransparency = hasTransparency(data.data);
+  const flattenedOnWhite = format === 'jpeg' && hadTransparency;
+  if (flattenedOnWhite) flattenOnWhite(data.data);
 
-  sendProgress(60, 'Encoding…');
-  const out = await encodeImageData(data, format, options.quality ?? 85);
+  sendProgress(40, 'Encoding…');
+  const quality = hasQuality(format) ? Math.max(1, Math.min(100, Math.round(options.quality ?? 85))) : null;
+  const out = await encodeImageData(data, format, quality ?? undefined);
   sendProgress(95, 'Finalizing…');
-  return out;
+  return {
+    buffer: out,
+    stats: {
+      mime: sniffImageMime(new Uint8Array(out)) ?? mimeForFormat(format),
+      width: data.width,
+      height: data.height,
+      quality,
+      hadTransparency,
+      flattenedOnWhite,
+      inputMime,
+    },
+  };
+}
+
+export interface ConvertImageResult {
+  buffer: ArrayBuffer;
+  stats: ConvertImageStats;
 }

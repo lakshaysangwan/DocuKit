@@ -26,7 +26,7 @@ import {
   type ImageFacts,
 } from '@/lib/compress-image';
 import type { CompressImageFormat, CompressImageOptions, CompressImageStats } from '@/types/worker-messages';
-import { useImagePreview } from './use-image-preview';
+import { COMPRESS_PREVIEW, useImagePreview } from '@/components/islands/workspace/use-image-preview';
 import { displayUrlFor, loadImage, type LoadedImage } from '@/components/islands/workspace/load-image';
 
 /**
@@ -229,6 +229,7 @@ export default function CompressImageTool({ initialTargetKb, initialFormat = 'we
   const running = run.phase === 'running';
   const done = run.phase === 'done' && !!run.result;
   const preview = useImagePreview({
+    spec: COMPRESS_PREVIEW,
     item: item?.info ? { id: item.id, file: item.file } : null,
     options: mode === 'quality' ? options : null,
     live,

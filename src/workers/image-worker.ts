@@ -1,5 +1,5 @@
 /**
- * Image Worker — compress / resize, off the main thread.
+ * Image Worker — compress / resize / convert, off the main thread.
  *
  * The actual pixel work lives in `src/lib/image-ops.ts` so the identical
  * implementation can also run inline on the main thread for browsers without
@@ -30,8 +30,12 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       const response: WorkerResponse = { status: 'success', result };
       (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
     } else if (msg.op === 'convert-image') {
-      const result = await convertImage(msg.buffer, msg.options, sendProgress);
-      const response: WorkerResponse = { status: 'success', result };
+      const { buffer: result, stats } = await convertImage(msg.buffer, msg.options, sendProgress);
+      const response: WorkerResponse = {
+        status: 'success',
+        result,
+        stats: { originalSize: msg.buffer.byteLength, outputSize: result.byteLength, convert: stats },
+      };
       (self as unknown as { postMessage(msg: unknown, transfer: Transferable[]): void }).postMessage(response, [result]);
     } else {
       const response: WorkerResponse = {

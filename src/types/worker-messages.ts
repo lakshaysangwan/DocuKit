@@ -256,10 +256,28 @@ export type ResizeImageOptions = {
   background: 'white' | 'black' | 'transparent';
 };
 
+/** Convert Image: the four formats it can write. Quality applies to the lossy three; PNG ignores it. */
 export type ConvertImageOptions = {
-  format: 'jpeg' | 'png' | 'webp' | 'avif' | 'bmp' | 'tiff' | 'ico' | 'gif';
+  format: CompressImageFormat;
   quality?: number;
 };
+
+/** What a Convert Image run actually produced, read from the bytes it returns. */
+export interface ConvertImageStats {
+  /** MIME type of the bytes returned, sniffed from them. */
+  mime: string;
+  /** Pixel size of the output: the input's as shown (EXIF orientation applied). */
+  width: number;
+  height: number;
+  /** Quality of the encode; null for PNG (lossless). */
+  quality: number | null;
+  /** The input had transparent pixels. */
+  hadTransparency: boolean;
+  /** Those were composited onto white, because the output (JPEG) cannot store them. */
+  flattenedOnWhite: boolean;
+  /** The input's real format, sniffed from its bytes; null when unknown. */
+  inputMime: string | null;
+}
 
 export type CropRotateImageOptions = {
   crop?: { x: number; y: number; width: number; height: number };
@@ -313,6 +331,8 @@ export interface ProcessingStats {
   returnedOriginal?: boolean;
   /** compress-image: what was produced. */
   image?: CompressImageStats;
+  /** convert-image: what was produced. */
+  convert?: ConvertImageStats;
 }
 
 export type WorkerResponse =

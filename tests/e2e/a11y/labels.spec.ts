@@ -4,6 +4,7 @@ import { uploadFiles, addSingleFileAndWait, addFilesAndWait, unlabelledFormContr
 import { openSign, addTypedSignature } from '../helpers/sign';
 import { openEdit, addObject } from '../helpers/edit-pdf';
 import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
+import { openConvert } from '../helpers/convert-image';
 
 /**
  * P4.1 — form-label audit (WCAG 2.1 AA, 1.3.1 / 4.1.2).
@@ -107,10 +108,9 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
   });
 
   test('convert-image — quality', async ({ page }) => {
-    await page.goto('/convert-image');
-    await addFilesAndWait(page, FIXTURE.png, 1);
-    // Default target is WebP (non-PNG) → quality slider shows.
-    await expect(page.getByLabel('Quality')).toBeVisible();
+    await openConvert(page, FIXTURE.png);
+    // Default target is WebP (lossy) → the quality slider shows.
+    await expect(page.getByLabel('Quality', { exact: true })).toBeVisible();
     await assertAllLabelled(page);
   });
 

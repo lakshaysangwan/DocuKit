@@ -1,20 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { workerPool } from '@/workers/worker-pool';
 import { displayUrlFor } from '@/components/islands/workspace/load-image';
-import type { CompressImageOptions, CompressImageStats, WorkerResponse } from '@/types/worker-messages';
+import type {
+  CompressImageOptions,
+  CompressImageStats,
+  ConvertImageOptions,
+  ConvertImageStats,
+  WorkerRequest,
+  WorkerResponse,
+} from '@/types/worker-messages';
 
 /**
- * The quality preview of Compress Image: the image shown, compressed with the
- * current settings by the same `compressImage` the real run uses, before
- * anything is downloaded. Its bytes are kept, so when the run reaches this
- * image with these settings it reuses them — the "after" image on screen is
- * then exactly the file that downloads.
+ * The live preview of an image tool: the image shown, run through the same
+ * worker op the real run uses with the current settings, before anything is
+ * downloaded. Its bytes are kept, so when the run reaches this image with these
+ * settings it reuses them — the "after" image on screen is then exactly the
+ * file that downloads. Compress Image and Convert Image use it; `spec` says
+ * which op and how to read its result.
  *
  *  - Live (`live`): each settled change — 250 ms after the last one — is
- *    compressed. One job at a time; a change made meanwhile waits, and only the
+ *    processed. One job at a time; a change made meanwhile waits, and only the
  *    latest runs.
- *  - Otherwise nothing is compressed until `request()` (AVIF, PNG, large images).
- *  - `options` null (Target size) or `paused` (a run is going or done): nothing.
+ *  - Otherwise nothing is processed until `request()` (AVIF, PNG, large images).
+ *  - `options` null (e.g. Target size) or `paused` (a run is going or done): nothing.
  *
  * Calls `workerPool.submit` directly rather than `useWorker`, whose `run`
  * cancels its previous job: here a short job is allowed to finish.
@@ -29,64 +37,93 @@ export interface PreviewItem {
   file: File;
 }
 
-export interface ImagePreviewResult {
+/** How a tool's preview talks to the worker. */
+export interface PreviewSpec<O, S> {
+  /** Settings that give the same output give the same key. */
+  key: (options: O) => string;
+  message: (buffer: ArrayBuffer, options: O) => WorkerRequest;
+  /** The stats and MIME type of a successful response, or null if it has none. */
+  read: (response: Extract<WorkerResponse, { status: 'success' }>) => { stats: S; mime: string } | null;
+}
+
+export interface ImagePreviewResult<S> {
   key: string;
   itemId: string;
   blob: Blob;
   url: string;
-  stats: CompressImageStats;
+  stats: S;
 }
 
 export type PreviewStatus = 'off' | 'waiting' | 'working' | 'ready' | 'error';
 
-export interface ImagePreview {
+export interface ImagePreview<O, S> {
   status: PreviewStatus;
   /** What to show: the result for these settings or, while working, this image's last one. */
-  shown: ImagePreviewResult | null;
+  shown: ImagePreviewResult<S> | null;
   /** `shown` is for the current settings. */
   current: boolean;
   error: string | null;
   /** Make the preview for the current image and settings now. */
   request: () => void;
   /** A finished result for this image and these options, for the run to reuse. */
-  lookup: (itemId: string, options: CompressImageOptions) => ImagePreviewResult | undefined;
+  lookup: (itemId: string, options: O) => ImagePreviewResult<S> | undefined;
 }
 
-export const previewKey = (itemId: string, o: CompressImageOptions) =>
-  `${itemId}|${o.format}|${o.mode}|${o.mode === 'quality' ? (o.quality ?? '') : (o.targetBytes ?? '')}`;
+export const COMPRESS_PREVIEW: PreviewSpec<CompressImageOptions, CompressImageStats> = {
+  key: (o) => `${o.format}|${o.mode}|${o.mode === 'quality' ? (o.quality ?? '') : (o.targetBytes ?? '')}`,
+  message: (buffer, options) => ({ op: 'compress-image', buffer, options, progressPort: undefined as never }),
+  read: (r) => (r.stats?.image ? { stats: r.stats.image, mime: r.stats.image.mime } : null),
+};
+
+export const CONVERT_PREVIEW: PreviewSpec<ConvertImageOptions, ConvertImageStats> = {
+  key: (o) => `${o.format}|${o.quality ?? ''}`,
+  message: (buffer, options) => ({
+    op: 'convert-image',
+    buffer,
+    mimeType: '',
+    options,
+    progressPort: undefined as never,
+  }),
+  read: (r) => (r.stats?.convert ? { stats: r.stats.convert, mime: r.stats.convert.mime } : null),
+};
 
 const isAbort = (err: unknown) => (err as Error)?.name === 'AbortError';
 
-interface Job {
+interface Job<O> {
   key: string;
   item: PreviewItem;
-  options: CompressImageOptions;
+  options: O;
 }
 
-export function useImagePreview({
+export function useImagePreview<O, S>({
+  spec,
   item,
   options,
   live,
   paused,
 }: {
+  spec: PreviewSpec<O, S>;
   item: PreviewItem | null;
-  options: CompressImageOptions | null;
+  options: O | null;
   live: boolean;
   paused: boolean;
-}): ImagePreview {
-  const cache = useRef(new Map<string, ImagePreviewResult>());
+}): ImagePreview<O, S> {
+  const cache = useRef(new Map<string, ImagePreviewResult<S>>());
   const [, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
   const [requested, setRequested] = useState<string | null>(null);
   const inFlight = useRef<string | null>(null);
-  const queued = useRef<Job | null>(null);
+  const queued = useRef<Job<O> | null>(null);
   const controller = useRef<AbortController | null>(null);
-  const lastShown = useRef<ImagePreviewResult | null>(null);
+  const lastShown = useRef<ImagePreviewResult<S> | null>(null);
+  const specRef = useRef(spec);
+  specRef.current = spec;
 
-  const key = item && options ? previewKey(item.id, options) : null;
+  const keyOf = useCallback((itemId: string, o: O) => `${itemId}|${specRef.current.key(o)}`, []);
+  const key = item && options ? keyOf(item.id, options) : null;
 
-  const start = useCallback((job: Job) => {
+  const start = useCallback((job: Job<O>) => {
     if (!workerPool) return;
     const ctrl = controller.current ?? new AbortController();
     controller.current = ctrl;
@@ -97,25 +134,21 @@ export function useImagePreview({
         const buffer = await job.item.file.arrayBuffer();
         const response: WorkerResponse = await workerPool!.submit({
           module: 'image',
-          message: { op: 'compress-image', buffer, options: job.options, progressPort: undefined as never },
+          message: specRef.current.message(buffer, job.options),
           transfer: [buffer],
           signal: ctrl.signal,
         });
         if (response.status === 'error') throw new Error(response.message || 'The preview could not be made.');
-        if (response.status !== 'success' || !response.stats?.image || ctrl.signal.aborted) return;
-        const blob = new Blob([response.result], { type: response.stats.image.mime });
+        if (response.status !== 'success' || ctrl.signal.aborted) return;
+        const read = specRef.current.read(response);
+        if (!read) return;
+        const blob = new Blob([response.result], { type: read.mime });
         const url = await displayUrlFor(blob);
         if (ctrl.signal.aborted) {
           URL.revokeObjectURL(url);
           return;
         }
-        const result: ImagePreviewResult = {
-          key: job.key,
-          itemId: job.item.id,
-          blob,
-          url,
-          stats: response.stats.image,
-        };
+        const result: ImagePreviewResult<S> = { key: job.key, itemId: job.item.id, blob, url, stats: read.stats };
         const map = cache.current;
         const old = map.get(job.key);
         if (old) URL.revokeObjectURL(old.url);
@@ -143,7 +176,7 @@ export function useImagePreview({
   }, []);
 
   const enqueue = useCallback(
-    (job: Job) => {
+    (job: Job<O>) => {
       if (cache.current.has(job.key) || inFlight.current === job.key) return;
       if (inFlight.current) queued.current = job;
       else start(job);
@@ -151,7 +184,7 @@ export function useImagePreview({
     [start],
   );
 
-  // Live: compress each settled change.
+  // Live: process each settled change.
   const itemRef = useRef(item);
   itemRef.current = item;
   const optionsRef = useRef(options);
@@ -193,10 +226,7 @@ export function useImagePreview({
   );
 
   const request = useCallback(() => setRequested(key), [key]);
-  const lookup = useCallback(
-    (itemId: string, o: CompressImageOptions) => cache.current.get(previewKey(itemId, o)),
-    [],
-  );
+  const lookup = useCallback((itemId: string, o: O) => cache.current.get(keyOf(itemId, o)), [keyOf]);
 
   const exact = key ? cache.current.get(key) : undefined;
   const stale = lastShown.current && item && lastShown.current.itemId === item.id ? lastShown.current : null;

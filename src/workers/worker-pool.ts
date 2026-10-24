@@ -199,7 +199,13 @@ class WorkerPool {
       } else if (message.op === 'resize-image') {
         result = await resizeImage(message.buffer, message.mimeType, message.options, sendProgress);
       } else if (message.op === 'convert-image') {
-        result = await convertImage(message.buffer, message.options, sendProgress);
+        const out = await convertImage(message.buffer, message.options, sendProgress);
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        return {
+          status: 'success',
+          result: out.buffer,
+          stats: { originalSize: message.buffer.byteLength, outputSize: out.buffer.byteLength, convert: out.stats },
+        };
       } else if (message.op === 'compress-pdf') {
         const { compressPdf } = await import('../lib/pdf-compress');
         const out = await compressPdf(message.buffer, message.options, sendProgress);

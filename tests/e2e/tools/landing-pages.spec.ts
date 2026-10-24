@@ -3,13 +3,13 @@ import { FIXTURE } from '../fixtures/generate';
 import { LANDING_PAGES } from '../../../src/lib/landing-pages';
 import {
   PageDiagnostics,
-  addFilesAndWait,
   addSingleFileAndWait,
   expectDownload,
   assertImage,
   assertPdf,
   countPdfPages,
 } from '../helpers/harness';
+import { convertAndDownload, openConvert } from '../helpers/convert-image';
 import { openOrganize, saveAndDownload, filePageOrder, fileRotations } from '../helpers/organize-pages';
 
 /**
@@ -48,39 +48,24 @@ test.describe('Landing pages — every page renders', () => {
 });
 
 test.describe('Landing pages — the preset is applied', () => {
-  test('PNG to JPG converts to JPEG without touching the format picker', async ({ page }) => {
-    await page.goto('/png-to-jpg/');
-    await addFilesAndWait(page, FIXTURE.png, 1);
-    await expect(page.getByTestId('tool-action')).toContainText('to JPG');
-
-    await page.getByTestId('tool-action').click();
-    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 30_000 });
-    const { bytes, name } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    assertImage(bytes, 'jpeg');
-    expect(name).toMatch(/\.jpe?g$/);
-  });
-
-  test('WebP to PNG converts to PNG', async ({ page }) => {
-    await page.goto('/webp-to-png/');
-    await addFilesAndWait(page, FIXTURE.webp, 1);
-    await expect(page.getByTestId('tool-action')).toContainText('to PNG');
-
-    await page.getByTestId('tool-action').click();
-    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 30_000 });
-    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    assertImage(bytes, 'png');
-  });
-
-  test('HEIC to JPG converts a real iPhone-format photo', async ({ page }) => {
-    await page.goto('/heic-to-jpg/');
-    await addFilesAndWait(page, FIXTURE.heic, 1);
-    await expect(page.getByTestId('tool-action')).toContainText('to JPG');
-
-    await page.getByTestId('tool-action').click();
-    await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
-    const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
-    assertImage(bytes, 'jpeg');
-  });
+  // Each Convert Image task page opens with its output format chosen.
+  const CONVERT_PRESETS = [
+    { slug: 'png-to-jpg', file: FIXTURE.png, format: 'jpeg', label: 'JPG' },
+    { slug: 'jpg-to-png', file: FIXTURE.jpg, format: 'png', label: 'PNG' },
+    { slug: 'webp-to-jpg', file: FIXTURE.webp, format: 'jpeg', label: 'JPG' },
+    { slug: 'webp-to-png', file: FIXTURE.webp, format: 'png', label: 'PNG' },
+    { slug: 'heic-to-jpg', file: FIXTURE.heic, format: 'jpeg', label: 'JPG' },
+  ] as const;
+  for (const preset of CONVERT_PRESETS) {
+    test(`${preset.slug} starts on ${preset.label} and downloads one, without touching the format picker`, async ({ page }) => {
+      await openConvert(page, preset.file, `/${preset.slug}/`);
+      await expect(page.getByTestId(`format-${preset.format}`)).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByTestId('tool-action')).toHaveText(`Convert to ${preset.label}`);
+      const { bytes, name } = await convertAndDownload(page);
+      assertImage(bytes, preset.format);
+      expect(name).toMatch(preset.format === 'jpeg' ? /.jpg$/ : /.png$/);
+    });
+  }
 
   test('PDF to JPG exports JPEG', async ({ page }) => {
     await page.goto('/pdf-to-jpg/');
