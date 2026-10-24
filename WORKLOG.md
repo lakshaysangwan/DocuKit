@@ -243,3 +243,23 @@ Closed from the previous session's list: the uncommitted source-check work shipp
 - Lakshay's requests from this session that are queued, not started: Crop PDF cursor and handles (T16), PDF to Image without the forced ZIP (T15), the compression quality preview (T12).
 - Not verified by anyone: that Adobe Acrobat honours the Protect PDF permissions, which the screen and a FAQ say it does. Lakshay to check in Acrobat Reader (File → Properties → Security).
 - Cloudflare Web Analytics is still switched on and still blocked by the CSP.
+
+---
+
+## 2026-10-24 — third coordinator session
+
+One sub-agent at a time: task agent → fresh verify agent (gate in a clean worktree) → push → the same
+verify agent checks docukit.uk.
+
+| Commit | What shipped | Verified |
+|---|---|---|
+| `b840812`, `8cfa5ca` (W13) | Resize Image in the workspace: the stage shows the output size at true proportions with the image placed as Fit / Cover / Stretch will place it, live as size, percentage, preset, mode or background change, from one layout function (`resizeLayout` in `src/lib/resize-image.ts`) shared with the writer; Cover crop position by drag, arrow keys or slider; new percentage sizing (1–400%) and White / Black / Transparent background; after a run the resized file itself is shown with facts read back from it; batches through `MultiFileDownload` (was a forced ZIP). Bugs fixed: WebP/GIF/BMP were always saved as JPEG named `.jpg` (format now sniffed from the bytes; GIF/BMP → PNG, HEIC → JPEG); transparent PNGs were flattened onto white; HEIC and undecodable AVIF could not be resized (new shared `decodeToBitmap`); an empty or 0 width ran a 1 px resize and sizes had no cap (now disabled with a reason, max 10,000 px); a width typed before the image loaded was overwritten. Copy: false "Fill" mode, "searchable" presets and "one-side resize" claims removed; FAQ and steps rewritten | Clean worktree: 752 Chromium, 900 Firefox/WebKit (1 known WebKit large-file flake), 69 mobile, 17 visual, 1033 unit. Live (deployed ~2 min after the push): `resize-image.spec.ts` against docukit.uk 16/16 functional on three engines (the H1 no-console-errors check fails only on the CSP-blocked Cloudflare beacon), workspace contract + mobile for Resize 27/27, Compress Image specs on Chromium |
+
+W13 notes: `load-image.ts` moved from `compress-image/` to `workspace/`; `CompareView` and `ImageStage`
+gained an optional `content` slot; `ResizeImageOptions` reshaped (unused percentage / maintainAspect /
+fill removed). New seeded fixture `photo-rotated.jpg` (EXIF 6). A social preset does not switch the
+mode to Cover (the frame shows Fit's bars). Not checked on a real phone or Safari. **CI found:** the
+`e2e` job on `main` has failed since W12 (run for `67f54b4`): on Linux WebKit,
+`tools/compress-image-preview.spec.ts:76` (transparent PNG → JPEG) and
+`workspace/contract.spec.ts:153` Sign PDF fail on every retry, though both pass in the Windows gates;
+five more WebKit tests were flaky. Queued as the next task.
