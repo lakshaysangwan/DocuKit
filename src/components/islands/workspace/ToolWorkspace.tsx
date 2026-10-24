@@ -87,6 +87,9 @@ export interface ToolWorkspaceProps {
 
 const PHONE = '(max-width: 767px)';
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex], [contenteditable="true"]';
+
 export default function ToolWorkspace({
   toolId,
   active,
@@ -151,6 +154,47 @@ export default function ToolWorkspace({
     if (open) optionsRef.current?.scrollIntoView({ block: 'nearest' });
     else if (changed) frameRef.current?.scrollIntoView({ block: 'start' });
   }, [active, open]);
+
+  // Safari lets the keyboard scroll a region only if focus can get into it. The
+  // options pane scrolls inside itself when its content is taller than its box,
+  // and at times it has nothing to focus: while a run makes the controls inert,
+  // or when it shows a result that is only text. Then the pane itself becomes a
+  // tab stop, so it can still be scrolled from the keyboard.
+  useEffect(() => {
+    const el = optionsRef.current;
+    if (!active || !el) return;
+    const update = () => {
+      const scrolls = el.scrollHeight > el.clientHeight + 1;
+      const reachable = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).some(
+        (node) => node.tabIndex >= 0 && !node.closest('[inert]') && node.getClientRects().length > 0,
+      );
+      const tabIndex = scrolls && !reachable ? 0 : -1;
+      if (el.tabIndex !== tabIndex) el.tabIndex = tabIndex;
+    };
+    const resize = new ResizeObserver(update);
+    const watchSizes = () => {
+      resize.disconnect();
+      resize.observe(el);
+      for (const child of Array.from(el.children)) resize.observe(child);
+    };
+    const mutation = new MutationObserver((records) => {
+      if (records.some((r) => r.type === 'childList' && r.target === el)) watchSizes();
+      update();
+    });
+    mutation.observe(el, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['inert', 'disabled', 'tabindex', 'hidden'],
+    });
+    watchSizes();
+    update();
+    return () => {
+      mutation.disconnect();
+      resize.disconnect();
+      el.tabIndex = -1;
+    };
+  }, [active]);
 
   const context = useMemo<WorkspaceContextValue>(
     () => ({ optionsOpen: open, setOptionsOpen: setOpen, optionsId }),
@@ -231,7 +275,7 @@ export default function ToolWorkspace({
         <div
           ref={optionsRef}
           id={optionsId}
-          className="ws-options outline-none"
+          className="ws-options outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
           data-testid="ws-controls"
           role="region"
           aria-label={result ? 'Result' : 'Options'}
