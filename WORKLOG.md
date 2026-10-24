@@ -263,3 +263,10 @@ mode to Cover (the frame shows Fit's bars). Not checked on a real phone or Safar
 `tools/compress-image-preview.spec.ts:76` (transparent PNG → JPEG) and
 `workspace/contract.spec.ts:153` Sign PDF fail on every retry, though both pass in the Windows gates;
 five more WebKit tests were flaky. Queued as the next task.
+| `bfbd912`, `69d4afd`, `4879934` (CI1) | CI's `e2e` job can finish and report again: its limit raised from 60 to 90 minutes (the last two runs were cancelled at 60 with the suite still running). Linux WebKit failures fixed: the Compress Image transparent-PNG test's fixture was so flat that the PNG beat the JPEG and the tool rightly kept the original (fixture now has seeded grain); axe graded the action button mid-fade from its disabled 40% opacity (`seriousViolations` waits for transitions to end). Product fix: the workspace Options / Result pane becomes a keyboard tab stop (with a focus ring) when it scrolls and has nothing focusable inside — Safari could not scroll it while a job ran | Clean worktree: 752 Chromium, 900 Firefox/WebKit (Firefox `compress-image-preview.spec.ts:241` HEIC flaky once), 69 mobile, 17 visual, 206 extra WebKit workspace + a11y, 1033 unit. Live (deployed ~1.5 min after the push): contract, axe and Compress Image specs against docukit.uk 314/314 on Chromium and WebKit; Crop pages 11/11 on WebKit |
+
+CI1 notes: worked from CI run 39911221969's artifacts (no Linux available locally). Still open: on CI
+the Crop Flatten `/Rotate 90` result page once rendered solid black — the test now reads the page's
+JPEG from the downloaded file first, so a repeat will say whether the file or the viewer is wrong; the
+Extract PDF Pages lost first click (`landing-pages.spec.ts:151`) is now reported per page but not
+explained. Sharding the e2e job is the longer-term answer to its run time.
