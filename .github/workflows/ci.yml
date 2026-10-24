@@ -52,7 +52,10 @@ jobs:
   # WebKit failure.
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The suite (four projects, two workers, retries) took 52 minutes in October
+    # 2026 and passed 60 as tools were added, so the job was cancelled before it
+    # could report. Leave headroom; a hung run still stops.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
