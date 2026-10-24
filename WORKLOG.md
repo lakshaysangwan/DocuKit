@@ -279,3 +279,11 @@ square in the viewer" — the downloaded file passes its pixel check, so the res
 the flattened page on Linux WebKit; flaky there: `page-numbers-placement.spec.ts:169`,
 `sign-pdf-placement.spec.ts:75`, `protect-pdf-permissions.spec.ts:108`, and on Firefox
 `compress-image-preview.spec.ts:241` (HEIC) and `organize-pages.spec.ts:102`. Queued as CI2.
+| `ae4aaf0` (CI2) | Safari-engine browsers show PDF pages with images instead of black: on Linux WebKit (which, unlike Playwright's Windows WebKit, has OffscreenCanvas in workers) pdf.js drew the decoded ImageBitmap of a full-page JPEG black at ~1.9× downscale — seen in the CI trace as a solid black viewer render of the Crop Flatten output while its thumbnails and the downloaded file were right. `src/lib/pdfjs.ts` now passes `isOffscreenCanvasSupported: false` to every `getDocument` on a WebKit page (user agent `AppleWebKit/` without Chrome/Chromium/Edg/OPR), the path Windows WebKit always took. Test helpers for Page Numbers and Sign placement re-read the viewer image from a fresh decode until it is opaque (WebKit read an empty bitmap from a just-loaded `<img>`) | Clean worktree: 767 Chromium, 924 Firefox/WebKit (1 known WebKit large-file flake), 213 extra WebKit workspace + a11y, 71 mobile, 17 visual, 1041 unit. Live (deployed ~1 min after the push): Crop pages, Page Numbers and Sign placement, Compress PDF specs against docukit.uk on Chromium and WebKit 89/89 functional (H1 console check fails only on the CSP-blocked Cloudflare beacon); workspace contract on WebKit 126/126 |
+
+CI2 notes: whether real Safari (macOS/iOS) had the black render is unknown — it was not available;
+the change applies to all WebKit browsers on purpose, at some main-thread cost when drawing images.
+CI for the W14 commits (40109981892, 40110622582) failed only on the Crop case CI2 fixes plus the
+Firefox HEIC flake. Unaddressed CI flakes: WebKit `protect-pdf-permissions.spec.ts:108` (goto load
+timeout), Firefox `organize-pages.spec.ts:102` (lost first click), Firefox
+`compress-image-preview.spec.ts:241` (HEIC decode slow under load).
