@@ -203,10 +203,13 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Batch resize: separate downloads or one ZIP': C([T('resize-image')], 'two images of different shapes download as two separate files, each decoded at the frame size, and as one ZIP'),
   },
   'convert-image': {
-    'JPEG, PNG, WebP, AVIF, BMP, TIFF, ICO, GIF, SVG': P([T('convert-image')], 'JPEG, PNG, WebP and AVIF tested; BMP, TIFF, ICO, GIF and SVG are not'),
-    'HEIC (iPhone) conversion': C([T('convert-image')], 'a real HEVC-coded HEIC converts to JPEG and PNG through the libheif fallback, under the production CSP'),
-    'Batch conversion to same format': C([T('convert-image')]),
-    'Per-format quality settings': C([T('convert-image')]),
+    'Save as JPG, PNG, WebP or AVIF': C([T('convert-image'), T('landing-pages')], 'each output is checked by its magic bytes, its .jpg/.png/.webp/.avif name and the pixel size it decodes to; every task page starts on its own format'),
+    'Opens JPEG, PNG, WebP, AVIF, GIF and BMP': P([T('convert-image')], 'JPEG, PNG, WebP and BMP (a hand-built 24-bit file, pixels checked) inputs convert; GIF and AVIF inputs go through the same decodeToBitmap path but no test feeds one in'),
+    'HEIC (iPhone) conversion': C([T('convert-image'), T('landing-pages')], 'a real HEVC-coded HEIC is shown on the stage and converts to JPEG and PNG at its 600 × 400 size through the libheif fallback, under the production CSP'),
+    'See the result next to your original before you download': C([T('convert-image')], 'the compare view’s after image is byte-for-byte the downloaded file (JPG live preview); AVIF waits for Preview; after the run the stage compares the original with the output'),
+    'Quality setting for JPG, WebP and AVIF': C([T('convert-image')], 'quality 30 and 95 previews differ in size and the download is the quality-95 file; the slider is not shown for PNG'),
+    'Transparency kept in PNG, WebP and AVIF': P([T('convert-image')], 'a half-transparent PNG keeps its clear pixels as PNG and WebP (read back from the file), and becomes white as JPG; AVIF keeps alpha through the same path but is not read back, as not every engine here decodes AVIF'),
+    'Batch conversion: separate downloads or one ZIP': C([T('convert-image')], 'two images download as two separate files of the right format, names and pixel sizes, and as one ZIP with the same entries; clashing names get "(2)"'),
   },
   'lock-image': {
     'AES-256-GCM authenticated encryption': P([T('lock-image')], 'round-trip and wrong-password both verified; the cipher itself is not asserted'),
