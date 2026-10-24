@@ -162,13 +162,33 @@ export async function redBoxInViewer(page: Page) {
   const image = page.getByTestId('page-image');
   await expect(image).toBeVisible();
   return image.evaluate(async (el: HTMLImageElement) => {
-    await el.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = el.naturalWidth;
-    canvas.height = el.naturalHeight;
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(el, 0, 0);
-    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Decoded afresh from its URL and read again until the read has pixels:
+    // WebKit on Linux now and then gives an empty (fully transparent) canvas
+    // for a page image that has just loaded, though the image itself is right
+    // (CI traces). A rendered page is opaque, so an empty read is never the page.
+    const src = el.currentSrc || el.src;
+    let pixels: ImageData | null = null;
+    for (let attempt = 0; attempt < 20 && !pixels; attempt++) {
+      if (attempt) await new Promise((resolve) => setTimeout(resolve, 100));
+      const img = new Image();
+      img.src = src;
+      try {
+        await img.decode();
+      } catch {
+        continue;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const read = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let opaque = false;
+      for (let i = 3; i < read.data.length && !opaque; i += 4) opaque = read.data[i] > 0;
+      if (opaque) pixels = read;
+    }
+    if (!pixels) throw new Error('The page image the viewer shows could not be read.');
+    const { data, width, height } = pixels;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;

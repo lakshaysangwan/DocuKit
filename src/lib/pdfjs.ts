@@ -29,6 +29,17 @@ export const PDFJS_WORKER_SRC = '/pdfjs/pdf.worker.min.mjs';
 const assetBase = (p: string) =>
   typeof self === 'undefined' ? p : new URL(p, self.location.origin).href;
 
+/**
+ * A page (not a worker) in a WebKit browser. Chromium's user agent carries
+ * "AppleWebKit" too, so Chromium-based browsers are told apart by their own
+ * token; Chrome and Edge on iOS (CriOS, EdgiOS) are WebKit and stay in.
+ */
+function isWebKitPage(): boolean {
+  if (typeof document === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /AppleWebKit\//.test(ua) && !/\b(Chrome|Chromium|Edg|OPR)\//.test(ua);
+}
+
 /** Set once by `getPdfjs()`: the library and the blob-backed worker it runs on. */
 let pdfjs: typeof PdfjsModule | null = null;
 let workerPort: Worker | null = null;
@@ -73,6 +84,17 @@ export const PDFJS_DOC_ASSETS = {
   cMapPacked: true,
   wasmUrl: assetBase('/pdfjs/wasm/'),
   iccUrl: assetBase('/pdfjs/iccs/'),
+  /**
+   * On WebKit (Safari, every iOS browser, GNOME Web) pdf.js is told not to use
+   * OffscreenCanvas. With it, pdf.js's worker decodes each image into an
+   * ImageBitmap and the page draws that bitmap; Linux WebKit drew a large one
+   * solid black — Crop PDF's flattened pages showed as black rectangles while
+   * the file itself was right. Without it the worker sends plain pixels, which
+   * every engine draws, and which is the only path WebKit builds without
+   * OffscreenCanvas (Playwright's on Windows) have ever taken — the one tested.
+   * Undefined elsewhere, so pdf.js keeps its own default.
+   */
+  isOffscreenCanvasSupported: isWebKitPage() ? false : undefined,
   /**
    * The shared worker (see `getSharedWorker`). A getter, so the object spread at
    * every `getDocument({ ...PDFJS_DOC_ASSETS, data })` call picks it up once
