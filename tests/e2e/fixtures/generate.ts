@@ -41,6 +41,9 @@ export const FIXTURE = {
   // JPEG carrying a real EXIF APP1 segment (incl. a GPS tag), so "EXIF
   // stripping" can be proven rather than assumed.
   jpgExif: path.join(FIXTURES_DIR, 'photo-exif.jpg'),
+  // photo.jpg's pixels (1200×800) with EXIF Orientation 6: a phone photo held
+  // upright, which every viewer shows turned a quarter clockwise, 800×1200.
+  jpgRotated: path.join(FIXTURES_DIR, 'photo-rotated.jpg'),
   /**
    * A real HEVC-coded HEIC, as an iPhone produces. Committed rather than
    * generated: nothing in the toolchain can encode HEIC (it was made once with
@@ -178,6 +181,7 @@ export async function generateFixtures(): Promise<void> {
   // ── P7 corpus ──────────────────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfCmyk, await makeCmykPdf());
   await writeFile(FIXTURE.jpgExif, withExif(Buffer.from(encoded.jpg, 'base64')));
+  await writeFile(FIXTURE.jpgRotated, withOrientation(Buffer.from(encoded.jpg, 'base64'), 6));
   // CJK/RTL need a font with those glyphs. Generated when one is present on the
   // host; the corpus tests skip themselves when the fixture is absent rather
   // than pretending to cover a script they never rendered.
@@ -468,5 +472,25 @@ function withExif(jpeg: Buffer): Buffer {
     payload,
   ]);
   // Insert directly after the SOI marker.
+  return Buffer.concat([jpeg.subarray(0, 2), app1, jpeg.subarray(2)]);
+}
+
+/**
+ * Splice an EXIF APP1 segment holding only an Orientation tag into a JPEG
+ * (1 = as stored, 6 = turn a quarter clockwise to show, 8 = anticlockwise).
+ */
+function withOrientation(jpeg: Buffer, orientation: number): Buffer {
+  const tiff = Buffer.from([
+    0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08, // big-endian TIFF, IFD0 at 8
+    0x00, 0x01, // one entry
+    0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, // Orientation, SHORT, count 1
+    0x00, orientation, 0x00, 0x00, // its value, left-justified
+    0x00, 0x00, 0x00, 0x00, // no next IFD
+  ]);
+  const payload = Buffer.concat([Buffer.from([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]), tiff]);
+  const app1 = Buffer.concat([
+    Buffer.from([0xff, 0xe1, ((payload.length + 2) >> 8) & 0xff, (payload.length + 2) & 0xff]),
+    payload,
+  ]);
   return Buffer.concat([jpeg.subarray(0, 2), app1, jpeg.subarray(2)]);
 }

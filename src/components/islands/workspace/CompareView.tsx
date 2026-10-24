@@ -18,7 +18,9 @@ import { cn } from '@/lib/utils';
  * they are shown, so they can be rendered sharp enough.
  *
  * With `after` null only `before` is shown (one image, no modes): the caller
- * has nothing to compare yet. With `before` null too, a page-shaped placeholder
+ * has nothing to compare yet. `content` then replaces `before`'s image inside
+ * the box, for a caller that draws something other than one whole image (Resize
+ * Image's output frame); it is sized like the image would be. With `before` null too, a page-shaped placeholder
  * stands in, so the view (and its mode and zoom) survives a page change.
  *
  * Exactly two `img` elements when comparing, in every mode.
@@ -54,6 +56,8 @@ export interface CompareViewProps {
   checkerboard?: boolean;
   /** Shown in the placeholder while `before` is null. Defaults to "Loading page…". */
   placeholder?: string;
+  /** With `after` null: drawn in the box instead of `before`'s image. */
+  content?: ReactNode;
   className?: string;
 }
 
@@ -113,6 +117,7 @@ export default function CompareView({
   busy = false,
   checkerboard = false,
   placeholder = 'Loading page…',
+  content,
   className,
 }: CompareViewProps) {
   const [mode, setMode] = useState<CompareMode>('split');
@@ -279,7 +284,7 @@ export default function CompareView({
       ),
     );
   } else if (ready && before && !after) {
-    body = viewport(splitViewportRef, beforeLabel, box(img(before, 'compare-before')));
+    body = viewport(splitViewportRef, beforeLabel, box(content ?? img(before, 'compare-before')));
   } else if (ready && before && after && mode === 'side') {
     body = (
       <div className="grid size-full grid-cols-2" style={{ gap: GAP }}>

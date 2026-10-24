@@ -16,6 +16,7 @@ import { openRedact, openOptions as openRedactOptions } from '../helpers/redact-
 import { encryptPdf, addPdfBuffer } from '../helpers/encrypted-pdf';
 import { openDigitalSignature } from '../helpers/digital-signature';
 import { openCompressImage } from '../helpers/compress-image';
+import { openResize, openOptions as openResizeOptions } from '../helpers/resize-image';
 
 /**
  * The tools that live in the shared workspace.
@@ -232,5 +233,22 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'compress-image',
     name: 'Compress Image',
     enter: (page) => openCompressImage(page, FIXTURE.jpg),
+  },
+  {
+    // An image tool whose stage is the output frame: the chosen size at its
+    // real proportions with the image placed as the fit mode will place it. It
+    // opens at the image's own size, so the action waits (and says why) until
+    // a new size is typed; `makeReady` types a width, opening Options on a
+    // phone first.
+    slug: 'resize-image',
+    name: 'Resize Image',
+    enter: (page) => openResize(page, FIXTURE.jpg),
+    makeReady: async (page) => {
+      await openResizeOptions(page);
+      await page.getByLabel('Width (px)').fill('600');
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
   },
 ];

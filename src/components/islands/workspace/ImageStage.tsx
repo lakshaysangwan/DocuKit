@@ -58,6 +58,12 @@ export interface ImageStageProps {
   footer?: ReactNode;
   /** Placeholder text while `src` is null. */
   placeholder?: string;
+  /**
+   * Without a result: drawn in place of the image, in a box of
+   * `naturalWidth × naturalHeight` at the chosen zoom (Resize Image draws its
+   * output frame here).
+   */
+  content?: ReactNode;
 }
 
 export default function ImageStage({
@@ -76,6 +82,7 @@ export default function ImageStage({
   toolbarStart,
   footer,
   placeholder = 'Reading the image…',
+  content,
 }: ImageStageProps) {
   const strip = items && items.length > 1;
   return (
@@ -129,6 +136,7 @@ export default function ImageStage({
           busy={busy}
           checkerboard
           placeholder={placeholder}
+          content={content}
         />
       </div>
       {footer && (

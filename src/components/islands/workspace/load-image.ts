@@ -1,4 +1,4 @@
-import { decodeHeic } from '@/lib/image-codec';
+import { decodeToBitmap } from '@/lib/image-codec';
 import { canvasToBlob, createCanvas2D } from '@/lib/canvas-2d';
 
 /**
@@ -34,9 +34,10 @@ export interface LoadedImage {
 }
 
 /**
- * Read an image for display: its pixel size, and a URL to show it by. Most
- * files are shown as they are. A HEIC the browser cannot decode goes through
- * libheif (as compression does) and is shown as a PNG of its pixels.
+ * Read an image for display: its pixel size (as shown, EXIF orientation
+ * applied), and a URL to show it by. Most files are shown as they are. A HEIC
+ * or AVIF the browser cannot decode goes through its codec (as the image tools
+ * do) and is shown as a PNG of its pixels.
  *
  * The caller revokes `url`.
  */
@@ -47,7 +48,7 @@ export async function loadImage(file: File): Promise<LoadedImage> {
     bitmap.close();
     return out;
   } catch {
-    const bitmap = await decodeHeic(file);
+    const bitmap = await decodeToBitmap(file);
     const { canvas, ctx } = createCanvas2D(bitmap.width, bitmap.height);
     ctx.drawImage(bitmap, 0, 0);
     const out = { width: bitmap.width, height: bitmap.height };

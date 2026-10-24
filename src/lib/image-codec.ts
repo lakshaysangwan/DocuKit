@@ -49,6 +49,30 @@ export async function decodeHeic(blob: Blob): Promise<ImageBitmap> {
 }
 
 /**
+ * Decode an encoded image to a bitmap, the way it is shown: EXIF orientation
+ * applied (`createImageBitmap`'s default). What the browser cannot decode
+ * falls back to a codec: AVIF (some WebKit builds) through libavif, HEIC/HEIF
+ * through libheif.
+ */
+export async function decodeToBitmap(blob: Blob): Promise<ImageBitmap> {
+  try {
+    // Handles JPEG/PNG/WebP/GIF/BMP and (in most browsers) AVIF natively.
+    return await createImageBitmap(blob);
+  } catch (err) {
+    const head = new Uint8Array(await blob.slice(0, 40).arrayBuffer());
+    const brands = String.fromCharCode(...head.subarray(4, 40));
+    if (brands.startsWith('ftyp') && /avi[fs]/.test(brands)) {
+      const { decode } = await import('@jsquash/avif');
+      const data = await decode(await blob.arrayBuffer());
+      if (!data) throw err;
+      return createImageBitmap(data);
+    }
+    // HEIC/HEIF: the browser can't decode it, so fall back to libheif.
+    return decodeHeic(blob);
+  }
+}
+
+/**
  * Decode an encoded image (any format the browser's `createImageBitmap`
  * understands) into ImageData. Optionally composite onto a solid background
  * (used when converting a transparent PNG to an opaque format like JPEG).
@@ -57,15 +81,7 @@ export async function bufferToImageData(
   buffer: ArrayBuffer,
   background?: string,
 ): Promise<ImageData> {
-  const blob = new Blob([buffer]);
-  let bitmap: ImageBitmap;
-  try {
-    // Handles JPEG/PNG/WebP/GIF/BMP and (in modern browsers) AVIF natively.
-    bitmap = await createImageBitmap(blob);
-  } catch {
-    // HEIC/HEIF: the browser can't decode it, so fall back to libheif.
-    bitmap = await decodeHeic(blob);
-  }
+  const bitmap = await decodeToBitmap(new Blob([buffer]));
   const { canvas, ctx } = createCanvas2D(bitmap.width, bitmap.height);
   if (background) {
     ctx.fillStyle = background;

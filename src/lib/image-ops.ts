@@ -13,7 +13,7 @@
  * without OffscreenCanvas.
  */
 import { createCanvas2D, type AnyCanvas, type AnyCanvas2D } from './canvas-2d';
-import { bufferToImageData, encodeImageData, type ImageFormat } from './image-codec';
+import { bufferToImageData, decodeToBitmap, encodeImageData, type ImageFormat } from './image-codec';
 import type {
   CompressImageFormat,
   CompressImageOptions,
@@ -29,6 +29,7 @@ import {
   searchTargetQuality,
   sniffImageMime,
 } from './compress-image';
+import { BACKGROUND_CSS, RESIZE_QUALITY, backgroundFor, outputMimeFor, resizeLayout } from './resize-image';
 
 export type ProgressFn = (pct: number, label?: string) => void;
 
@@ -56,9 +57,15 @@ async function encodeCanvas(
 }
 
 /**
- * Resize an image: decode via createImageBitmap, scale under the chosen fit mode
- * (white letterbox for fit; centre-crop for cover/fill; distort for stretch),
- * then encode via jSquash.
+ * Resize an image: decode it as it is shown (EXIF orientation applied; HEIC and
+ * AVIF through their codecs where the browser cannot), draw it into a
+ * `width × height` canvas at the box `resizeLayout` gives — the same box the
+ * preview draws — over the chosen background, then encode.
+ *
+ * The output format follows the input's real format (sniffed from its bytes,
+ * not its name or MIME type): see `outputMimeFor`. JPEG cannot be
+ * transparent, so a transparent background becomes white there. Only pixels
+ * are written: EXIF and other metadata are not copied.
  */
 export async function resizeImage(
   buffer: ArrayBuffer,
@@ -67,31 +74,36 @@ export async function resizeImage(
   sendProgress: ProgressFn,
 ): Promise<ArrayBuffer> {
   sendProgress(10, 'Decoding image…');
-  const bitmap = await createImageBitmap(new Blob([buffer]));
-  const nw = bitmap.width;
-  const nh = bitmap.height;
-  const W = Math.max(1, Math.round(options.width ?? nw));
-  const H = Math.max(1, Math.round(options.height ?? nh));
+  const inputMime = sniffImageMime(new Uint8Array(buffer)) ?? mimeType;
+  const outMime = outputMimeFor(inputMime);
+  const bitmap = await decodeToBitmap(new Blob([buffer]));
+  const layout = resizeLayout({
+    srcW: bitmap.width,
+    srcH: bitmap.height,
+    outW: options.width,
+    outH: options.height,
+    mode: options.mode,
+    focusX: options.focusX,
+    focusY: options.focusY,
+  });
 
-  const { canvas, ctx } = createCanvas2D(W, H);
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, W, H);
-
-  if (options.mode === 'stretch') {
-    ctx.drawImage(bitmap, 0, 0, W, H);
-  } else {
-    // 'cover'/'fill' fill the frame (centre-crop); 'fit' letterboxes inside it.
-    const cover = options.mode === 'cover' || options.mode === 'fill';
-    const scale = cover ? Math.max(W / nw, H / nh) : Math.min(W / nw, H / nh);
-    const dw = nw * scale;
-    const dh = nh * scale;
-    ctx.drawImage(bitmap, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  sendProgress(40, 'Resizing…');
+  const { canvas, ctx } = createCanvas2D(layout.width, layout.height);
+  const fill = BACKGROUND_CSS[backgroundFor(outMime, options.background)];
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(0, 0, layout.width, layout.height);
   }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  const { x, y, w, h } = layout.draw;
+  ctx.drawImage(bitmap, x, y, w, h);
   bitmap.close();
 
   sendProgress(60, 'Encoding…');
-  const format: ImageFormat = mimeType === 'image/png' ? 'png' : 'jpeg';
-  const out = await encodeCanvas(canvas, ctx, format, 92);
+  const format: ImageFormat =
+    outMime === 'image/png' ? 'png' : outMime === 'image/webp' ? 'webp' : outMime === 'image/avif' ? 'avif' : 'jpeg';
+  const out = await encodeCanvas(canvas, ctx, format, RESIZE_QUALITY);
   sendProgress(95, 'Finalizing…');
   return out;
 }

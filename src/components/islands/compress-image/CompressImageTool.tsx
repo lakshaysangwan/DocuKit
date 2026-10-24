@@ -27,7 +27,7 @@ import {
 } from '@/lib/compress-image';
 import type { CompressImageFormat, CompressImageOptions, CompressImageStats } from '@/types/worker-messages';
 import { useImagePreview } from './use-image-preview';
-import { displayUrlFor, loadImage, type LoadedImage } from './load-image';
+import { displayUrlFor, loadImage, type LoadedImage } from '@/components/islands/workspace/load-image';
 
 /**
  * Compress Image, in the shared workspace.

@@ -243,12 +243,17 @@ export interface CompressImageStats {
   target?: { bytes: number; met: boolean };
 }
 
+/** Resize Image: the output frame and where the image goes in it (see `lib/resize-image.ts`). */
 export type ResizeImageOptions = {
-  width?: number;
-  height?: number;
-  percentage?: number;
-  mode: 'fit' | 'fill' | 'stretch' | 'cover';
-  maintainAspect?: boolean;
+  /** Output size in pixels. */
+  width: number;
+  height: number;
+  mode: 'fit' | 'cover' | 'stretch';
+  /** Cover: which part is kept where the image overflows, 0–1 per axis. */
+  focusX?: number;
+  focusY?: number;
+  /** Behind the image: the Fit bars and any transparent pixels. Transparent becomes white for JPEG. */
+  background: 'white' | 'black' | 'transparent';
 };
 
 export type ConvertImageOptions = {

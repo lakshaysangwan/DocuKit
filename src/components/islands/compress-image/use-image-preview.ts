@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { workerPool } from '@/workers/worker-pool';
-import { displayUrlFor } from './load-image';
+import { displayUrlFor } from '@/components/islands/workspace/load-image';
 import type { CompressImageOptions, CompressImageStats, WorkerResponse } from '@/types/worker-messages';
 
 /**
