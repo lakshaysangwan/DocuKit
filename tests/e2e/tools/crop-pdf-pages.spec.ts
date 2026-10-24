@@ -5,6 +5,7 @@ import { FIXTURE } from '../fixtures/generate';
 import { userToView } from '../helpers/edit-pdf';
 import {
   SIDES,
+  colourBoxInFlattenedPage,
   colourBoxInViewer,
   cropAndDownload,
   cropBoxes,
@@ -16,6 +17,7 @@ import {
   setUnit,
   shownAreaFractions,
   withOptions,
+  type ColourBox,
   type Margins,
 } from '../helpers/crop-pdf';
 
@@ -209,13 +211,22 @@ for (const kind of ['rotated', 'offset'] as const) {
         y2: (r.y2 - m.top / size.height) / keepH,
       });
       await expect(page.locator('[data-testid="page-canvas"][data-rendered="true"]')).toBeVisible({ timeout: 30_000 });
-      for (const [name, marker] of [['red', red], ['blue', blue]] as const) {
-        const found = await colourBoxInViewer(page, name);
-        expect(found, `${name} square in the flattened page`).not.toBeNull();
-        const want = expected(marker);
+      const near = (where: string, name: string, found: ColourBox | null, want: ColourBox) => {
+        expect(found, `${name} square in the flattened page (${where})`).not.toBeNull();
         for (const k of ['x1', 'x2', 'y1', 'y2'] as const) {
-          expect(Math.abs(found![k] - want[k]), `${name} ${k}: found ${found![k].toFixed(4)}, want ${want[k].toFixed(4)}`).toBeLessThan(TOL + 0.003);
+          expect(Math.abs(found![k] - want[k]), `${where}: ${name} ${k}: found ${found![k].toFixed(4)}, want ${want[k].toFixed(4)}`).toBeLessThan(TOL + 0.003);
         }
+      };
+      for (const [name, marker] of [['red', red], ['blue', blue]] as const) {
+        // First the file itself: the page's own JPEG, taken out of the download.
+        near('the downloaded file', name, await colourBoxInFlattenedPage(page, bytes, 0, name), expected(marker));
+        // Then what the viewer shows of it. It can swap in a sharper render just
+        // after it first shows the page, and an image read mid-swap has no
+        // pixels, so it is read until a complete render is there.
+        await expect
+          .poll(() => colourBoxInViewer(page, name), { message: `${name} square in the viewer`, timeout: 15_000 })
+          .not.toBeNull();
+        near('the viewer', name, await colourBoxInViewer(page, name), expected(marker));
       }
     });
   });

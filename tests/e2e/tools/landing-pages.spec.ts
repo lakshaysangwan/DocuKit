@@ -152,8 +152,12 @@ test.describe('Landing pages — the preset is applied', () => {
     await page.goto('/extract-pdf-pages/');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
     await expect(page.getByTestId('split-modes').getByRole('button', { name: /^Extract Pages/ })).toHaveAttribute('aria-pressed', 'true');
+    // Each click is seen to land before the next, so a miss names the page it missed.
     await page.getByTestId('page-select-1').click();
+    await expect(page.getByTestId('page-select-1')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('textbox')).toHaveValue('2');
     await page.getByTestId('page-select-3').click();
+    await expect(page.getByTestId('page-select-3')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('textbox')).toHaveValue('2, 4');
 
     await page.getByTestId('tool-action').click();

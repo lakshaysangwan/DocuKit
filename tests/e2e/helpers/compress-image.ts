@@ -98,7 +98,13 @@ export async function decodeImage(page: Page, bytes: Buffer, points: [number, nu
   );
 }
 
-/** A PNG made in the browser: the left half fully transparent, the right half opaque red. */
+/**
+ * A PNG made in the browser: the left half fully transparent, the right half
+ * opaque red with a little seeded grain in it. The grain is there so the PNG is
+ * reliably larger than the JPEG made from it: a flat half-red PNG is under 1 KB
+ * on some browsers' encoders (Linux WebKit among them), smaller than any JPEG,
+ * and the tool then — rightly — keeps the original instead of converting it.
+ */
 export async function transparentPng(page: Page, width = 240, height = 160): Promise<Buffer> {
   const b64 = await page.evaluate(
     async ({ width, height }) => {
@@ -106,8 +112,19 @@ export async function transparentPng(page: Page, width = 240, height = 160): Pro
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = 'rgb(220, 20, 20)';
-      ctx.fillRect(width / 2, 0, width / 2, height);
+      const half = ctx.createImageData(width / 2, height);
+      let seed = 12345;
+      const rand = () => {
+        seed = (seed * 1103515245 + 12345) >>> 0;
+        return (seed >>> 16) / 65536;
+      };
+      for (let i = 0; i < half.data.length; i += 4) {
+        half.data[i] = 205 + Math.floor(rand() * 40);
+        half.data[i + 1] = 5 + Math.floor(rand() * 30);
+        half.data[i + 2] = 5 + Math.floor(rand() * 30);
+        half.data[i + 3] = 255;
+      }
+      ctx.putImageData(half, width / 2, 0);
       const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/png'));
       const buf = new Uint8Array(await blob.arrayBuffer());
       let bin = '';

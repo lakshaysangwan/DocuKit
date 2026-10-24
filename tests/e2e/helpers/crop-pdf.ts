@@ -1,5 +1,5 @@
 import { type Page, expect } from '@playwright/test';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { uploadFiles, uploadBuffer, expectDownload, assertPdf } from './harness';
 import { userToView } from './edit-pdf';
 
@@ -116,15 +116,54 @@ export async function shownAreaFractions(original: Buffer, output: Buffer, pageI
   };
 }
 
+export type ColourBox = { x1: number; y1: number; x2: number; y2: number };
+
 /**
  * The box (fractions of the page) of strongly red or blue pixels in the page
- * image the viewer shows, or null when there are almost none.
+ * image the viewer shows, or null when there are almost none (or the image the
+ * viewer had a moment ago has been replaced by a fresh render).
  */
-export async function colourBoxInViewer(page: Page, colour: 'red' | 'blue') {
+export async function colourBoxInViewer(page: Page, colour: 'red' | 'blue'): Promise<ColourBox | null> {
   const image = page.getByTestId('page-image');
   await expect(image).toBeVisible();
-  return image.evaluate(async (el: HTMLImageElement, want: string) => {
-    await el.decode();
+  const src = await image.getAttribute('src');
+  return src ? colourBoxInImage(page, src, colour) : null;
+}
+
+/**
+ * The same box, read from the downloaded file itself: a flattened page is one
+ * JPEG drawn over the whole page, so that JPEG is taken out of the PDF and
+ * decoded by the browser — no viewer, no pdf.js.
+ */
+export async function colourBoxInFlattenedPage(
+  page: Page,
+  pdf: Buffer,
+  pageIndex: number,
+  colour: 'red' | 'blue',
+): Promise<ColourBox | null> {
+  const doc = await PDFDocument.load(pdf, { ignoreEncryption: true, updateMetadata: false });
+  const xobjects = doc.getPage(pageIndex).node.Resources()?.lookup(PDFName.of('XObject'), PDFDict);
+  expect(xobjects, 'the flattened page draws an image').toBeTruthy();
+  const images = xobjects!
+    .values()
+    .map((ref) => doc.context.lookup(ref))
+    .filter((obj): obj is PDFRawStream => obj instanceof PDFRawStream);
+  expect(images, 'the flattened page is exactly one image').toHaveLength(1);
+  expect(String(images[0].dict.get(PDFName.of('Filter'))), 'a JPEG').toBe('/DCTDecode');
+  const jpeg = Buffer.from(images[0].contents).toString('base64');
+  return colourBoxInImage(page, `data:image/jpeg;base64,${jpeg}`, colour);
+}
+
+/** Decode the image at `src` in the page and find the colour's box; null if it cannot be read. */
+async function colourBoxInImage(page: Page, src: string, colour: 'red' | 'blue'): Promise<ColourBox | null> {
+  return page.evaluate(async ({ src, want }) => {
+    const el = new Image();
+    el.src = src;
+    try {
+      await el.decode();
+    } catch {
+      return null;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = el.naturalWidth;
     canvas.height = el.naturalHeight;
@@ -152,7 +191,7 @@ export async function colourBoxInViewer(page: Page, colour: 'red' | 'blue') {
     }
     if (count < 20) return null;
     return { x1: minX / width, y1: minY / height, x2: maxX / width, y2: maxY / height };
-  }, colour);
+  }, { src, want: colour });
 }
 
 /** The raw /CropBox of every page, `[x, y, width, height]`. */

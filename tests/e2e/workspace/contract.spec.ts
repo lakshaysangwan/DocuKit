@@ -96,6 +96,15 @@ function expectSameBox(actual: Box | null, expected: Box | null, what: string) {
 }
 
 async function seriousViolations(page: Page) {
+  // Contrast is graded on what settles on screen, not a frame of a CSS
+  // transition: the action button fades from its disabled 40% opacity to full
+  // over 150 ms when it becomes available, and axe reads the computed opacity
+  // mid-fade if it runs in that window (it did, on Linux WebKit in CI).
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => !(typeof CSSTransition !== 'undefined' && a instanceof CSSTransition) || a.playState !== 'running'),
+  );
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   return results.violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
