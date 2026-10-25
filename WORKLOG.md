@@ -311,3 +311,9 @@ selection bar under the page).
 F2 notes: ruled lines, printed text and shadows reaching the photo's edge are kept as ink (slider or
 Original are the remedies); a very thick marker may be partly taken for paper; the chosen picture is
 not kept across tab switches.
+| `5ecf3f6` (F3) | Sign PDF puts a signature on every page or the pages chosen, in the same place on each (Lakshay's request): "Put this signature on: This page only / All pages (N) / Choose pages" in the controls pane under "Your signature" (Choose pages = the shared `parsePageRange` field — odd / even / last — synced with page checkboxes); copies keep the same size and distance from the left and bottom edge of each displayed page (`copyRectToPage`, correct on landscape, `/Rotate 90` and offset-CropBox pages); copies stay linked — drag, resize, nudge or mm edit on any page moves them all live, one Undo step; "Unlink page N"; Remove on a linked copy asks This page / All N pages; "Signature on 2 of 4 pages…" line, rail ticks, announcements. Pure `src/lib/sign/stamp-groups.ts`. Copy: two bullets replace "Copy a stamp to every page in one click" | Clean worktree: 783 Chromium, 965 Firefox/WebKit (WebKit `ux/large-file.spec.ts:16` now fails every time on Windows `EBUSY` unlinking its temp file — not F3), 75 mobile, 17 visual, 1073 unit. Live (~1 min after the push): all-pages, Sign and placement specs against docukit.uk 87 functional passes on three engines (6 failures all the CSP-blocked Cloudflare beacon), mobile 6/6 |
+
+F3 notes: new seeded fixture `doc-mixed-pages.pdf` (Letter, landscape, `/Rotate 90`, A5 offset
+CropBox). A stamp near an edge that does not fit a smaller page is shrunk/moved by `copyRectToPage`;
+editing that copy then passes its fitted size to the others — untested. The design doc's 4.1 still
+describes the old flow.
