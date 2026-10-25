@@ -241,13 +241,16 @@ Dropped: workspace step 1c (splitting `pdf-worker.ts`) — it only served parall
 - **Checks only he can do:** try Sign, Image to PDF, Edit PDF and Redact on his phone; open a
   protected PDF and a digitally signed PDF in Adobe Acrobat.
 
-### 1. Remaining image tools into the workspace
+### 1. Done on 2026-10-24/25 (third session)
 
-Resize Image, Convert Image, Lock Image, View-Once — reuse `workspace/ImageStage.tsx` and
-`CompareView` (built in W12). The batch image tools and Split already use `MultiFileDownload`; check
-Resize and Convert do.
+W13 Resize Image, W14 Convert Image, W15 Lock Image + View-Once — **all 20 tools are in the
+workspace**. CI1 + CI2 made the CI `e2e` job green again (90-minute limit; Linux WebKit black page
+renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
 ### 2. Follow-ups found during the migration
+
+- CI flakes still unexplained: WebKit `protect-pdf-permissions.spec.ts:108` (goto load timeout), Firefox `organize-pages.spec.ts:102` (lost first click), Firefox `compress-image-preview.spec.ts:241` (HEIC slow), Firefox/WebKit `landing-pages.spec.ts` Extract PDF Pages lost first click. The e2e job takes ~1h–1h20 of its 90 minutes — shard it.
+- Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
 
 - Signature fonts `public/fonts/*.woff2` have no Latin glyphs — replace with Latin subsets.
 - Compress PDF size wins: dedupe identical image streams; alpha-aware compression of masked images.
