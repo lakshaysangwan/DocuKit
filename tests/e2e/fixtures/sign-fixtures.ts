@@ -123,3 +123,101 @@ export async function makeUnbalancedPdf(): Promise<Uint8Array> {
   page.node.set(PDFName.of('Contents'), doc.context.register(doc.context.stream(content)));
   return doc.save();
 }
+
+/**
+ * "A photo of a signature": off-white, yellowish paper lit unevenly (a good
+ * deal darker toward the bottom right), with sensor noise; a blue-ink
+ * signature stroke and the dot of an "i"; and a few dark specks well away from
+ * the ink. Saved as a JPEG, as a phone saves it. Drawn by a browser canvas
+ * during global setup, from a seeded random source, so it is the same file on
+ * every run.
+ */
+export const SIGNATURE_PHOTO = {
+  width: 1600,
+  height: 1200,
+  ink: [25, 45, 160] as Rgb,
+  /** Pen width in pixels (round caps and joins). */
+  pen: 12,
+  /** The stroke, as a polyline. */
+  stroke: Array.from({ length: 61 }, (_, k): [number, number] => {
+    const x = 420 + k * 13;
+    return [x, Math.round(640 + 90 * Math.sin(k / 5) - 40 * Math.sin(k / 2.2))];
+  }),
+  /** The dot over an "i": centre and radius. */
+  dot: { x: 900, y: 430, r: 9 },
+  /** Dark specks (dust, noise), each a few pixels across. */
+  specks: [
+    [120, 140],
+    [1480, 180],
+    [200, 1050],
+    [1450, 1080],
+    [800, 1120],
+    [80, 600],
+  ] as [number, number][],
+} as const;
+
+/** The ink's own bounding box in the photo, in pixels (edges inclusive). */
+export function signaturePhotoInkBox() {
+  const { stroke, pen, dot } = SIGNATURE_PHOTO;
+  const xs = stroke.map((p) => p[0]);
+  const ys = stroke.map((p) => p[1]);
+  const half = pen / 2;
+  return {
+    x0: Math.min(...xs) - half,
+    x1: Math.max(...xs) + half,
+    y0: Math.min(dot.y - dot.r, Math.min(...ys) - half),
+    y1: Math.max(...ys) + half,
+  };
+}
+
+/** Browser script (a string, so no bundler helpers leak into it) that returns the photo as base-64 JPEG. */
+export function signaturePhotoScript(): string {
+  return `(async () => {
+    const P = ${JSON.stringify(SIGNATURE_PHOTO)};
+    let seed = 20261025;
+    const random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const c = document.createElement('canvas');
+    c.width = P.width; c.height = P.height;
+    const ctx = c.getContext('2d');
+    // Paper, lit from the top left.
+    const img = ctx.createImageData(P.width, P.height);
+    for (let y = 0; y < P.height; y++) {
+      for (let x = 0; x < P.width; x++) {
+        const light = 1 - 0.32 * ((x / P.width) * 0.6 + (y / P.height) * 0.4);
+        const n = (random() - 0.5) * 12;
+        const i = (y * P.width + x) * 4;
+        img.data[i] = 246 * light + n;
+        img.data[i + 1] = 238 * light + n;
+        img.data[i + 2] = 206 * light + n;
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    // The ink, a little darker where the light is.
+    const g = ctx.createLinearGradient(0, 0, P.width, P.height);
+    g.addColorStop(0, 'rgb(' + P.ink.join(',') + ')');
+    g.addColorStop(1, 'rgb(' + P.ink.map((v) => Math.round(v * 0.75)).join(',') + ')');
+    ctx.strokeStyle = g;
+    ctx.fillStyle = g;
+    ctx.lineWidth = P.pen;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    P.stroke.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(P.dot.x, P.dot.y, P.dot.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgb(60,55,50)';
+    for (const [x, y] of P.specks) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5 + random() * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const blob = await new Promise((res) => c.toBlob((b) => res(b), 'image/jpeg', 0.9));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  })()`;
+}

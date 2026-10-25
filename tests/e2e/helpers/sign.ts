@@ -1,4 +1,5 @@
 import { type Page, type Locator, expect } from '@playwright/test';
+import type { PDFRawStream } from 'pdf-lib';
 import { uploadFiles, expectDownload, assertPdf, readPdfContentStreams } from './harness';
 import { MARKER_COLOURS } from '../fixtures/sign-fixtures';
 
@@ -58,13 +59,71 @@ export async function drawStroke(page: Page, points: [number, number][], stepsPe
   await page.mouse.up();
 }
 
-/** Upload a picture as the signature; it goes onto the current page at once. */
-export async function addUploadedSignature(page: Page, image: string) {
+/** Choose a picture in the Upload tab and wait until it is shown, cleaned or not. */
+export async function chooseSignaturePicture(page: Page, image: string) {
   await page.getByTestId('signature-mode-upload').click();
   const zone = page.getByTestId('signature-upload');
   await expect(zone.locator('[data-testid="dropzone"][data-hydrated="true"]')).toBeVisible();
   await zone.locator('input[type="file"]').setInputFiles(image);
+  await expect(page.getByTestId('signature-upload-preview')).toBeVisible({ timeout: 30_000 });
+  // Ready, or cleaned and found no ink (a photo that is not a signature).
+  await expect(page.getByTestId('signature-upload-preview')).toHaveAttribute('data-state', /ready|empty/, { timeout: 30_000 });
+}
+
+/**
+ * Upload a picture as the signature and put it on the current page.
+ *
+ * `view: 'original'` (the default here) uses the picture as it is, which the
+ * placement tests need: their four-coloured marker is not a signature on paper.
+ * `'cleaned'` uses it with the paper taken out, as the tab does by default.
+ */
+export async function addUploadedSignature(page: Page, image: string, view: 'original' | 'cleaned' = 'original') {
+  await chooseSignaturePicture(page, image);
+  await page.getByTestId(`signature-view-${view}`).click();
+  await expect(page.getByTestId('signature-upload-preview')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+  await expect(page.getByTestId('use-signature')).toBeEnabled();
+  await page.getByTestId('use-signature').click();
   await expect(page.getByTestId('overlay-item').first()).toBeVisible();
+}
+
+/** The pixels of an image stored in the file: RGB and its soft mask (alpha), if it has one. */
+export interface StoredImage {
+  width: number;
+  height: number;
+  /** 3 bytes a pixel. */
+  rgb: Uint8Array;
+  /** 1 byte a pixel; null when the image has no /SMask. */
+  alpha: Uint8Array | null;
+}
+
+/**
+ * Read an image XObject drawn on a page out of the file itself: the bytes
+ * pdf-lib stored (8-bit DeviceRGB, Flate) and its /SMask.
+ */
+export async function readStoredImage(bytes: Buffer, name: string, pageIndex = 0): Promise<StoredImage> {
+  const { PDFDocument, PDFName, PDFDict, PDFNumber } = await import('pdf-lib');
+  const { inflateSync } = await import('node:zlib');
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  const xobjects = doc.getPages()[pageIndex].node.Resources()!.lookup(PDFName.of('XObject'), PDFDict);
+  const image = xobjects.lookup(PDFName.of(name)) as PDFRawStream;
+  const num = (stream: PDFRawStream, key: string) => stream.dict.lookup(PDFName.of(key), PDFNumber).asNumber();
+  const decode = (stream: PDFRawStream) => {
+    const filter = stream.dict.lookup(PDFName.of('Filter'));
+    const raw = Buffer.from(stream.getContents());
+    return filter ? new Uint8Array(inflateSync(raw)) : new Uint8Array(raw);
+  };
+  const width = num(image, 'Width');
+  const height = num(image, 'Height');
+  expect(num(image, 'BitsPerComponent'), 'an 8-bit image').toBe(8);
+  const rgb = decode(image);
+  expect(rgb.length, 'RGB, 3 bytes a pixel').toBe(width * height * 3);
+  const mask = image.dict.lookup(PDFName.of('SMask')) as PDFRawStream | undefined;
+  let alpha: Uint8Array | null = null;
+  if (mask) {
+    alpha = decode(mask);
+    expect(alpha.length, 'the mask is 1 byte a pixel, the same size').toBe(width * height);
+  }
+  return { width, height, rgb, alpha };
 }
 
 /** Where a stamp is on screen: its box as fractions of the page it sits on. */

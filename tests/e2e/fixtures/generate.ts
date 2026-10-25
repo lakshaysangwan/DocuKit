@@ -12,7 +12,7 @@ import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeMaskedImagesPdf, makeOnlyMaskedPdf } from './masked-images';
-import { makeCropOffsetPdf, makeMarkerPng, makeRotatedPdf, makeUnbalancedPdf } from './sign-fixtures';
+import { makeCropOffsetPdf, makeMarkerPng, makeRotatedPdf, makeUnbalancedPdf, signaturePhotoScript } from './sign-fixtures';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 export const FIXTURES_DIR = path.join(DIR, 'files');
@@ -72,6 +72,9 @@ export const FIXTURE = {
   pdfUnbalanced: path.join(FIXTURES_DIR, 'doc-unbalanced-cm.pdf'),
   // A four-coloured image: shows where a stamp landed and which way up.
   signMarker: path.join(FIXTURES_DIR, 'sign-marker.png'),
+  // A phone photo of a blue-ink signature on yellowish, unevenly lit paper,
+  // with specks: what Sign PDF's Upload tab has to pick the ink out of.
+  signPhoto: path.join(FIXTURES_DIR, 'signature-photo.jpg'),
 } as const;
 
 async function makePdf(pages: number, landscape = false): Promise<Uint8Array> {
@@ -149,12 +152,14 @@ export async function generateFixtures(): Promise<void> {
     };
   })()`;
   const encoded = await page.evaluate(browserScript) as Record<'jpg' | 'jpg2' | 'png' | 'webp', string>;
+  const signPhoto = await page.evaluate(signaturePhotoScript()) as string;
   await browser.close();
 
   await writeFile(FIXTURE.jpg, Buffer.from(encoded.jpg, 'base64'));
   await writeFile(FIXTURE.jpg2, Buffer.from(encoded.jpg2, 'base64'));
   await writeFile(FIXTURE.png, Buffer.from(encoded.png, 'base64'));
   await writeFile(FIXTURE.webp, Buffer.from(encoded.webp, 'base64'));
+  await writeFile(FIXTURE.signPhoto, Buffer.from(signPhoto, 'base64'));
 
   // ── Image-heavy PDF (node) ─────────────────────────────────────────────────
   // Embeds the high-quality JPEGs full-page so image recompression has real work

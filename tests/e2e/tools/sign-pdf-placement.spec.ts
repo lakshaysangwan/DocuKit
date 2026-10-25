@@ -15,6 +15,7 @@ import {
   stampViewRect,
   addTypedSignature,
   addUploadedSignature,
+  chooseSignaturePicture,
   type ViewRect,
 } from '../helpers/sign';
 
@@ -334,8 +335,9 @@ test.describe('Sign PDF — the stamp lands where it was shown', () => {
     const before = await stampViewRect(page);
 
     await page.getByTestId('change-signature').click();
-    await page.getByTestId('signature-mode-upload').click();
-    await page.getByTestId('signature-upload').locator('input[type="file"]').setInputFiles(FIXTURE.signMarker);
+    await chooseSignaturePicture(page, FIXTURE.signMarker);
+    await page.getByTestId('signature-view-original').click();
+    await page.getByTestId('use-signature').click();
     await expect(page.getByTestId('signature-creator')).toHaveCount(0);
 
     // Still three stamps, same width and centre, now with the new image's 3:1 shape.

@@ -1,11 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import DropZone from '@/components/islands/shared/DropZone';
 import { cn } from '@/lib/utils';
 import SignaturePad, { type SignaturePadHandle } from './SignaturePad';
+import SignatureUpload, { type SignatureUploadHandle, type UploadStatus } from './SignatureUpload';
 import {
   SIGNATURE_FONTS,
   signatureFromCanvas,
-  signatureFromFile,
   signatureFromText,
   type SigAsset,
 } from './signature-image';
@@ -17,8 +16,6 @@ const MODES: { id: SignatureMode; label: string }[] = [
   { id: 'type', label: 'Type' },
   { id: 'upload', label: 'Upload' },
 ];
-
-const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 interface SignatureCreatorProps {
   /** The visitor chose this signature. */
@@ -32,6 +29,8 @@ interface SignatureCreatorProps {
   onFontChange: (index: number) => void;
   /** Shown when a signature already exists and this is a change, not a first go. */
   onCancel?: () => void;
+  /** Whether an uploaded picture is being checked before it is used (for the prompt). */
+  onReviewChange?: (reviewing: boolean) => void;
 }
 
 const secondary =
@@ -53,11 +52,14 @@ export default function SignatureCreator({
   fontIndex,
   onFontChange,
   onCancel,
+  onReviewChange,
 }: SignatureCreatorProps) {
   const [drawn, setDrawn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const padRef = useRef<SignaturePadHandle>(null);
+  const uploadRef = useRef<SignatureUploadHandle>(null);
+  const [upload, setUpload] = useState<UploadStatus>({ reason: 'Choose a picture of your signature first', reviewing: false });
   const hintId = useId();
   const tabsId = useId();
 
@@ -68,7 +70,20 @@ export default function SignatureCreator({
   }, []);
 
   const reason =
-    mode === 'draw' ? (drawn ? null : 'Draw your signature first') : typedText.trim() ? null : 'Type your name first';
+    mode === 'draw'
+      ? drawn
+        ? null
+        : 'Draw your signature first'
+      : mode === 'upload'
+        ? upload.reason
+        : typedText.trim()
+          ? null
+          : 'Type your name first';
+
+  const reviewing = mode === 'upload' && upload.reviewing;
+  useEffect(() => {
+    onReviewChange?.(reviewing);
+  }, [reviewing, onReviewChange]);
 
   const use = async () => {
     setProblem(null);
@@ -80,27 +95,13 @@ export default function SignatureCreator({
         asset = canvas ? signatureFromCanvas(canvas) : null;
       } else if (mode === 'type') {
         asset = await signatureFromText(typedText.trim(), fontIndex);
+      } else {
+        asset = uploadRef.current?.getAsset() ?? null;
       }
       if (asset) onUse(asset);
       else setProblem('That signature came out blank. Try again.');
     } catch {
       setProblem('That signature could not be used. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const upload = async (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
-    setProblem(null);
-    setBusy(true);
-    try {
-      const asset = await signatureFromFile(file);
-      if (asset) onUse(asset);
-      else setProblem('That picture looks blank. Choose a picture of your signature.');
-    } catch {
-      setProblem('That picture could not be read. Try a PNG or JPEG.');
     } finally {
       setBusy(false);
     }
@@ -206,50 +207,32 @@ export default function SignatureCreator({
           </>
         )}
 
-        {mode === 'upload' && (
-          <div data-testid="signature-upload">
-            <DropZone
-              accept={IMAGE_TYPES}
-              multiple={false}
-              onFiles={upload}
-              prompt="Drop a picture of your signature"
-              hint="PNG with a transparent background works best"
-              className="min-h-28"
-            />
-          </div>
-        )}
+        {mode === 'upload' && <SignatureUpload ref={uploadRef} onStatus={setUpload} />}
       </div>
 
-      {mode !== 'upload' && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={use}
-              disabled={!!reason || busy}
-              aria-describedby={reason ? hintId : undefined}
-              data-testid="use-signature"
-              className="h-10 flex-1 rounded-lg border-2 border-[var(--color-primary)] bg-[var(--color-primary)]/10 px-4 text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/15 disabled:cursor-not-allowed disabled:border-[var(--color-border)] disabled:bg-transparent disabled:text-[var(--color-text-muted)]"
-            >
-              Use this signature
+      <div className="flex flex-col gap-1.5">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={use}
+            disabled={!!reason || busy}
+            aria-describedby={reason ? hintId : undefined}
+            data-testid="use-signature"
+            className="h-10 flex-1 rounded-lg border-2 border-[var(--color-primary)] bg-[var(--color-primary)]/10 px-4 text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/15 disabled:cursor-not-allowed disabled:border-[var(--color-border)] disabled:bg-transparent disabled:text-[var(--color-text-muted)]"
+          >
+            Use this signature
+          </button>
+          {onCancel && (
+            <button type="button" onClick={onCancel} className={cn(secondary, 'h-10')}>
+              Cancel
             </button>
-            {onCancel && (
-              <button type="button" onClick={onCancel} className={cn(secondary, 'h-10')}>
-                Cancel
-              </button>
-            )}
-          </div>
-          {/* Always one line tall, so the button never moves when the reason goes. */}
-          <p id={hintId} data-testid="use-signature-hint" className="min-h-4 text-xs text-[var(--color-text-secondary)]">
-            {reason ?? ''}
-          </p>
+          )}
         </div>
-      )}
-      {mode === 'upload' && onCancel && (
-        <button type="button" onClick={onCancel} className={cn(secondary, 'self-start')}>
-          Cancel
-        </button>
-      )}
+        {/* Always one line tall, so the button never moves when the reason goes. */}
+        <p id={hintId} data-testid="use-signature-hint" className="min-h-4 text-xs text-[var(--color-text-secondary)]">
+          {reason ?? ''}
+        </p>
+      </div>
 
       {problem && (
         <p role="alert" data-testid="signature-problem" className="text-xs font-medium text-[var(--color-error)]">

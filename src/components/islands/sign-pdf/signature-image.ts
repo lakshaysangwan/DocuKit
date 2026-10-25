@@ -6,6 +6,16 @@
  * which is unit-tested.
  */
 import { findInkBounds, hasTransparency, padBounds } from '@/lib/sign/ink-bounds';
+import { decodeToBitmap } from '@/lib/image-codec';
+import {
+  extractInk,
+  prepareSignature,
+  workingScale,
+  type ExtractOptions,
+  type PreparedSignature,
+  type RgbaImage,
+} from '@/lib/sign/signature-extract';
+import type { SignatureWorkerRequest, SignatureWorkerResponse } from '@/workers/signature-worker';
 
 /** A signature or initials image, and its shape. Stamps point at one of these. */
 export interface SigAsset {
@@ -123,14 +133,148 @@ export async function signatureFromText(text: string, fontIndex: number): Promis
   return trimToInk(canvas, canvas.width, canvas.height);
 }
 
-/** An uploaded picture of a signature, trimmed to its ink (or to what is not white paper). */
-export async function signatureFromFile(file: File): Promise<SigAsset | null> {
-  const url = URL.createObjectURL(file);
+/** A picture of a signature, decoded upright and reduced to the working size. */
+export interface SignaturePhoto {
+  /** The picture at working size (long edge at most 2000 px). */
+  canvas: HTMLCanvasElement;
+  pixels: ImageData;
+  /** Whether it already has see-through pixels (a PNG cut out beforehand). */
+  transparent: boolean;
+}
+
+/**
+ * Decode an uploaded picture: JPEG, PNG, WebP natively, HEIC/HEIF (and AVIF
+ * where the browser cannot) through the shared codecs. EXIF orientation is
+ * applied, so a phone photo comes out upright.
+ */
+export async function readSignaturePhoto(file: File): Promise<SignaturePhoto> {
+  const bitmap = await decodeToBitmap(file);
   try {
-    const img = await loadImage(url);
-    return trimToInk(img, img.naturalWidth, img.naturalHeight);
+    const scale = workingScale(bitmap.width, bitmap.height);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('No canvas.');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const pixels = ctx.getImageData(0, 0, width, height);
+    return { canvas, pixels, transparent: hasTransparency(pixels.data) };
   } finally {
-    URL.revokeObjectURL(url);
+    bitmap.close();
+  }
+}
+
+/** The picture as it is, trimmed to what is not white paper (the "Original" choice). */
+export function signatureFromPhoto(photo: SignaturePhoto): SigAsset | null {
+  return trimToInk(photo.canvas, photo.canvas.width, photo.canvas.height);
+}
+
+/** Cleaned ink as the stamp image: a PNG with alpha, so the page shows through. */
+export function signatureFromInk(ink: RgbaImage): SigAsset | null {
+  if (!ink.width || !ink.height) return null;
+  const full = document.createElement('canvas');
+  full.width = ink.width;
+  full.height = ink.height;
+  const ctx = full.getContext('2d');
+  if (!ctx) return null;
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(ink.data), ink.width, ink.height), 0, 0);
+  const scale = Math.min(1, MAX_EDGE_PX / Math.max(ink.width, ink.height));
+  let out = full;
+  if (scale < 1) {
+    out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(ink.width * scale));
+    out.height = Math.max(1, Math.round(ink.height * scale));
+    const outCtx = out.getContext('2d');
+    if (!outCtx) return null;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(full, 0, 0, out.width, out.height);
+  }
+  const dataUrl = out.toDataURL('image/png');
+  return { dataUrl, aspect: out.width / out.height };
+}
+
+/**
+ * Runs the ink extraction in a worker (it takes over 100 ms on a phone
+ * photo), keeping the prepared photo there between slider moves. Falls back
+ * to running in the page where a worker cannot start.
+ */
+export class InkExtractor {
+  private worker: Worker | null = null;
+  private inline: PreparedSignature | null = null;
+  private pixels: ImageData | null = null;
+  private nextId = 1;
+  private pending = new Map<number, { resolve: (r: SignatureWorkerResponse) => void; reject: (e: Error) => void }>();
+
+  constructor() {
+    try {
+      this.worker = new Worker(new URL('../../../workers/signature-worker.ts', import.meta.url), { type: 'module' });
+      this.worker.onmessage = (e: MessageEvent<SignatureWorkerResponse>) => {
+        const job = this.pending.get(e.data.id);
+        this.pending.delete(e.data.id);
+        job?.resolve(e.data);
+      };
+      this.worker.onerror = () => this.fallBack();
+    } catch {
+      this.worker = null;
+    }
+  }
+
+  /** Stop using the worker; every waiting request is answered in the page. */
+  private fallBack() {
+    this.worker?.terminate();
+    this.worker = null;
+    const jobs = [...this.pending.values()];
+    this.pending.clear();
+    for (const job of jobs) job.reject(new Error('worker'));
+  }
+
+  private send(msg: SignatureWorkerRequest, transfer: Transferable[] = []): Promise<SignatureWorkerResponse> {
+    return new Promise((resolve, reject) => {
+      this.pending.set(msg.id, { resolve, reject });
+      this.worker!.postMessage(msg, transfer);
+    });
+  }
+
+  async prepare(pixels: ImageData): Promise<void> {
+    this.pixels = pixels;
+    this.inline = null;
+    if (this.worker) {
+      const buffer = pixels.data.slice().buffer;
+      try {
+        const r = await this.send({ id: this.nextId++, type: 'prepare', width: pixels.width, height: pixels.height, buffer }, [buffer]);
+        if (!r.ok) throw new Error(r.error);
+        return;
+      } catch {
+        this.fallBack();
+      }
+    }
+    this.inline = prepareSignature(pixels);
+  }
+
+  async extract(options: ExtractOptions): Promise<RgbaImage | null> {
+    if (this.worker) {
+      try {
+        const r = await this.send({ id: this.nextId++, type: 'extract', options });
+        if (!r.ok) throw new Error(r.error);
+        return r.ink ? { data: new Uint8ClampedArray(r.ink.buffer), width: r.ink.width, height: r.ink.height } : null;
+      } catch {
+        this.fallBack();
+      }
+    }
+    if (!this.inline && this.pixels) this.inline = prepareSignature(this.pixels);
+    if (!this.inline) return null;
+    return extractInk(this.inline, options)?.image ?? null;
+  }
+
+  dispose() {
+    this.worker?.terminate();
+    this.worker = null;
+    this.pending.clear();
+    this.inline = null;
+    this.pixels = null;
   }
 }
 

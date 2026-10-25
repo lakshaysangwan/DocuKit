@@ -173,6 +173,8 @@ export default function SignPdfTool() {
   const [creatorOpen, setCreatorOpen] = useState(true);
   const [optionsOpen, setOptionsOpen] = useState(true);
   const [signatureMode, setSignatureMode] = useState<SignatureMode>('draw');
+  // An uploaded picture is on show in the Upload tab, waiting to be checked.
+  const [uploadReview, setUploadReview] = useState(false);
   const [typedText, setTypedText] = useState('');
   const [fontIndex, setFontIndex] = useState(0);
   const [initialsText, setInitialsText] = useState('');
@@ -571,6 +573,10 @@ export default function SignPdfTool() {
     promptTone = 'error';
   } else if (status !== 'ready') {
     prompt = 'Opening your PDF…';
+  } else if ((creatorOpen || !state.signature) && signatureMode === 'upload' && uploadReview) {
+    prompt = closed
+      ? 'Open Options to check your signature.'
+      : `Check your signature ${beside}: the paper is taken out and it is cropped to the ink. Then press Use this signature.`;
   } else if (!state.signature || (creatorOpen && stampCount === 0)) {
     prompt = closed ? 'Open Options to create your signature.' : `Create your signature ${beside}.`;
   } else if (creatorOpen) {
@@ -842,6 +848,7 @@ export default function SignPdfTool() {
               fontIndex={fontIndex}
               onFontChange={setFontIndex}
               onCancel={state.signature ? () => setCreatorOpen(false) : undefined}
+              onReviewChange={setUploadReview}
             />
           </>
         ) : (

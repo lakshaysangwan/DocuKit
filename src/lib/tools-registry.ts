@@ -185,7 +185,8 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['digital-signature-pdf', 'edit-pdf', 'protect-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
-      { q: 'What signature methods are supported?', a: 'Draw with a mouse, finger or pen, type your name and pick one of four handwriting styles, or upload a picture of your signature (a PNG with a transparent background works best). Whichever you choose is trimmed to the signature itself and keeps its proportions.' },
+      { q: 'What signature methods are supported?', a: 'Draw with a mouse, finger or pen, type your name and pick one of four handwriting styles, or upload a photo or scan of your signature (JPEG, PNG, WebP or HEIC). Whichever you choose is trimmed to the signature itself and keeps its proportions.' },
+      { q: 'Can I use a photo of my signature on paper?', a: 'Yes. Upload the photo and the paper is taken out and the picture cropped to the ink, in your browser: only the signature is placed on the page, and the page shows through around it. The ink keeps its own colour, or tick "Make ink black". Shadows, lined paper or printed text behind the signature can leave marks; move the Sensitivity slider left to drop them, or choose Original to use the picture as it is. Sign on plain paper in good light for the cleanest result.' },
       { q: 'Is this a legally binding signature?', a: 'Visual signatures apply an image of your signature. For a cryptographic signature (PKCS#7) that shows whether the file was changed after signing, use our Digital Signature tool.' },
       { q: 'Can I move or resize the signature after placing it?', a: 'Yes. Drag it to move it and pull a corner to resize it — it keeps its proportions. You can also use the Smaller and Larger buttons, type an exact position in millimetres, or nudge it with the arrow keys. Remove deletes a stamp, and Undo and Redo cover every change until you download.' },
       { q: 'Can I sign multiple pages?', a: 'Yes. Go to any page with the page arrows or the thumbnails and add your signature there, or select a stamp and choose "Copy to all pages" to put it in the same position on every page in one step.' },
@@ -193,12 +194,13 @@ export const TOOLS: ToolDef[] = [
     ],
     howToSteps: [
       { title: 'Add your PDF', description: 'Drop the PDF you want to sign, or browse for it. It opens in your browser and is never uploaded.' },
-      { title: 'Create your signature', description: 'Draw it, type your name, or upload a picture of it, then click "Use this signature". It appears on the page straight away.' },
+      { title: 'Create your signature', description: 'Draw it, type your name, or upload a photo of it (the paper is taken out and it is cropped to the ink, in your browser), then click "Use this signature". It appears on the page straight away.' },
       { title: 'Put it in place', description: 'Drag the signature to where it belongs and pull a corner to resize it. Add your initials or the date, or copy a stamp to all pages.' },
       { title: 'Sign and download', description: 'Click "Sign PDF", check the signed page that is shown, then click "Download signed PDF". The signature is part of the page in the new file.' },
     ],
     features: [
       'Draw, type, or upload signature',
+      'Upload a photo of your signature: the paper is taken out, and it is cropped to the ink',
       'See the signature on the page: drag to move, pull a corner to resize',
       'Placed exactly where shown, on rotated and cropped pages too',
       'Date stamp and initials support',
