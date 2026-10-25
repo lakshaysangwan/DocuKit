@@ -254,22 +254,16 @@ renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
 ### 2. Follow-ups found during the migration
 
-- ~~Signature fonts~~ — done (F1).
-- `ux/large-file.spec.ts:16` on Windows WebKit now fails every time (`EBUSY` unlinking its `%TEMP%\docukit-huge-*.png`): make the cleanup tolerate a locked file (retry / ignore EBUSY) without weakening the check.
+- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4).
 - CI flakes still unexplained: WebKit `protect-pdf-permissions.spec.ts:108` (goto load timeout), Firefox `organize-pages.spec.ts:102` (lost first click), Firefox `compress-image-preview.spec.ts:241` (HEIC slow), Firefox/WebKit `landing-pages.spec.ts` Extract PDF Pages lost first click. The e2e job takes ~1h–1h20 of its 90 minutes — shard it.
 - Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
 
-- Signature fonts `public/fonts/*.woff2` have no Latin glyphs — replace with Latin subsets.
 - Compress PDF size wins: dedupe identical image streams; alpha-aware compression of masked images.
 - Compress PDF: the DPI slider is a scale, not a DPI; "Strip embedded fonts" loses text; the probe re-copies the file to the worker per page.
-- `MultiFileDownload` result gallery squeezes 3 columns into the narrow result pane — fix once for all tools.
 - Image to PDF "Fit Image" turns pixels into points (a 12 MP photo makes a ~1.4 m page).
 - Redact search marks the whole line containing a phrase.
 - Watermark: drag-to-position (only nine presets today).
-- Sign PDF FAQ "Is this a legally binding signature?" — answer plainly that we cannot say.
-- Homepage search synonyms ("join", "esign") via `searchKeywords` on registry entries.
 - Copy truth sweep for anything not yet migrated.
-- `src/types/worker-messages.ts` declares an unused `redact` op.
 - Untrack the nine fixtures under `tests/e2e/fixtures/files/` and ignore the folder.
 
 ### 3. Older backlog still open
