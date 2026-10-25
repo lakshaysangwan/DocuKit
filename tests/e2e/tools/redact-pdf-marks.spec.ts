@@ -345,6 +345,58 @@ test.describe('Redact PDF — find and mark', () => {
     await expect(page.getByTestId('verify-phrase')).toHaveText('“page 2 of” no longer appears in the file.');
   });
 
+  test('marks only the phrase, not the line it is on: the rest of the line is still in the file', async ({ page }) => {
+    // "This is sample body text for functional testing of Docukit." on each page, searched in other capitals.
+    await openRedact(page, FIXTURE.pdf3page);
+    await openOptions(page);
+    await page.getByTestId('redact-search').fill('SAMPLE BODY');
+    await page.getByTestId('redact-find').click();
+    await expect(page.getByTestId('search-note')).toHaveText('Marked 3 matches on 3 pages.');
+
+    // The mark on screen covers the two words, not the 12pt line (≈ 0.52 of the page wide).
+    const mark = await markViewRect(page, page.getByTestId('overlay-item').first());
+    expect(mark.width, 'mark width as a fraction of the page').toBeLessThan(0.17);
+    expect(mark.width).toBeGreaterThan(0.1);
+    expect(mark.x, 'it starts after "This is "').toBeGreaterThan(60 / 612 + 0.05);
+
+    const bytes = await redactAndDownload(page);
+    for (let p = 0; p < 3; p++) {
+      const text = await pageText(bytes, p);
+      expect(text.toLowerCase(), `page ${p + 1}: the phrase is gone`).not.toContain('sample body');
+      expect(text.toLowerCase()).not.toContain('sample');
+      expect(text, `page ${p + 1}: the rest of the line is still there`).toMatch(/This is\b/);
+      expect(text).toContain('text for functional testing of Docukit.');
+      expect(text).toContain('Test Document');
+      expect(text).toContain(`Page ${p + 1} of 3`);
+    }
+    await expect(page.getByTestId('verify-phrase')).toHaveText('“SAMPLE BODY” no longer appears in the file.');
+    await expect(page.getByTestId('verify-under-marks')).toHaveText('No text found under any of your 3 marks in the redacted file.');
+  });
+
+  test('on a /Rotate 90 scan the mark lands on the word, which goes, and the rest of its line stays', async ({ page }) => {
+    // "Rotated scan, page 1", drawn turned so it reads across the displayed page.
+    await openRedact(page, FIXTURE.pdfRotate90);
+    await openOptions(page);
+    await page.getByTestId('redact-search').fill('scan');
+    await page.getByTestId('redact-find').click();
+    await expect(page.getByTestId('search-note')).toHaveText(/^Marked \d+ match(es)? on \d+ pages?\.$/);
+
+    const runs = await textRunsAt(await readFile(FIXTURE.pdfRotate90), 0);
+    const line = runs.find((r) => r.str.startsWith('Rotated scan'))!;
+    const mark = await markViewRect(page, page.getByTestId('overlay-item').first());
+    // Wider than tall on the displayed page, on the line, and well short of its length.
+    expect(mark.width * 792, 'width in points (the page is shown 792 × 612)').toBeGreaterThan(mark.height * 612);
+    expect(mark.width).toBeLessThan(0.15);
+    expect(Math.abs(mark.y + mark.height / 2 - line.y), 'on the line').toBeLessThan(0.03);
+
+    const bytes = await redactAndDownload(page);
+    const text = await pageText(bytes, 0);
+    expect(text).not.toContain('scan');
+    expect(text).toContain('Rotated');
+    expect(text).toContain('page 1');
+    expect(text).toContain('Sign here:');
+  });
+
   test('the download is the file the stage shows', async ({ page }) => {
     await openRedact(page, FIXTURE.pdf3page);
     await drawMark(page, TITLE);

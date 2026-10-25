@@ -4,6 +4,7 @@
  * ~10 MB module is reclaimed between operations.
  */
 import type { RedactJobMark } from './redact/marks';
+import type { PhraseMatch } from './redact/find-phrase';
 
 export type { RedactJobMark };
 
@@ -12,6 +13,28 @@ export interface RedactOptions {
   stripMetadata?: boolean;
   /** Aborting terminates the worker at once and rejects with an `AbortError`. */
   signal?: AbortSignal;
+}
+
+/**
+ * Every place a phrase appears, case-insensitively, as one rectangle (PDF user
+ * space) per line of each match — over the phrase, not its whole line. Runs in
+ * the MuPDF worker, the engine that will remove the text.
+ */
+export function findPhraseWithMupdf(buffer: ArrayBuffer, phrase: string): Promise<PhraseMatch[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('../workers/mupdf-worker.ts', import.meta.url), { type: 'module' });
+    worker.onmessage = (e: MessageEvent<{ ok: boolean; matches?: PhraseMatch[]; error?: string }>) => {
+      worker.terminate();
+      if (e.data.ok && e.data.matches) resolve(e.data.matches);
+      else reject(new Error(e.data.error || 'Search failed'));
+    };
+    worker.onerror = (e) => {
+      worker.terminate();
+      reject(new Error(e.message || 'MUPDF worker failed to load'));
+    };
+    const copy = buffer.slice(0);
+    worker.postMessage({ op: 'search', buffer: copy, phrase }, [copy]);
+  });
 }
 
 export function redactWithMupdf(

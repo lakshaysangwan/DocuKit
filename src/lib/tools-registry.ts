@@ -555,7 +555,7 @@ export const TOOLS: ToolDef[] = [
     wasmDeps: ['pdf-lib', 'pdfjs', 'mupdf'],
     faqs: [
       { q: 'What makes this "true" redaction?', a: 'The text under each mark and the image pixels under it are removed from the PDF itself, not just covered with a black box, and so are shapes a mark covers completely. A black box is then drawn where the content was. The rest of the page keeps its selectable text.' },
-      { q: 'Can I redact text by searching for it?', a: 'Yes. Type a word, name or number and press Find & mark all: every line of text that contains it, on every page, gets a mark you can move, resize or remove before redacting.' },
+      { q: 'Can I redact text by searching for it?', a: 'Yes. Type a word, name or number and press Find & mark all: every place it appears, on every page and in any capitals, gets a mark over just those words, not the rest of the line, which you can move, resize or remove before redacting. A phrase that runs onto the next line gets a mark on each line.' },
       { q: 'Can I mark areas with a finger or a pen?', a: 'Yes. Drag a finger or a stylus over what you want to remove, just as with a mouse. To scroll a zoomed page with a finger, turn off Draw marks first. Add mark and the millimetre fields place a mark without dragging at all.' },
       { q: 'Can I check the result before downloading?', a: 'Yes. After Redact PDF the page view shows the redacted file itself, page by page, with Before and After to compare. The result panel says whether any text can still be found under your marks, and whether the phrases you searched for still appear in the file.' },
       { q: 'Is this reversible?', a: 'No. Redaction is permanent and irreversible. You tick a confirmation before Redact PDF can run, and Make changes takes you back to your marks before you download.' },
@@ -569,7 +569,7 @@ export const TOOLS: ToolDef[] = [
     features: [
       'True redaction: text and image pixels under a mark are removed, not covered',
       'Mark with a mouse, a finger or a pen',
-      'Find & mark every line that contains a phrase',
+      'Find & mark every place a phrase appears',
       'Removes the area shown, on rotated and cropped pages too',
       'See the redacted pages before you download',
       'Undo and redo',

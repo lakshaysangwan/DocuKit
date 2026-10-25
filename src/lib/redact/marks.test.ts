@@ -9,8 +9,8 @@ import {
   rectContains,
   rectFromPoints,
   runMatches,
+  pdfRectToViewRect,
   textRunViewCentre,
-  textRunViewRect,
   MM_PER_PT,
 } from './marks';
 
@@ -50,51 +50,50 @@ describe('defaultMarkRect', () => {
   });
 });
 
-describe('textRunViewRect', () => {
-  it('covers an upright run on a plain page, with a quarter of the font size spare', () => {
+describe('pdfRectToViewRect', () => {
+  it('is the box a user-space rectangle is on a plain page', () => {
     const geom = makePageGeometry({ view: [0, 0, 600, 800], rotate: 0 });
-    // 12pt text at x=100, baseline y=700, 60pt wide.
-    const r = textRunViewRect(geom, { str: 'Name', transform: [12, 0, 0, 12, 100, 700], width: 60, height: 12 });
-    close(r.x, (100 - 3) / 600);
-    close(r.width, 66 / 600);
-    // Top of the box: baseline + 12 + 3 = 715 → (800 − 715) / 800.
-    close(r.y, 85 / 800);
+    const r = pdfRectToViewRect(geom, { x: 100, y: 697, width: 60, height: 18 });
+    close(r.x, 100 / 600);
+    close(r.width, 60 / 600);
+    close(r.y, (800 - 715) / 800);
     close(r.height, 18 / 800);
   });
 
-  it('covers text drawn turned 90° on a /Rotate 90 page, where it reads upright', () => {
-    // The rotated fixture: a Letter page shown turned, text drawn rotated so it reads across.
+  it('turns with a /Rotate 90 page', () => {
+    // Displayed 792 wide × 612 tall: user-space x runs down the displayed page, y runs right.
     const geom = makePageGeometry({ view: [0, 0, 612, 792], rotate: 90 });
-    const r = textRunViewRect(geom, { str: 'Rotated', transform: [0, 24, -24, 0, 60, 60], width: 200, height: 24 });
-    // Displayed 792 wide × 612 tall; the run starts 60pt from the displayed left
-    // and its baseline is 60pt below the displayed top, so it sits in the top-left.
-    close(r.x, (60 - 6) / 792);
+    const r = pdfRectToViewRect(geom, { x: 30, y: 54, width: 36, height: 212 });
+    close(r.x, 54 / 792);
     close(r.width, 212 / 792);
-    close(r.y, (60 - 24 - 6) / 612);
+    close(r.y, 30 / 612);
     close(r.height, 36 / 612);
   });
 
-  it('maps back through the crop box origin on an offset page', () => {
+  it('maps through the crop box origin on an offset page', () => {
     const geom = makePageGeometry({ view: [50, 100, 562, 742], rotate: 0 });
-    const r = textRunViewRect(geom, { str: 'Cropped', transform: [24, 0, 0, 24, 90, 680], width: 150, height: 24 });
-    close(r.x, (90 - 6 - 50) / 512);
-    close(r.y, (742 - (680 + 24 + 6)) / 642);
+    const r = pdfRectToViewRect(geom, { x: 84, y: 674, width: 162, height: 36 });
+    close(r.x, (84 - 50) / 512);
+    close(r.y, (742 - 710) / 642);
   });
 
-  it('round-trips: the PDF rectangle of the view box contains the run', () => {
-    const geom = makePageGeometry({ view: [0, 0, 612, 792], rotate: 270, userUnit: 2 });
-    const run = { str: 'x', transform: [10, 0, 0, 10, 300, 400], width: 40, height: 10 };
-    const pdf = viewRectToPdfRect(geom, textRunViewRect(geom, run));
-    expect(pdf.x).toBeLessThanOrEqual(300);
-    expect(pdf.x + pdf.width).toBeGreaterThanOrEqual(340);
-    expect(pdf.y).toBeLessThanOrEqual(400);
-    expect(pdf.y + pdf.height).toBeGreaterThanOrEqual(410);
+  it('round-trips with viewRectToPdfRect on every page kind', () => {
+    const rect = { x: 300, y: 400, width: 40, height: 10 };
+    for (const geom of [
+      makePageGeometry({ view: [0, 0, 612, 792], rotate: 270, userUnit: 2 }),
+      makePageGeometry({ view: [0, 0, 612, 792], rotate: 180 }),
+      makePageGeometry({ view: [50, 100, 562, 742], rotate: 90 }),
+    ]) {
+      const back = viewRectToPdfRect(geom, pdfRectToViewRect(geom, rect));
+      for (const k of ['x', 'y', 'width', 'height'] as const) close(back[k], rect[k], 1e-6);
+    }
   });
 
-  it('falls back to the matrix scale when pdf.js reports no height', () => {
+  it('keeps the box on the page', () => {
     const geom = makePageGeometry({ view: [0, 0, 600, 800], rotate: 0 });
-    const r = textRunViewRect(geom, { str: 'a', transform: [10, 0, 0, 10, 0, 400], width: 10, height: 0 });
-    close(r.height, 15 / 800);
+    const r = pdfRectToViewRect(geom, { x: -10, y: 790, width: 50, height: 30 });
+    expect(r.x).toBe(0);
+    expect(r.y).toBe(0);
   });
 });
 
@@ -102,7 +101,8 @@ describe('textRunViewCentre and rectContains', () => {
   it('finds a run inside the mark that covers it and outside one beside it', () => {
     const geom = makePageGeometry({ view: [0, 0, 612, 792], rotate: 90 });
     const run = { str: 'Sign here:', transform: [0, 14, -14, 0, 500, 300], width: 70, height: 14 };
-    const box = textRunViewRect(geom, run);
+    // The run's own box in user space: it reads along y from (500, 300), its height to the left.
+    const box = pdfRectToViewRect(geom, { x: 486, y: 300, width: 14, height: 70 });
     const centre = textRunViewCentre(geom, run);
     expect(rectContains(box, centre)).toBe(true);
     expect(rectContains({ ...box, x: box.x + box.width + 0.01 }, centre)).toBe(false);

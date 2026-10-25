@@ -16,6 +16,7 @@
  * runs in its own worker so the heavy WASM never touches the main thread.
  */
 import type * as MuPDF from 'mupdf';
+import { findPhrase } from '../lib/redact/find-phrase';
 
 interface RedactMark {
   pageIndex: number;
@@ -48,8 +49,29 @@ interface Req {
   stripMetadata?: boolean;
 }
 
-self.onmessage = async (e: MessageEvent<Req>) => {
-  const { buffer, marks, stripMetadata } = e.data;
+/** "Find & mark all": where a phrase is, as marks over just the phrase. */
+interface SearchReq {
+  op: 'search';
+  buffer: ArrayBuffer;
+  phrase: string;
+}
+
+self.onmessage = async (e: MessageEvent<Req | SearchReq>) => {
+  if ('op' in e.data && e.data.op === 'search') {
+    const { buffer, phrase } = e.data;
+    try {
+      const mupdf = (await import('mupdf')) as typeof MuPDF;
+      const doc = mupdf.Document.openDocument(new Uint8Array(buffer), 'application/pdf').asPDF();
+      if (!doc) throw new Error('Not a PDF document');
+      const matches = findPhrase(doc, phrase);
+      doc.destroy();
+      (self as unknown as Worker).postMessage({ ok: true, matches });
+    } catch (err) {
+      (self as unknown as Worker).postMessage({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+  const { buffer, marks, stripMetadata } = e.data as Req;
   try {
     // Import inside the handler (not top-level) so the ~10 MB WASM loads lazily,
     // the message handler registers immediately, and any load error is reported

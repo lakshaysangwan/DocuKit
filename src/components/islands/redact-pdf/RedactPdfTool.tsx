@@ -20,17 +20,17 @@ import {
   markRectToMm,
   markToJob,
   marksPerPage,
+  pdfRectToViewRect,
   rectContains,
   runMatches,
   textRunViewCentre,
-  textRunViewRect,
   type MarkMm,
   type RedactJobMark,
   type RedactMark,
 } from '@/lib/redact/marks';
 import { getPdfjs, PDFJS_DOC_ASSETS } from '@/lib/pdfjs';
 import { createCanvas2D, canvasToBlob } from '@/lib/canvas-2d';
-import { redactWithMupdf } from '@/lib/redact-with-mupdf';
+import { findPhraseWithMupdf, redactWithMupdf } from '@/lib/redact-with-mupdf';
 import { downloadBlob } from '@/lib/download';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { cn, formatBytes, generateId } from '@/lib/utils';
@@ -41,7 +41,8 @@ import { cn, formatBytes, generateId } from '@/lib/utils';
  * One page large. A drag on the page — mouse, finger or pen (pointer events) —
  * draws a mark; marks are boxes that can be selected, moved, resized from the
  * corners, nudged with the keyboard, typed in millimetres or removed, with undo
- * and redo. "Find & mark all" marks every run of text that contains a phrase.
+ * and redo. "Find & mark all" marks every place a phrase appears — the phrase
+ * itself, not the line it is on (see `find-phrase.ts`).
  *
  * A mark is kept as a fraction of the displayed page and goes through
  * `page-geometry.ts` to PDF user space only when the file is written, so on a
@@ -404,35 +405,35 @@ export default function RedactPdfTool() {
     [selected, geometry, commit, updateRect, describe],
   );
 
-  /** Mark every run of text, on every page, that contains the phrase. */
+  /** Mark every place the phrase appears, on every page: one mark per line of each match. */
   const findAndMark = useCallback(async () => {
     const phrase = query.trim();
-    if (!doc || !phrase) return;
+    if (!doc || !file || !phrase) return;
     setSearching(true);
     setSearchNote('');
     try {
+      const matches = await findPhraseWithMupdf(await file.arrayBuffer(), phrase);
       const found: RedactMark[] = [];
-      for (let p = 0; p < doc.pageCount; p++) {
-        const [geom, runs] = await Promise.all([doc.geometry(p), doc.textContent(p)]);
-        for (const textRun of runs) {
-          if (!runMatches(textRun.str, phrase)) continue;
-          found.push({ id: generateId(), pageIndex: p, rect: textRunViewRect(geom, textRun) });
+      for (const match of matches) {
+        const geom = await doc.geometry(match.pageIndex);
+        for (const rect of match.rects) {
+          found.push({ id: generateId(), pageIndex: match.pageIndex, rect: pdfRectToViewRect(geom, rect) });
         }
       }
-      if (found.length === 0) {
+      if (matches.length === 0) {
         setSearchNote(`No text found containing “${phrase}”.`);
         return;
       }
       commit((current) => [...current, ...found]);
       setPhrases((list) => (list.includes(phrase) ? list : [...list, phrase]));
-      const pages = new Set(found.map((m) => m.pageIndex)).size;
-      setSearchNote(`Marked ${plural(found.length, 'match', 'matches')} on ${plural(pages, 'page')}.`);
+      const pages = new Set(matches.map((m) => m.pageIndex)).size;
+      setSearchNote(`Marked ${plural(matches.length, 'match', 'matches')} on ${plural(pages, 'page')}.`);
     } catch {
       setSearchNote('The text of this PDF could not be searched.');
     } finally {
       setSearching(false);
     }
-  }, [doc, query, commit]);
+  }, [doc, file, query, commit]);
 
   // Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y — except while typing.
   useEffect(() => {
@@ -757,7 +758,7 @@ export default function RedactPdfTool() {
           </button>
         </div>
         <p data-testid="search-note" role="status" className="min-h-4 text-xs text-[var(--color-text-secondary)]">
-          {searchNote || 'Marks every line of text, on every page, that contains it.'}
+          {searchNote || 'Marks it wherever it appears, on every page, in any capitals.'}
         </p>
       </section>
 

@@ -53,7 +53,7 @@ export function defaultMarkRect(existingOnPage: number): RectNorm {
   return clampRect({ x: 0.5 - DEFAULT_MARK.width / 2, y, width: DEFAULT_MARK.width, height: DEFAULT_MARK.height });
 }
 
-/** The parts of a pdf.js `TextItem` this module reads. */
+/** The parts of a pdf.js `TextItem` this module reads (to check the redacted file). */
 export interface TextRun {
   str: string;
   /** Text-space → user-space matrix `[a, b, c, d, e, f]`; (e, f) is the baseline start. */
@@ -62,36 +62,6 @@ export interface TextRun {
   width: number;
   /** Font height in user-space units (0 when pdf.js could not tell). */
   height: number;
-}
-
-/**
- * The upright box on the displayed page that covers a run of text, with a
- * quarter of the font size spare on every side so descenders and accents are
- * inside it. Works for text drawn at any angle and on any page rotation: the
- * four corners of the run's own box are mapped to the view and enclosed.
- */
-export function textRunViewRect(geom: PageGeometry, run: TextRun): RectNorm {
-  const [a, b, c, d, e, f] = Array.from(run.transform);
-  const alongLen = Math.hypot(a, b) || 1;
-  const upLen = Math.hypot(c, d) || 1;
-  const ux = a / alongLen;
-  const uy = b / alongLen;
-  const vx = c / upLen;
-  const vy = d / upLen;
-  const height = run.height > 0 ? run.height : upLen;
-  const pad = height * 0.25;
-  const xs: number[] = [];
-  const ys: number[] = [];
-  for (const s of [-pad, run.width + pad]) {
-    for (const t of [-pad, height + pad]) {
-      const [x, y] = pdfPointToView(geom, e + s * ux + t * vx, f + s * uy + t * vy);
-      xs.push(x);
-      ys.push(y);
-    }
-  }
-  const x1 = clamp01(Math.min(...xs));
-  const y1 = clamp01(Math.min(...ys));
-  return { x: x1, y: y1, width: clamp01(Math.max(...xs)) - x1, height: clamp01(Math.max(...ys)) - y1 };
 }
 
 /** The centre of a text run on the displayed page (its box without padding). */
@@ -120,6 +90,15 @@ export function rectContains(rect: RectNorm, point: { x: number; y: number }): b
 export function runMatches(str: string, phrase: string): boolean {
   const q = phrase.trim().toLowerCase();
   return q.length > 0 && str.toLowerCase().includes(q);
+}
+
+/** A user-space rectangle → the box it is on the displayed page (kept on the page). */
+export function pdfRectToViewRect(geom: PageGeometry, rect: PdfRect): RectNorm {
+  const [ax, ay] = pdfPointToView(geom, rect.x, rect.y);
+  const [bx, by] = pdfPointToView(geom, rect.x + rect.width, rect.y + rect.height);
+  const x1 = clamp01(Math.min(ax, bx));
+  const y1 = clamp01(Math.min(ay, by));
+  return { x: x1, y: y1, width: clamp01(Math.max(ax, bx)) - x1, height: clamp01(Math.max(ay, by)) - y1 };
 }
 
 /** A mark → what the engine removes, through the page's own geometry. */
