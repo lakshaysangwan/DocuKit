@@ -154,7 +154,7 @@ test.describe('P7 claims — PDF editor', () => {
 });
 
 test.describe('P7 claims — image tools', () => {
-  test('lock-image: the exported HTML derives its key with 100,000 PBKDF2 iterations', async ({ page }) => {
+  test('lock-image: the exported HTML derives its key with PBKDF2-SHA-256, 600,000 iterations', async ({ page }) => {
     await page.goto('/lock-image');
     await addSingleFileAndWait(page, FIXTURE.jpg);
     await page.getByTestId('password').fill('claims-pw-123');
@@ -164,12 +164,12 @@ test.describe('P7 claims — image tools', () => {
     const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
 
     const html = bytes.toString('utf8');
-    // The self-contained page carries its own decrypt routine; the advertised
-    // parameters have to be visible in it.
-    expect(html).toMatch(/PBKDF2/);
-    expect(html).toMatch(/iterations\s*:\s*100_?000/);
-    expect(html).toMatch(/AES-GCM/);
-    expect(html).toMatch(/SHA-256/);
+    // The self-contained page carries its own decrypt routine, which takes its
+    // parameters from the file's header; the advertised ones have to be there.
+    const header = JSON.parse(/<script type="application\/json" id="docukit-lock">([\s\S]*?)<\/script>/.exec(html)![1]);
+    expect(header).toMatchObject({ kdf: 'PBKDF2', hash: 'SHA-256', iterations: 600000, cipher: 'AES-GCM' });
+    expect(html).toMatch(/iterations:H\.iterations,hash:H\.hash/);
+    expect(html).toMatch(/name:'AES-GCM',length:256/);
   });
 
   test('compress-image: output carries no EXIF metadata', async ({ page }) => {

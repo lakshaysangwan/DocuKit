@@ -1,7 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { FIXTURE } from '../fixtures/generate';
-import { uploadFiles } from '../helpers/harness';
+import { TOOLS } from '../../../src/lib/tools-registry';
 import { MIGRATED } from './migrated';
 
 /**
@@ -276,13 +275,14 @@ for (const tool of MIGRATED) {
       await expect(page.getByTestId('ws-stage')).toBeFocused();
     });
 
-    test('a tool that has not been migrated is not widened', async ({ page }) => {
-      await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto('/lock-image');
-      await uploadFiles(page, FIXTURE.png);
-      await expect(page.getByTestId('tool-action')).toBeVisible();
-      await expect(page.getByTestId('workspace')).toHaveCount(0);
-      expect((await page.locator('.tool-shell').boundingBox())!.width).toBeLessThanOrEqual(1152);
-    });
   });
 }
+
+// Every tool now runs in the workspace, so there is no unmigrated tool left to
+// check "not widened" against (each tool's narrow pre-upload column is checked
+// above). What is checked instead: no tool can be added without joining the
+// workspace's rules.
+test('every tool in the registry is held to the workspace contract', () => {
+  const missing = TOOLS.map((t) => t.slug).filter((slug) => !MIGRATED.some((m) => m.slug === slug));
+  expect(missing, 'tools missing from tests/e2e/workspace/migrated.ts').toEqual([]);
+});

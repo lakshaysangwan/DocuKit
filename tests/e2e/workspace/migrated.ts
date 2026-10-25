@@ -18,6 +18,8 @@ import { openDigitalSignature } from '../helpers/digital-signature';
 import { openCompressImage } from '../helpers/compress-image';
 import { openResize, openOptions as openResizeOptions } from '../helpers/resize-image';
 import { openConvert } from '../helpers/convert-image';
+import { openLock, typePasswords } from '../helpers/lock-image';
+import { openViewOnce } from '../helpers/view-once';
 
 /**
  * The tools that live in the shared workspace.
@@ -260,5 +262,30 @@ export const MIGRATED: MigratedTool[] = [
     slug: 'convert-image',
     name: 'Convert Image',
     enter: (page) => openConvert(page, FIXTURE.jpg),
+  },
+  {
+    // An image tool with the image shown plain: what will be locked. The action
+    // waits (and says why) for a password typed twice; `makeReady` types it,
+    // opening Options on a phone first.
+    slug: 'lock-image',
+    name: 'Lock Image',
+    enter: (page) => openLock(page, FIXTURE.jpg),
+    makeReady: async (page) => {
+      await typePasswords(page, 'contract-Pw-2026!');
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
+  },
+  {
+    // An image tool whose result is a link, not a file: the done state's one
+    // button is "Copy link" in the download's place. The upload goes to a stub
+    // of the API installed by `openViewOnce` (never the real one). 24 hours is
+    // chosen on entry, so there is no `makeReady`.
+    slug: 'view-once-image',
+    name: 'View-Once Image',
+    enter: async (page) => {
+      await openViewOnce(page, FIXTURE.jpg);
+    },
   },
 ];

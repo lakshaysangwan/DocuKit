@@ -1,263 +1,423 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Link2 } from 'lucide-react';
 import DropZone from '@/components/islands/shared/DropZone';
-import FileInfoCard from '@/components/islands/shared/FileInfoCard';
-import { fileToArrayBuffer, validateFileSize, VIEW_ONCE_MAX_SIZE } from '@/lib/file-utils';
-type Status = 'idle' | 'encrypting' | 'uploading' | 'done' | 'error';
+import ToolWorkspace from '@/components/islands/workspace/ToolWorkspace';
+import ActionBar from '@/components/islands/workspace/ActionBar';
+import WorkspaceFileBar from '@/components/islands/workspace/WorkspaceFileBar';
+import ImageStage from '@/components/islands/workspace/ImageStage';
+import { useToolRun } from '@/components/islands/workspace/use-tool-run';
+import { loadImage, type LoadedImage } from '@/components/islands/workspace/load-image';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { validateFileSize, VIEW_ONCE_MAX_SIZE } from '@/lib/file-utils';
+import { formatName, sniffImageMime } from '@/lib/compress-image';
+import {
+  DEFAULT_TTL,
+  UUID,
+  VIEW_ONCE_API,
+  VIEW_ONCE_TTLS,
+  VIEW_ONCE_TYPES,
+  sealImage,
+  shareLink,
+  ttlLabel,
+} from '@/lib/view-once';
+import { formatBytes, cn } from '@/lib/utils';
 
-const TTL_OPTIONS = [
-  { label: '1 hour', value: 3600 },
-  { label: '6 hours', value: 21600 },
-  { label: '24 hours', value: 86400 },
-  { label: '7 days', value: 604800 },
-];
+/**
+ * View-Once Image, in the shared workspace.
+ *
+ * The image is shown large; the controls choose when the link expires and say
+ * exactly what is sent. "Create view-once link" encrypts the image in this
+ * browser under a new random key, uploads only the ciphertext, and builds the
+ * link with the key after the `#` (src/lib/view-once.ts). The action slot then
+ * holds "Copy link", and the result pane shows the link and what it does.
+ */
 
-async function encryptBuffer(buffer: ArrayBuffer): Promise<{ encrypted: ArrayBuffer; key: CryptoKey; iv: Uint8Array }> {
-  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buffer);
-  return { encrypted, key, iv };
+const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/bmp'];
+const INPUTS = 'JPEG, PNG, WebP, GIF, AVIF, BMP';
+const MAX = formatBytes(VIEW_ONCE_MAX_SIZE, 0);
+
+interface Loaded {
+  file: File;
+  info: LoadedImage | null;
+  mime: string | null;
+  sniffed: boolean;
+  failed: boolean;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 8192) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  }
-  return btoa(binary);
+interface Result {
+  link: string;
+  expiresAt: number;
+  ttl: number;
+  uploaded: number;
 }
 
-async function exportKeyBase64(key: CryptoKey): Promise<string> {
-  const raw = await crypto.subtle.exportKey('raw', key);
-  return bytesToBase64(new Uint8Array(raw));
-}
+const px = (w: number, h: number) => `${w} × ${h} px`;
 
-function ivToBase64(iv: Uint8Array): string {
-  return bytesToBase64(iv);
+const choice = (on: boolean) =>
+  cn(
+    'h-9 rounded-lg border px-3 text-sm font-medium transition-colors',
+    on
+      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]'
+      : 'border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-background)]',
+  );
+
+function expiryText(at: number) {
+  return new Date(at).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function ViewOnceImageTool() {
-  const [file, setFile] = useState<File | null>(null);
-  const [ttl, setTtl] = useState(86400);
-  const [status, setStatus] = useState<Status>('idle');
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [item, setItem] = useState<Loaded | null>(null);
+  const [ttl, setTtl] = useState<number>(DEFAULT_TTL);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [step, setStep] = useState<'encrypting' | 'uploading'>('encrypting');
+  const [copyFailed, setCopyFailed] = useState(false);
+  const linkRef = useRef<HTMLInputElement>(null);
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const phone = useMediaQuery('(max-width: 767px)');
+  const run = useToolRun<Result>();
+  const { invalidate } = run;
 
-  const handleFiles = useCallback((files: File[]) => {
-    const f = files[0];
-    if (!f) return;
-    const err = validateFileSize(f, VIEW_ONCE_MAX_SIZE);
-    if (err) { toast.error(err); return; }
-    setFile(f);
-    setStatus('idle');
-    setShareUrl(null);
-    setCopied(false);
-  }, []);
+  /* ── File ─────────────────────────────────────────────────────────────── */
 
-  const handleRemoveFile = useCallback(() => {
-    setFile(null); setStatus('idle'); setShareUrl(null); setCopied(false); setErrorMsg(null);
-  }, []);
+  const shown = useRef<string | null>(null);
+  const forget = () => {
+    if (shown.current) URL.revokeObjectURL(shown.current);
+    shown.current = null;
+  };
+  useEffect(() => forget, []);
 
-  const handleCreate = useCallback(async () => {
-    if (!file) { toast.error('Upload an image first'); return; }
+  const openFile = useCallback(
+    (files: File[]) => {
+      const file = files[0];
+      if (!file) return;
+      const tooBig = validateFileSize(file, VIEW_ONCE_MAX_SIZE);
+      if (tooBig) {
+        toast.error(tooBig);
+        return;
+      }
+      invalidate();
+      forget();
+      setCopyFailed(false);
+      setItem({ file, info: null, mime: null, sniffed: false, failed: false });
+      const same = (prev: Loaded | null) => prev?.file === file;
+      file
+        .slice(0, 64)
+        .arrayBuffer()
+        .then(
+          (head) => {
+            const sniffed = sniffImageMime(new Uint8Array(head));
+            const mime = sniffed && VIEW_ONCE_TYPES[sniffed] ? sniffed : null;
+            setItem((prev) => (same(prev) ? { ...prev!, mime, sniffed: true } : prev));
+          },
+          () => setItem((prev) => (same(prev) ? { ...prev!, sniffed: true } : prev)),
+        );
+      loadImage(file).then(
+        (info) =>
+          setItem((prev) => {
+            if (!same(prev)) {
+              URL.revokeObjectURL(info.url);
+              return prev;
+            }
+            shown.current = info.url;
+            return { ...prev!, info };
+          }),
+        () => setItem((prev) => (same(prev) ? { ...prev!, failed: true } : prev)),
+      );
+    },
+    [invalidate],
+  );
 
-    setStatus('encrypting');
-    setErrorMsg(null);
+  const removeFile = useCallback(() => {
+    invalidate();
+    forget();
+    setItem(null);
+  }, [invalidate]);
 
-    try {
-      const buffer = await fileToArrayBuffer(file);
+  /* ── The run ──────────────────────────────────────────────────────────── */
 
-      // Combine mime type length + mime type + image data so recipient knows the type
-      const mimeBytes = new TextEncoder().encode(file.type);
-      const combined = new ArrayBuffer(2 + mimeBytes.length + buffer.byteLength);
-      const view = new DataView(combined);
-      view.setUint16(0, mimeBytes.length, false);
-      new Uint8Array(combined, 2, mimeBytes.length).set(mimeBytes);
-      new Uint8Array(combined, 2 + mimeBytes.length).set(new Uint8Array(buffer));
+  const loading = !!item && (!item.sniffed || (!item.info && !item.failed));
+  const unusable = !!item && !loading && (item.failed || !item.mime);
+  const running = run.phase === 'running';
+  const done = run.phase === 'done' && !!run.result;
+  const result = run.result;
 
-      const { encrypted, key, iv } = await encryptBuffer(combined);
-      const keyB64 = await exportKeyBase64(key);
-      const ivB64 = ivToBase64(iv);
-
-      setStatus('uploading');
-
-      const res = await fetch('/api/view-once', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream', 'X-TTL': String(ttl) },
-        body: encrypted,
-      });
-
+  const create = useCallback(() => {
+    if (!item || loading || unusable || !item.mime) return;
+    const { file, mime } = item;
+    const seconds = ttl;
+    setCopyFailed(false);
+    void run.start(async () => {
+      setStep('encrypting');
+      setProgress(10);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const sealed = await sealImage(new Uint8Array(await file.arrayBuffer()), mime);
+      setStep('uploading');
+      setProgress(50);
+      let res: Response;
+      try {
+        res = await fetch(VIEW_ONCE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream', 'X-TTL': String(seconds) },
+          body: sealed.cipher as BufferSource,
+        });
+      } catch {
+        throw new Error('Could not reach docukit.uk to store the encrypted image. Check the connection and try again.');
+      }
       if (!res.ok) {
-        const text = await res.text().catch(() => 'Unknown error');
-        throw new Error(`Upload failed: ${text}`);
+        throw new Error(
+          res.status === 413
+            ? 'The server refused the image as too large.'
+            : `The server did not store the encrypted image (error ${res.status}). Try again later.`,
+        );
       }
+      const body = (await res.json().catch(() => null)) as { id?: unknown; expiresIn?: unknown } | null;
+      const id = typeof body?.id === 'string' ? body.id : '';
+      if (!UUID.test(id)) throw new Error('The server gave an answer this page does not understand. Try again later.');
+      const expiresIn = typeof body?.expiresIn === 'number' ? body.expiresIn : seconds;
+      setProgress(100);
+      return {
+        link: shareLink(window.location.origin, id, sealed.fragment),
+        expiresAt: Date.now() + expiresIn * 1000,
+        ttl: expiresIn,
+        uploaded: sealed.cipher.length,
+      };
+    });
+  }, [item, loading, unusable, ttl, run]);
 
-      const { id } = (await res.json()) as { id: string };
-
-      // Key and IV are in the fragment — never sent to server
-      const url = `${window.location.origin}/view/${id}#${keyB64}.${ivB64}`;
-      setShareUrl(url);
-      setStatus('done');
-      toast.success('Secure link ready to share');
-    } catch (err) {
-      let msg = err instanceof Error ? err.message : 'Failed to create link';
-      if (err instanceof TypeError && (err.message.includes('fetch') || err.message.includes('network'))) {
-        msg = 'View-once requires the Cloudflare Worker backend. This feature is unavailable in local development.';
-      }
-      setStatus('error');
-      setErrorMsg(msg);
-      toast.error(msg);
-    }
-  }, [file, ttl]);
-
-  const handleCopy = useCallback(async () => {
-    if (!shareUrl) return;
+  const copy = useCallback(async () => {
+    if (!result) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      toast.success('Link copied to clipboard!');
-      setTimeout(() => setCopied(false), 3000);
+      await navigator.clipboard.writeText(result.link);
+      setCopyFailed(false);
     } catch {
-      toast.error('Failed to copy — select and copy manually');
+      setCopyFailed(true);
+      linkRef.current?.focus();
+      linkRef.current?.select();
+      throw new Error('copy refused');
     }
-  }, [shareUrl]);
+  }, [result]);
 
-  const handleReset = useCallback(() => {
-    setFile(null);
-    setStatus('idle');
-    setShareUrl(null);
-    setCopied(false);
-    setErrorMsg(null);
-  }, []);
+  /* ── Stage ────────────────────────────────────────────────────────────── */
+
+  const typeName = item?.mime ? formatName(item.mime) : null;
+  let stageStatus = '';
+  if (item) {
+    if (loading) stageStatus = 'Reading the image…';
+    else if (unusable)
+      stageStatus = item.mime
+        ? `${item.file.name} could not be shown, so it cannot be shared as an image.`
+        : `${item.file.name} is not an image View-Once can share (${INPUTS}).`;
+    else if (done) stageStatus = 'A link to this image is ready. It opens once.';
+    else
+      stageStatus = `Your image (${typeName}${item.info ? `, ${px(item.info.width, item.info.height)}` : ''}, ${formatBytes(
+        item.file.size,
+      )}). This is what the recipient will see, once.`;
+  }
+
+  const stage = item ? (
+    <ImageStage
+      src={item.info?.url ?? null}
+      alt={`Your image: ${item.file.name}`}
+      naturalWidth={item.info?.width ?? 0}
+      naturalHeight={item.info?.height ?? 0}
+      beforeLabel={typeName ? `Your image (${typeName})` : 'Your image'}
+      placeholder={item.failed ? 'This file could not be shown as an image' : 'Reading the image…'}
+      footer={
+        <p data-testid="stage-status" aria-live="polite" className="line-clamp-2 text-xs text-[var(--color-text-secondary)]">
+          {stageStatus}
+        </p>
+      }
+    />
+  ) : null;
+
+  /* ── Controls ─────────────────────────────────────────────────────────── */
+
+  const heading = 'text-sm font-semibold text-[var(--color-text-primary)]';
+  const note = 'text-xs leading-5 text-[var(--color-text-secondary)]';
+  const size = item ? formatBytes(item.file.size) : '';
+
+  const controls = (
+    <div className="flex flex-col gap-5 p-3 sm:p-4" inert={running}>
+      <section className="flex flex-col gap-2" aria-labelledby="vo-ttl-heading">
+        <h3 id="vo-ttl-heading" className={heading}>
+          Link expires after
+        </h3>
+        <div className="flex flex-wrap gap-2" role="group" aria-labelledby="vo-ttl-heading">
+          {VIEW_ONCE_TTLS.map((t) => (
+            <button
+              key={t.seconds}
+              type="button"
+              aria-pressed={ttl === t.seconds}
+              data-testid={`ttl-${t.seconds}`}
+              onClick={() => {
+                invalidate();
+                setTtl(t.seconds);
+              }}
+              className={choice(ttl === t.seconds)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <p className={note}>If nobody opens the link by then, the encrypted image is deleted from the server.</p>
+      </section>
+
+      <section className="flex flex-col gap-2" aria-labelledby="vo-sent-heading">
+        <h3 id="vo-sent-heading" className={heading}>
+          What leaves your browser
+        </h3>
+        <ul data-testid="upload-explainer" className="flex list-disc flex-col gap-1.5 pl-4 text-xs leading-5 text-[var(--color-text-secondary)]">
+          <li>Your image is encrypted here, with a new random key (AES-256-GCM), before anything is sent.</li>
+          <li>
+            Sent to docukit.uk: the encrypted image (about {size}) and the expiry you chose. As with any website, the
+            server also sees your connection&apos;s IP address.
+          </li>
+          <li>
+            Not sent: the key, the image itself, its file name. The key is put in the link after the #, a part browsers
+            never send to a server.
+          </li>
+          <li>The first time the link is opened, the encrypted image is handed over and deleted from the server.</li>
+        </ul>
+      </section>
+    </div>
+  );
+
+  /* ── Result ───────────────────────────────────────────────────────────── */
+
+  const resultPanel =
+    done && result ? (
+      <div className="flex flex-col gap-4 p-3 sm:p-4" data-testid="result-panel">
+        <section aria-labelledby="vo-link-heading" className="flex flex-col gap-2">
+          <h3 id="vo-link-heading" className={heading}>
+            <label htmlFor="view-once-link">Your view-once link</label>
+          </h3>
+          <input
+            ref={linkRef}
+            id="view-once-link"
+            readOnly
+            value={result.link}
+            data-testid="share-link"
+            onFocus={(e) => e.target.select()}
+            className="h-11 w-full min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 font-mono text-xs text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
+          />
+          {copyFailed && (
+            <p data-testid="copy-failed" role="alert" className="text-xs font-medium text-[var(--color-error)]">
+              This browser did not allow copying. The link is selected above: copy it with Ctrl+C (⌘C on a Mac), or
+              press and hold it on a phone.
+            </p>
+          )}
+          <ul data-testid="link-facts" className="flex list-disc flex-col gap-1.5 pl-4 text-sm text-[var(--color-text-secondary)]">
+            <li data-testid="fact-once">
+              Opens once. The first time it is opened, the server hands over the encrypted image and deletes it; after
+              that the link only says the image is gone.
+            </li>
+            <li data-testid="fact-expiry">
+              If nobody opens it, it is deleted after {ttlLabel(result.ttl)} ({expiryText(result.expiresAt)}).
+            </li>
+            <li>
+              The key is the part after the #: anyone who has the whole link can open the image, so send it only to the
+              person it is for. They can still save or screenshot the image.
+            </li>
+            <li>This is the only time the link is shown. Copy it before you leave this page.</li>
+            <li data-testid="fact-uploaded">
+              Uploaded: {formatBytes(result.uploaded)} of encrypted data and the expiry. Not uploaded: the key, the image
+              or its name.
+            </li>
+          </ul>
+        </section>
+      </div>
+    ) : undefined;
+
+  /* ── What the visitor is told ─────────────────────────────────────────── */
+
+  const beside = wide ? 'on the right' : 'below';
+  let prompt: string;
+  let promptTone: 'info' | 'success' | 'error' = 'info';
+  if (loading) prompt = 'Reading your image…';
+  else if (unusable) {
+    prompt = `${item!.file.name} cannot be shared: choose a ${INPUTS} image up to ${MAX}.`;
+    promptTone = 'error';
+  } else if (running) prompt = step === 'uploading' ? 'Uploading the encrypted image…' : 'Encrypting your image…';
+  else if (run.phase === 'error') {
+    prompt = 'The link could not be made. Try again.';
+    promptTone = 'error';
+  } else if (done) {
+    prompt = 'Copy the link and send it to one person. It opens once.';
+    promptTone = 'success';
+  } else if (phone && !optionsOpen) prompt = 'Open Options to choose when the link expires, then press Create view-once link.';
+  else prompt = `Choose when the link expires ${beside}, then press Create view-once link.`;
+
+  const disabledReason = loading
+    ? 'Reading the image…'
+    : unusable
+      ? `${item!.file.name} is not an image this tool can share`
+      : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* How it works */}
-      <div className="flex gap-3 rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-4">
-        <svg className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div className="text-sm text-[var(--color-text-secondary)]">
-          <p className="font-medium text-[var(--color-text-primary)]">End-to-end encrypted · View once · Auto-delete</p>
-          <p className="mt-0.5">Your image is encrypted in the browser before upload. The decryption key is only in the share URL — never sent to the server. The image is permanently deleted after the first view.</p>
-        </div>
-      </div>
-
-      {!shareUrl && (
-        <>
-          <DropZone
-            accept={['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp']}
-            multiple={false}
-            onFiles={handleFiles}
-            hint="JPEG, PNG, WebP, GIF · Max 10MB"
+    <ToolWorkspace
+      toolId="view-once-image"
+      active={!!item}
+      empty={
+        <DropZone accept={ACCEPTED} multiple={false} onFiles={openFile} hint={`${INPUTS} · up to ${MAX} · encrypted before upload`} />
+      }
+      title="Share this image once"
+      prompt={prompt}
+      promptTone={promptTone}
+      optionsOpen={optionsOpen}
+      onOptionsOpenChange={setOptionsOpen}
+      fileBar={
+        item ? (
+          <WorkspaceFileBar
+            file={item.file}
+            extra={item.info ? `${typeName ? `${typeName} · ` : ''}${px(item.info.width, item.info.height)}` : undefined}
+            onRemove={removeFile}
+            onReplace={openFile}
+            accept={ACCEPTED}
+            disabled={running}
           />
-
-          {file && (
-            <div className="flex flex-col gap-2">
-              <FileInfoCard file={file} onRemove={handleRemoveFile} />
-              <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                <img src={URL.createObjectURL(file)} alt={file.name} className="mx-auto max-h-48 object-contain" />
-              </div>
-            </div>
-          )}
-
-          {file && (
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-              <label className="mb-3 block text-sm font-medium text-[var(--color-text-primary)]">Link expires after</label>
-              <div className="flex flex-wrap gap-2">
-                {TTL_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setTtl(opt.value)}
-                    className={[
-                      'rounded-lg border px-4 py-2 text-sm transition-colors',
-                      ttl === opt.value
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] font-medium'
-                        : 'border-[var(--color-border)] text-[var(--color-text-secondary)]',
-                    ].join(' ')}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {status === 'error' && errorMsg && (
-            <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
-              {errorMsg}
-            </div>
-          )}
-
-          {(status === 'encrypting' || status === 'uploading') && (
-            <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)]">
-              <svg className="h-4 w-4 animate-spin text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              {status === 'encrypting' ? 'Encrypting image…' : 'Uploading encrypted data…'}
-            </div>
-          )}
-
-          {file && status !== 'encrypting' && status !== 'uploading' && (
-            <button
-              onClick={handleCreate}
-              data-testid="tool-action"
-              className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 sm:w-auto"
-            >
-              🔗 Create View-Once Link
-            </button>
-          )}
-        </>
-      )}
-
-      {/* Success state */}
-      {status === 'done' && shareUrl && (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
-            <p className="text-sm font-medium text-[var(--color-success)]">View-once link created!</p>
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              Share the link below. The image will be permanently deleted after the first view.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <label htmlFor="view-once-link" className="mb-2 block text-xs font-medium text-[var(--color-text-secondary)]">Share link</label>
-            <div className="flex gap-2">
-              <input
-                id="view-once-link"
-                readOnly
-                value={shareUrl}
-                className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm font-mono outline-none"
-                onFocus={(e) => e.target.select()}
-              />
-              <button
-                onClick={handleCopy}
-                className={[
-                  'shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
-                  copied
-                    ? 'border-[var(--color-success)] bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                    : 'border-[var(--color-border)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]',
-                ].join(' ')}
-              >
-                {copied ? '✓ Copied' : 'Copy'}
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 p-3 text-xs text-[var(--color-text-secondary)]">
-            ⚠️ <strong>Important:</strong> This is the only time you can see this link. Once you leave the page, the link cannot be recovered. The recipient's browser will automatically delete the image from our servers.
-          </div>
-
-          <button
-            onClick={handleReset}
-            className="w-full rounded-lg border border-[var(--color-border)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] sm:w-auto"
-          >
-            Create another link
-          </button>
-        </div>
-      )}
-    </div>
+        ) : null
+      }
+      stage={stage}
+      controls={controls}
+      result={resultPanel}
+      action={
+        <ActionBar
+          phase={run.phase}
+          label="Create view-once link"
+          runningLabel={step === 'uploading' ? 'Uploading…' : 'Encrypting…'}
+          onRun={create}
+          disabledReason={disabledReason}
+          hint={`Encrypts the image here, uploads only the encrypted bytes, and gives you a link that opens once within ${ttlLabel(ttl)}.`}
+          progress={progress}
+          progressLabel={step === 'uploading' ? 'Uploading the encrypted image' : 'Encrypting'}
+          // No Cancel: once the upload has started the image is stored, and a
+          // cancelled run would leave it there with no link to it.
+          download={
+            result
+              ? {
+                  label: 'Copy link',
+                  onDownload: copy,
+                  ariaLabel: 'Copy the view-once link',
+                  busyLabel: 'Copying…',
+                  doneLabel: 'Link copied',
+                  icon: <Link2 className="size-4" aria-hidden="true" />,
+                }
+              : undefined
+          }
+          summary={result ? `Link ready · opens once · expires in ${ttlLabel(result.ttl)}` : undefined}
+          onEditAgain={invalidate}
+          editAgainLabel="Make another link"
+          error={run.error}
+        />
+      }
+    />
   );
 }

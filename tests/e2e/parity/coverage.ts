@@ -212,22 +212,24 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Batch conversion: separate downloads or one ZIP': C([T('convert-image')], 'two images download as two separate files of the right format, names and pixel sizes, and as one ZIP with the same entries; clashing names get "(2)"'),
   },
   'lock-image': {
-    'AES-256-GCM authenticated encryption': P([T('lock-image')], 'round-trip and wrong-password both verified; the cipher itself is not asserted'),
-    'PBKDF2 key derivation (100,000 iterations)': C(['parity/claims.spec.ts'], 'the exported self-contained HTML is checked for the advertised parameters'),
-    'Self-contained HTML — works offline': C([T('lock-image')], 'the produced HTML decrypts on its own'),
-    'No server involved — 100% client-side': C([GUARD]),
-    'Works in any modern browser': C([XBROWSER], 'the suite runs on Chromium, Firefox and WebKit'),
-    'Password strength meter': U("SOURCE CHECK — implemented at LockImageTool getStrength() with a 0-4 bar; needs a test."),
+    'AES-256-GCM authenticated encryption': CU(['src/lib/lock-image.test.ts'], 'the downloaded file is parsed and decrypted in Node with WebCrypto AES-GCM (256-bit key) back to the exact original bytes, and a wrong password fails; the unit test also checks the 16-byte GCM tag', [T('lock-image')]),
+    'PBKDF2-SHA-256 key derivation (600,000 iterations)': C(['parity/claims.spec.ts', T('lock-image')], "the downloaded file's header names PBKDF2 / SHA-256 / 600000, and the Node-side decryption derives the key with exactly those parameters"),
+    'One self-contained HTML file that opens offline': C([T('lock-image')], 'the downloaded file is opened from disk (file://) with all network blocked; the password unlocks it and Save image gives back the original bytes'),
+    'Nothing uploaded: encrypted in your browser': C([T('lock-image')], 'every request made while locking is recorded; none leaves the page origin and none carries a body'),
+    'Works in any modern browser': C([XBROWSER, T('lock-image')], 'the lock and unlock round trip runs on Chromium, Firefox and WebKit'),
+    'Password strength meter': CU(['src/lib/lock-image.test.ts'], 'the grading is unit-tested; the spec checks the bar appears and rises from a short to a long password', [T('lock-image')]),
+    'Unlocking gives back the original image, byte for byte': C([T('lock-image')], 'the image saved from the unlocked file equals the uploaded fixture byte for byte'),
   },
   'view-once-image': {
-    'End-to-end encrypted before upload': C([T('view-once-image')]),
-    'Decryption key only in the URL fragment': C([T('view-once-image')]),
+    'End-to-end encrypted before upload': C([T('view-once-image')], 'the upload is intercepted: its body is AES-GCM ciphertext (image size + type header + 16-byte tag) containing no run of the image bytes, and it decrypts with the key from the link to the exact image'),
+    'Decryption key only in the URL fragment': C([T('view-once-image')], 'the key appears only after the #; no request (upload or fetch) carries it in its URL, headers or body'),
     // The delete-on-read guarantee lives in the Pages Function, which the e2e
     // suite cannot reach — it runs against a static build with no Functions
     // runtime. A unit test against a stub KV proves it instead.
-    'Automatically deleted after first view': CU(['functions/api/view-once/view-once.test.ts'], 'was implemented all along, server-side — the audit searched only client code; the handler deletes the blob on the first GET and a second read 404s'),
-    'Configurable expiry: 1h, 6h, 24h, or 7 days': { state: 'partial', specs: [T('view-once-image')], units: ['functions/api/view-once/view-once.test.ts'], note: 'TTL options are shown and an out-of-range TTL is clamped to 24h; real expiry over time is not tested' },
-    'Works in any modern browser': C([XBROWSER]),
+    'Deleted from the server the first time it is opened': CU(['functions/api/view-once/view-once.test.ts'], 'the handler deletes the blob on the first GET and a second read 404s; the e2e spec opens a link against a stubbed API that does the same and sees "no longer available" the second time', [T('view-once-image')]),
+    'Nothing is fetched until the recipient presses Open image': C([T('view-once-image')], 'the /view/ page is loaded and no API request is made until the button is pressed'),
+    'Configurable expiry: 1h, 6h, 24h, or 7 days': { state: 'partial', specs: [T('view-once-image')], units: ['functions/api/view-once/view-once.test.ts'], note: 'each choice is sent as X-TTL in the intercepted upload, and an out-of-range TTL is clamped to 24h by the function; real expiry over time is not tested' },
+    'Works in any modern browser': C([XBROWSER, T('view-once-image')], 'create and open run on Chromium, Firefox and WebKit'),
     'Max 10MB image size': C([CLOSED], 'was implemented all along (VIEW_ONCE_MAX_SIZE); an 11MB file is refused before any encryption happens'),
   },
 };

@@ -1,256 +1,412 @@
-import { useState, useCallback } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import DropZone from '@/components/islands/shared/DropZone';
-import FileInfoCard from '@/components/islands/shared/FileInfoCard';
-import DownloadButton from '@/components/islands/shared/DownloadButton';
-import { fileToArrayBuffer } from '@/lib/file-utils';
-import { cn } from '@/lib/utils';
+import NextStep from '@/components/islands/shared/NextStep';
+import ToolWorkspace from '@/components/islands/workspace/ToolWorkspace';
+import ActionBar from '@/components/islands/workspace/ActionBar';
+import WorkspaceFileBar from '@/components/islands/workspace/WorkspaceFileBar';
+import ImageStage from '@/components/islands/workspace/ImageStage';
+import { useToolRun } from '@/components/islands/workspace/use-tool-run';
+import { loadImage, type LoadedImage } from '@/components/islands/workspace/load-image';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { downloadBlob } from '@/lib/download';
+import { formatName, sniffImageMime } from '@/lib/compress-image';
+import {
+  LOCK_ITERATIONS,
+  LOCK_SHOWN_EVERYWHERE,
+  LOCK_TYPES,
+  buildLockedHtml,
+  lockImage,
+  lockedFileName,
+  passwordStrength,
+} from '@/lib/lock-image';
+import { formatBytes, cn } from '@/lib/utils';
 
-type Status = 'idle' | 'encrypting' | 'done' | 'error';
+/**
+ * Lock Image, in the shared workspace.
+ *
+ * The image is shown large; the controls take a password (twice). "Lock image"
+ * encrypts the file's own bytes in this browser (AES-256-GCM, key from the
+ * password by PBKDF2-SHA-256) and wraps them in one HTML file that asks for the
+ * password and shows the image again (src/lib/lock-image.ts). Nothing is
+ * uploaded. The download replaces the action; the result pane says what the
+ * file is and how it is opened.
+ */
 
-/** Strength meter (0-4) */
-function getStrength(pw: string) {
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
-  const colors = ['#DC2626', '#EAB308', '#F97316', '#16A34A', '#15803D'];
-  return { score: Math.min(score, 4), label: labels[Math.min(score, 4)], color: colors[Math.min(score, 4)] };
+const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/bmp', 'image/heic', 'image/heif'];
+const INPUTS = 'JPEG, PNG, WebP, GIF, AVIF, BMP, HEIC';
+const ROUNDS = LOCK_ITERATIONS.toLocaleString('en-US');
+
+const STRENGTH_COLOUR = ['#DC2626', '#EA580C', '#CA8A04', '#16A34A', '#15803D'];
+
+interface Loaded {
+  file: File;
+  info: LoadedImage | null;
+  /** The real format, from the first bytes; null until read, or if it is not one Lock Image takes. */
+  mime: string | null;
+  sniffed: boolean;
+  failed: boolean;
 }
 
-/** Build a standalone HTML file that decrypts and shows the image on password entry */
-function buildLockedHtml(cipherB64: string, ivB64: string, saltB64: string, mimeType: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Locked Image — Docukit</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;font-family:system-ui,sans-serif;color:#f1f5f9}
-  .card{background:#1e293b;border-radius:16px;padding:2rem;max-width:400px;width:90%;box-shadow:0 25px 50px rgba(0,0,0,.5)}
-  h1{font-size:1.25rem;font-weight:600;margin-bottom:.5rem}
-  p{color:#94a3b8;font-size:.875rem;margin-bottom:1.5rem}
-  input{width:100%;padding:.75rem 1rem;border:1.5px solid #334155;border-radius:10px;background:#0f172a;color:#f1f5f9;font-size:1rem;outline:none;margin-bottom:.75rem}
-  input:focus{border-color:#1a56db}
-  button{width:100%;padding:.75rem;border:none;border-radius:10px;background:#1a56db;color:#fff;font-size:1rem;font-weight:600;cursor:pointer}
-  button:hover{background:#1e40af}
-  .err{color:#dc2626;font-size:.875rem;margin-top:.5rem;text-align:center}
-  img{max-width:100%;border-radius:8px;display:block;margin:0 auto}
-  .branding{margin-top:1rem;text-align:center;font-size:.75rem;color:#475569}
-  .branding a{color:#1a56db;text-decoration:none}
-</style>
-</head>
-<body>
-<div class="card" id="lockCard">
-  <h1>🔒 Locked Image</h1>
-  <p>This image is password-protected. Enter the password to view it.</p>
-  <input type="password" id="pw" placeholder="Enter password" autocomplete="current-password" />
-  <button onclick="unlock()">Unlock Image</button>
-  <p class="err" id="err"></p>
-  <p class="branding">Protected by <a href="https://docukit.uk" target="_blank">Docukit</a></p>
-</div>
-<script>
-const CIPHER='${cipherB64}';
-const IV='${ivB64}';
-const SALT='${saltB64}';
-const MIME='${mimeType}';
-async function unlock(){
-  const pw=document.getElementById('pw').value;
-  if(!pw){document.getElementById('err').textContent='Enter a password';return;}
-  try{
-    const enc=new TextEncoder();
-    const keyMat=await crypto.subtle.importKey('raw',enc.encode(pw),{name:'PBKDF2'},false,['deriveKey']);
-    const salt=Uint8Array.from(atob(SALT),c=>c.charCodeAt(0));
-    const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:100000,hash:'SHA-256'},keyMat,{name:'AES-GCM',length:256},false,['decrypt']);
-    const iv=Uint8Array.from(atob(IV),c=>c.charCodeAt(0));
-    const cipher=Uint8Array.from(atob(CIPHER),c=>c.charCodeAt(0));
-    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,cipher);
-    const blob=new Blob([plain],{type:MIME});
-    const url=URL.createObjectURL(blob);
-    document.getElementById('lockCard').innerHTML='<img src="'+url+'" alt="Decrypted image"/><p class="branding" style="margin-top:1rem">Decrypted by <a href="https://docukit.uk" target="_blank">Docukit</a></p>';
-  }catch(e){document.getElementById('err').textContent='Incorrect password. Please try again.';}
+interface Result {
+  name: string;
+  blob: Blob;
+  mime: string;
+  imageBytes: number;
 }
-document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});
-</script>
-</body>
-</html>`;
-}
+
+const px = (w: number, h: number) => `${w} × ${h} px`;
 
 export default function LockImageTool() {
-  const [file, setFile] = useState<File | null>(null);
-  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
+  const [item, setItem] = useState<Loaded | null>(null);
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [status, setStatus] = useState<Status>('idle');
-  const [resultHtml, setResultHtml] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState('');
+  const [show, setShow] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const phone = useMediaQuery('(max-width: 767px)');
+  const run = useToolRun<Result>();
+  const { invalidate } = run;
 
-  const strength = getStrength(password);
+  /* ── File ─────────────────────────────────────────────────────────────── */
 
-  const handleFiles = useCallback(async (files: File[]) => {
-    const f = files[0]; if (!f) return;
-    setFile(f); setStatus('idle'); setResultHtml(null);
-    try { setBuffer(await fileToArrayBuffer(f)); } catch { toast.error('Failed to read image'); }
-  }, []);
+  const shown = useRef<string | null>(null);
+  const forget = () => {
+    if (shown.current) URL.revokeObjectURL(shown.current);
+    shown.current = null;
+  };
+  useEffect(() => forget, []);
 
-  const handleRemoveFile = useCallback(() => {
-    setFile(null); setBuffer(null); setStatus('idle'); setResultHtml(null); setErrorMsg(null);
-  }, []);
-
-  const handleEncrypt = useCallback(async () => {
-    if (!buffer || !file) { toast.error('Upload an image first'); return; }
-    if (!password) { toast.error('Enter a password'); return; }
-    if (password !== confirmPassword) { toast.error('Passwords do not match'); return; }
-
-    setStatus('encrypting');
-    setErrorMsg(null);
-
-    try {
-      const enc = new TextEncoder();
-
-      // Generate random salt + IV
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-
-      // Derive AES-256 key from password via PBKDF2
-      const keyMat = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
-      const key = await crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
-        keyMat,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt']
+  const openFile = useCallback(
+    (files: File[]) => {
+      const file = files[0];
+      if (!file) return;
+      invalidate();
+      forget();
+      setItem({ file, info: null, mime: null, sniffed: false, failed: false });
+      const same = (prev: Loaded | null) => prev?.file === file;
+      file
+        .slice(0, 64)
+        .arrayBuffer()
+        .then(
+          (head) => {
+            const sniffed = sniffImageMime(new Uint8Array(head));
+            const mime = sniffed && LOCK_TYPES[sniffed] ? sniffed : null;
+            setItem((prev) => (same(prev) ? { ...prev!, mime, sniffed: true } : prev));
+          },
+          () => setItem((prev) => (same(prev) ? { ...prev!, sniffed: true } : prev)),
+        );
+      loadImage(file).then(
+        (info) => {
+          setItem((prev) => {
+            if (!same(prev)) {
+              URL.revokeObjectURL(info.url);
+              return prev;
+            }
+            shown.current = info.url;
+            return { ...prev!, info };
+          });
+        },
+        () => setItem((prev) => (same(prev) ? { ...prev!, failed: true } : prev)),
       );
+    },
+    [invalidate],
+  );
 
-      // Encrypt image data
-      const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buffer);
+  const removeFile = useCallback(() => {
+    invalidate();
+    forget();
+    setItem(null);
+  }, [invalidate]);
 
-      // Encode to base64 — chunked to avoid exceeding max function arguments
-      const toB64 = (buf: ArrayBuffer) => {
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += 8192) {
-          binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-        }
-        return btoa(binary);
-      };
-      const cipherB64 = toB64(cipherBuf);
-      const ivB64 = toB64(iv.buffer as ArrayBuffer);
-      const saltB64 = toB64(salt.buffer as ArrayBuffer);
+  const change =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      invalidate();
+      set(value);
+    };
 
-      const html = buildLockedHtml(cipherB64, ivB64, saltB64, file.type || 'image/jpeg');
-      setResultHtml(html);
-      setStatus('done');
-      toast.success('Image encrypted — download the HTML to share');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Encryption failed';
-      setStatus('error'); setErrorMsg(msg); toast.error(msg);
-    }
-  }, [buffer, file, password, confirmPassword]);
+  /* ── The run ──────────────────────────────────────────────────────────── */
 
-  const handleDownload = useCallback(async () => {
-    if (!resultHtml || !file) return;
-    const name = file.name.replace(/\.[^.]+$/, '') + '-locked.html';
-    const blob = new Blob([resultHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [resultHtml, file]);
+  const loading = !!item && (!item.sniffed || (!item.info && !item.failed));
+  const unusable = !!item && !loading && (item.failed || !item.mime);
+  const mismatch = !!password && !!confirm && password !== confirm;
+  const running = run.phase === 'running';
+  const done = run.phase === 'done' && !!run.result;
+  const result = run.result;
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* How it works note */}
-      <div className="flex gap-3 rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 p-4">
-        <svg className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div className="text-sm text-[var(--color-text-secondary)]">
-          <p className="font-medium text-[var(--color-text-primary)]">AES-256-GCM encryption</p>
-          <p className="mt-0.5">The image is encrypted in your browser and wrapped in a standalone HTML file. Share the HTML file — the recipient enters the password to view the image. No uploads needed.</p>
-        </div>
-      </div>
+  const lock = useCallback(() => {
+    if (!item || loading || unusable || !password || password !== confirm || !item.mime) return;
+    const { file, mime } = item;
+    const pw = password;
+    void run.start(async () => {
+      setProgress(10);
+      // Let "Locking…" paint before the key derivation takes the CPU.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      setProgress(30);
+      const locked = await lockImage(bytes, mime, pw);
+      setProgress(90);
+      const html = buildLockedHtml(locked);
+      setProgress(100);
+      return { name: lockedFileName(file.name), blob: new Blob([html], { type: 'text/html' }), mime, imageBytes: file.size };
+    });
+  }, [item, loading, unusable, password, confirm, run]);
 
-      <DropZone accept={['image/jpeg', 'image/png', 'image/webp', 'image/gif']}
-        multiple={false} onFiles={handleFiles}
-        hint="JPEG, PNG, WebP, GIF · Encrypted in browser" />
+  /* ── Stage ────────────────────────────────────────────────────────────── */
 
-      {file && (
-        <>
-          <FileInfoCard file={file} onRemove={handleRemoveFile} />
+  const typeName = item?.mime ? formatName(item.mime) : null;
+  let stageStatus = '';
+  if (item) {
+    if (loading) stageStatus = 'Reading the image…';
+    else if (unusable)
+      stageStatus = item.mime
+        ? `${item.file.name} could not be shown, so it cannot be checked as an image.`
+        : `${item.file.name} is not an image Lock Image can lock (${INPUTS}).`;
+    else if (done && result)
+      stageStatus = `Locked into ${result.name}. Unlocking it gives back this image, byte for byte.`;
+    else
+      stageStatus = `Your image (${typeName}${item.info ? `, ${px(item.info.width, item.info.height)}` : ''}, ${formatBytes(
+        item.file.size,
+      )}). It is locked exactly as it is: the same file comes out when it is unlocked.`;
+  }
 
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-            <div className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="lock-password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Password</label>
-                <input id="lock-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  data-testid="password"
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
-                {password && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-border)]">
-                      <div className="h-full rounded-full transition-[width]"
-                        style={{ width: `${(strength.score / 4) * 100}%`, backgroundColor: strength.color }} />
-                    </div>
-                    <span className="text-xs" style={{ color: strength.color }}>{strength.label}</span>
-                  </div>
-                )}
+  const stage = item ? (
+    <ImageStage
+      src={item.info?.url ?? null}
+      alt={`Your image: ${item.file.name}`}
+      naturalWidth={item.info?.width ?? 0}
+      naturalHeight={item.info?.height ?? 0}
+      beforeLabel={typeName ? `Your image (${typeName})` : 'Your image'}
+      placeholder={item.failed ? 'This file could not be shown as an image' : 'Reading the image…'}
+      footer={
+        <p data-testid="stage-status" aria-live="polite" className="line-clamp-2 text-xs text-[var(--color-text-secondary)]">
+          {stageStatus}
+        </p>
+      }
+    />
+  ) : null;
+
+  /* ── Controls ─────────────────────────────────────────────────────────── */
+
+  const heading = 'text-sm font-semibold text-[var(--color-text-primary)]';
+  const note = 'text-xs leading-5 text-[var(--color-text-secondary)]';
+  const field =
+    'h-11 w-full rounded-lg border bg-[var(--color-background)] px-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]';
+  const strength = passwordStrength(password);
+  const stem = item ? lockedFileName(item.file.name) : 'image-locked.html';
+  const opensEverywhere = !item?.mime || LOCK_SHOWN_EVERYWHERE.includes(item.mime);
+
+  const controls = (
+    <div className="flex flex-col gap-5 p-3 sm:p-4" inert={running}>
+      <section className="flex flex-col gap-3" aria-labelledby="li-password-heading">
+        <h3 id="li-password-heading" className={heading}>
+          Choose a password
+        </h3>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="lock-password" className="text-sm font-medium text-[var(--color-text-primary)]">
+            Password
+          </label>
+          <input
+            id="lock-password"
+            type={show ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => change(setPassword)(e.target.value)}
+            autoComplete="new-password"
+            data-testid="password"
+            className={cn(field, 'border-[var(--color-border)]')}
+          />
+          {password && (
+            <div className="flex items-center gap-2" data-testid="password-strength" data-score={strength.score}>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-border)]" aria-hidden="true">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${((strength.score + 1) / 5) * 100}%`, backgroundColor: STRENGTH_COLOUR[strength.score] }}
+                />
               </div>
-
-              <div>
-                <label htmlFor="lock-confirm-password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">Confirm Password</label>
-                <input id="lock-confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  data-testid="confirm-password"
-                  className={cn('w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]',
-                    'bg-[var(--color-background)]',
-                    confirmPassword && password !== confirmPassword ? 'border-[var(--color-error)]' : 'border-[var(--color-border)]'
-                  )} />
-              </div>
+              <span className="shrink-0 text-xs font-medium text-[var(--color-text-secondary)]">{strength.label}</span>
             </div>
-          </div>
-        </>
-      )}
-
-      {status === 'encrypting' && (
-        <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)]">
-          <svg className="h-4 w-4 animate-spin text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Encrypting with PBKDF2 + AES-256-GCM…
-        </div>
-      )}
-
-      {status === 'error' && errorMsg && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">{errorMsg}</div>
-      )}
-
-      {status !== 'encrypting' && file && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button onClick={handleEncrypt} disabled={!password || !confirmPassword} data-testid="tool-action"
-            className="w-full rounded-lg bg-[var(--color-text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--color-background)] hover:opacity-80 disabled:opacity-50 sm:w-auto">
-            🔒 Lock Image
-          </button>
-          {status === 'done' && resultHtml && (
-            <DownloadButton onClick={handleDownload} label="Download Locked HTML" />
           )}
         </div>
-      )}
-
-      {status === 'done' && resultHtml && (
-        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
-          <p className="text-sm font-medium text-[var(--color-success)]">Image locked!</p>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-            Share the .html file with anyone who has the password. No server involved.
-          </p>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="lock-confirm-password" className="text-sm font-medium text-[var(--color-text-primary)]">
+            Confirm password
+          </label>
+          <input
+            id="lock-confirm-password"
+            type={show ? 'text' : 'password'}
+            value={confirm}
+            onChange={(e) => change(setConfirm)(e.target.value)}
+            autoComplete="new-password"
+            aria-invalid={mismatch || undefined}
+            aria-describedby={mismatch ? 'lock-mismatch' : undefined}
+            data-testid="confirm-password"
+            className={cn(field, mismatch ? 'border-[var(--color-error)]' : 'border-[var(--color-border)]')}
+          />
+          {mismatch && (
+            <p id="lock-mismatch" data-testid="password-mismatch" className="text-xs font-medium text-[var(--color-error)]">
+              The two passwords do not match.
+            </p>
+          )}
         </div>
-      )}
+        <label className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+          <input
+            type="checkbox"
+            checked={show}
+            onChange={(e) => setShow(e.target.checked)}
+            data-testid="show-password"
+            className="size-4 accent-[var(--color-primary)]"
+          />
+          Show passwords
+        </label>
+        <p className={note}>
+          A forgotten password cannot be recovered. Anyone who has the file can try passwords on it for as long as they
+          like, so a long password of several words is safest. The strength bar only counts length and kinds of
+          character; it cannot tell whether a password is a common one.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-2" aria-labelledby="li-what-heading">
+        <h3 id="li-what-heading" className={heading}>
+          What you get
+        </h3>
+        <ul data-testid="lock-explainer" className="flex list-disc flex-col gap-1.5 pl-4 text-xs leading-5 text-[var(--color-text-secondary)]">
+          <li>
+            One HTML file, <span className="font-medium text-[var(--color-text-primary)]">{stem}</span>, with your image
+            inside it encrypted with AES-256-GCM. The key is made from the password with PBKDF2-SHA-256 ({ROUNDS} rounds).
+          </li>
+          <li>
+            To see the image, open the file in a web browser (Chrome, Edge, Firefox or Safari) and type the password. It
+            works offline and contacts nothing, docukit.uk included.
+          </li>
+          <li>
+            The image is locked as it is: same bytes, same size. Anything inside it, such as camera details or location,
+            is locked with it and is there again once it is unlocked.
+          </li>
+          {!opensEverywhere && (
+            <li data-testid="heic-note">
+              Most browsers other than Safari cannot show HEIC. The unlocked page then offers the image to save instead.
+            </li>
+          )}
+          <li>Nothing is uploaded: the image is encrypted in this browser.</li>
+        </ul>
+      </section>
     </div>
+  );
+
+  /* ── Result ───────────────────────────────────────────────────────────── */
+
+  const resultPanel =
+    done && result ? (
+      <div className="flex flex-col gap-4 p-3 sm:p-4" data-testid="result-panel">
+        <section aria-labelledby="li-result-heading" className="flex flex-col gap-1.5">
+          <h3 id="li-result-heading" className={heading} data-testid="facts-heading">
+            {result.name}
+          </h3>
+          <ul data-testid="lock-facts" className="flex list-disc flex-col gap-1.5 pl-4 text-sm text-[var(--color-text-secondary)]">
+            <li>
+              Holds your {formatName(result.mime)} image ({formatBytes(result.imageBytes)}), encrypted. The file is{' '}
+              {formatBytes(result.blob.size)}: the encrypted image is stored as text, which makes it about a third larger.
+            </li>
+            <li>
+              To open it: open the file in a web browser, type the password and press Unlock image. Save image then gives
+              back the original file.
+            </li>
+            <li>Send the password some other way than the file, not in the same email or chat.</li>
+            <li>A preview inside a mail or chat app may not run it: save the file first, then open it.</li>
+          </ul>
+        </section>
+        <NextStep href="/view-once-image/" label="View-Once Image">
+          Want a link that opens only once instead?
+        </NextStep>
+      </div>
+    ) : undefined;
+
+  /* ── What the visitor is told ─────────────────────────────────────────── */
+
+  const beside = wide ? 'on the right' : 'below';
+  let prompt: string;
+  let promptTone: 'info' | 'success' | 'error' = 'info';
+  if (loading) prompt = 'Reading your image…';
+  else if (unusable) {
+    prompt = `${item!.file.name} cannot be locked: choose a ${INPUTS} image.`;
+    promptTone = 'error';
+  } else if (running) prompt = 'Locking your image…';
+  else if (run.phase === 'error') {
+    prompt = 'The image could not be locked. Try again.';
+    promptTone = 'error';
+  } else if (done) {
+    prompt = 'Download the locked file, then send it, and tell the recipient the password another way.';
+    promptTone = 'success';
+  } else if (phone && !optionsOpen) prompt = 'Open Options to choose a password, then press Lock image.';
+  else if (!password || !confirm) prompt = `Type a password twice ${beside}, then press Lock image.`;
+  else if (mismatch) {
+    prompt = 'The passwords do not match: type the same password in both fields.';
+    promptTone = 'error';
+  } else prompt = 'Press Lock image to make the locked file.';
+
+  const disabledReason = loading
+    ? 'Reading the image…'
+    : unusable
+      ? `${item!.file.name} is not an image this tool can lock`
+      : !password
+        ? 'Type a password to lock the image with'
+        : !confirm
+          ? 'Type the password again to confirm it'
+          : mismatch
+            ? 'The two passwords do not match'
+            : null;
+
+  return (
+    <ToolWorkspace
+      toolId="lock-image"
+      active={!!item}
+      empty={<DropZone accept={ACCEPTED} multiple={false} onFiles={openFile} hint={`${INPUTS} · encrypted in your browser`} />}
+      title="Lock this image"
+      prompt={prompt}
+      promptTone={promptTone}
+      optionsOpen={optionsOpen}
+      onOptionsOpenChange={setOptionsOpen}
+      fileBar={
+        item ? (
+          <WorkspaceFileBar
+            file={item.file}
+            extra={item.info ? `${typeName ? `${typeName} · ` : ''}${px(item.info.width, item.info.height)}` : undefined}
+            onRemove={removeFile}
+            onReplace={openFile}
+            accept={ACCEPTED}
+            disabled={running}
+          />
+        ) : null
+      }
+      stage={stage}
+      controls={controls}
+      result={resultPanel}
+      action={
+        <ActionBar
+          phase={run.phase}
+          label="Lock image"
+          runningLabel="Locking…"
+          onRun={lock}
+          disabledReason={disabledReason}
+          hint={`Makes ${stem}: your image encrypted, opened with the password.`}
+          progress={progress}
+          progressLabel="Locking"
+          onCancel={run.cancel}
+          download={
+            result
+              ? {
+                  label: 'Download',
+                  onDownload: () => downloadBlob(result.blob, result.name),
+                  ariaLabel: `Download ${result.name}`,
+                }
+              : undefined
+          }
+          summary={result ? `${result.name} · ${formatBytes(result.blob.size)}` : undefined}
+          onEditAgain={invalidate}
+          error={run.error}
+        />
+      }
+    />
   );
 }

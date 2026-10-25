@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 interface DownloadButtonProps {
@@ -23,6 +23,8 @@ interface DownloadButtonProps {
    * about, so the warning, not the button, is what stands out.
    */
   variant?: 'primary' | 'outline';
+  /** Replaces the download arrow in the idle state, for a button that does something else (copy a link). */
+  icon?: ReactNode;
 }
 
 const sizeClasses = {
@@ -48,6 +50,7 @@ export default function DownloadButton({
   doneLabel = 'Downloaded!',
   ariaLabel,
   variant = 'primary',
+  icon,
 }: DownloadButtonProps) {
   const [state, setState] = useState<'idle' | 'downloading' | 'done'>('idle');
 
@@ -112,6 +115,8 @@ export default function DownloadButton({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
         </svg>
+      ) : icon ? (
+        icon
       ) : (
         <svg
           className={iconSizeClasses[size]}
