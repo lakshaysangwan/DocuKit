@@ -94,6 +94,40 @@ describe('view-once Pages Function', () => {
     expect(kv.store.size).toBe(0);
   });
 
+  it('rejects an oversized body that does not declare its length', async () => {
+    const kv = stubKv();
+    // A streamed (chunked) upload has no Content-Length; the cap must hold on the bytes received.
+    const big = new Uint8Array(12 * 1024 * 1024 + 1);
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(big);
+        controller.close();
+      },
+    });
+    const res = await call(
+      new Request(`${ORIGIN}/api/view-once`, {
+        method: 'POST',
+        body: stream,
+        headers: { 'Content-Type': 'application/octet-stream' },
+        duplex: 'half',
+      } as RequestInit),
+      { VIEW_ONCE_KV: kv },
+    );
+    expect(res.status).toBe(413);
+    expect(kv.store.size).toBe(0);
+  });
+
+  it('tells caches not to keep the ciphertext', async () => {
+    const kv = stubKv();
+    const env = { VIEW_ONCE_KV: kv };
+    const created = await call(postRequest(new Uint8Array([1, 2])), env);
+    expect(created.headers.get('Cache-Control')).toBe('no-store');
+    const { id } = (await created.json()) as { id: string };
+    const read = await call(new Request(`${ORIGIN}/api/view-once/${id}`), env, [id]);
+    expect(read.status).toBe(200);
+    expect(read.headers.get('Cache-Control')).toBe('no-store');
+  });
+
   it('clamps an unexpected TTL to the 24h default', async () => {
     const kv = stubKv();
     const res = await call(postRequest(new Uint8Array([1]), { 'X-TTL': '999999' }), {

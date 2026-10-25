@@ -26,10 +26,14 @@ function corsHeaders(origin: string | null, allowedOrigin: string): Record<strin
   };
 }
 
+// Neither the stored ciphertext nor the answers about it may be kept by a cache:
+// a cached GET would hand the image out a second time.
+const NO_STORE = { 'Cache-Control': 'no-store' };
+
 function json(data: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...extra },
+    headers: { 'Content-Type': 'application/json', ...NO_STORE, ...extra },
   });
 }
 
@@ -59,6 +63,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const body = await request.arrayBuffer();
     if (!body || body.byteLength === 0) {
       return json({ error: 'Missing body' }, 400, cors);
+    }
+    // Content-Length can be absent (a chunked upload) or wrong; the cap is on
+    // what actually arrived.
+    if (body.byteLength > MAX_BODY_BYTES) {
+      return json({ error: 'Payload too large' }, 413, cors);
     }
 
     const ttlHeader = parseInt(request.headers.get('X-TTL') ?? '86400', 10);
@@ -97,7 +106,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     return new Response(bytes, {
       status: 200,
-      headers: { 'Content-Type': 'application/octet-stream', ...cors },
+      headers: { 'Content-Type': 'application/octet-stream', ...NO_STORE, ...cors },
     });
   }
 
