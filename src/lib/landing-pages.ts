@@ -23,7 +23,7 @@ export interface LandingDef extends ToolDef {
 type LandingInput = Pick<
   LandingDef,
   | 'slug' | 'baseSlug' | 'name' | 'howToName' | 'shortDescription' | 'longDescription'
-  | 'primaryKeyword' | 'pageTitle' | 'metaDescription' | 'h1' | 'faqs' | 'howToSteps' | 'features'
+  | 'primaryKeyword' | 'searchKeywords' | 'pageTitle' | 'metaDescription' | 'h1' | 'faqs' | 'howToSteps' | 'features'
 > & { relatedSlugs?: string[] };
 
 function landing(input: LandingInput): LandingDef {
@@ -32,6 +32,8 @@ function landing(input: LandingInput): LandingDef {
   return {
     ...base,
     ...input,
+    // The base tool's search words describe the base tool; a task page names its own.
+    searchKeywords: input.searchKeywords,
     // The base tool always leads the related list — it is the fuller version of this page.
     relatedSlugs: input.relatedSlugs ?? [base.slug, ...base.relatedSlugs],
   };
@@ -47,6 +49,7 @@ export const LANDING_PAGES: LandingDef[] = [
     shortDescription: 'Turn PDF pages and save the result',
     longDescription: 'Rotate every page of a PDF at once, or only the pages that are sideways or upside down. The rotation is saved into the file, so it opens the right way round everywhere.',
     primaryKeyword: 'rotate pdf',
+    searchKeywords: ['turn'],
     pageTitle: 'Rotate PDF Online — Turn Pages & Save | Docukit',
     metaDescription: 'Rotate PDF pages online and save them permanently. Turn the whole document or just the sideways pages, left or right. Runs in your browser — no uploads.',
     h1: 'Rotate PDF Pages',

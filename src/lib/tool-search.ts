@@ -18,6 +18,8 @@ export interface SearchEntry {
   keyword: string;
   /** Other words from the heading and long description, normalised and deduped. */
   extra: string;
+  /** Other phrases people search for this page by (`searchKeywords`), comma-separated. Never shown. */
+  synonyms: string;
 }
 
 /**
@@ -105,6 +107,10 @@ export function buildSearchIndex(pages: readonly ToolDef[]): SearchEntry[] {
       category: page.category,
       keyword: page.primaryKeyword,
       extra: extra.join(' '),
+      synonyms: (page.searchKeywords ?? []).map((phrase) => {
+        if (phrase.includes(',')) throw new Error(`search index: ${page.slug} keyword "${phrase}" contains a comma`);
+        return phrase;
+      }).join(','),
     };
   });
 }
@@ -115,7 +121,7 @@ export function buildSearchIndex(pages: readonly ToolDef[]): SearchEntry[] {
  * value with its type and the attribute escapes every quote), so it is sent as
  * plain text instead: one page per line, fields separated by tabs.
  */
-const FIELD_ORDER = ['slug', 'name', 'description', 'category', 'keyword', 'extra'] as const;
+const FIELD_ORDER = ['slug', 'name', 'description', 'category', 'keyword', 'extra', 'synonyms'] as const;
 
 export function serializeSearchIndex(entries: readonly SearchEntry[]): string {
   return entries
@@ -133,8 +139,8 @@ export function serializeSearchIndex(entries: readonly SearchEntry[]): string {
 export function parseSearchIndex(text: string): SearchEntry[] {
   if (text === '') return [];
   return text.split('\n').map((line) => {
-    const [slug = '', name = '', description = '', category = '', keyword = '', extra = ''] = line.split('\t');
-    return { slug, name, description, category: category === 'image' ? 'image' : 'pdf', keyword, extra };
+    const [slug = '', name = '', description = '', category = '', keyword = '', extra = '', synonyms = ''] = line.split('\t');
+    return { slug, name, description, category: category === 'image' ? 'image' : 'pdf', keyword, extra, synonyms };
   });
 }
 
@@ -142,6 +148,7 @@ export function parseSearchIndex(text: string): SearchEntry[] {
 const FIELD_WEIGHTS = {
   name: [12, 9],
   keyword: [8, 6],
+  synonyms: [8, 6],
   description: [5, 4],
   extra: [2, 1],
 } as const;
@@ -154,6 +161,7 @@ interface PreparedEntry {
   words: Record<Field, string[]>;
   nameKey: string;
   keywordKey: string;
+  synonymKeys: string[];
 }
 
 /** A field's words, each alongside its other spellings. */
@@ -169,9 +177,11 @@ function prepare(entry: SearchEntry): PreparedEntry {
       keyword: fieldWords(entry.keyword),
       description: fieldWords(entry.description),
       extra: fieldWords(entry.extra),
+      synonyms: fieldWords(entry.synonyms),
     },
     nameKey: phraseKey(tokenize(entry.name)),
     keywordKey: phraseKey(tokenize(entry.keyword)),
+    synonymKeys: entry.synonyms.split(',').map((phrase) => phraseKey(tokenize(phrase))).filter(Boolean),
   };
 }
 
@@ -204,6 +214,9 @@ function score(prepared: PreparedEntry, words: readonly string[], queryKey: stri
 
   if (keywordKey === queryKey) total += 15;
   else if (keywordKey.startsWith(queryKey)) total += 8;
+
+  // "remove password" is Unlock's phrase, not just two words Protect also uses.
+  if (prepared.synonymKeys.includes(queryKey)) total += 15;
 
   return total;
 }

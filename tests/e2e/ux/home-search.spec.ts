@@ -66,6 +66,26 @@ test.describe('Homepage search', () => {
     await expect(page.getByRole('option').nth(1)).toHaveAttribute('href', '/pdf-to-image/');
   });
 
+  test('finds a tool by another word for what it does, without showing that word', async ({ page }) => {
+    const input = await openHome(page);
+    for (const [query, href] of [
+      ['join', '/merge-pdf/'],
+      ['esign', '/sign-pdf/'],
+      ['remove password', '/unlock-pdf/'],
+      ['black out', '/redact-pdf/'],
+      ['self-destruct', '/view-once-image/'],
+    ] as const) {
+      await input.fill(query);
+      const first = page.getByRole('option').first();
+      await expect(first, query).toHaveAttribute('href', href);
+      // The keyword finds the page; the result still shows only its name and description.
+      if (query === 'esign') await expect(page.getByRole('listbox')).not.toContainText(/esign/i);
+    }
+    // The words are not part of the homepage's visible copy either.
+    await input.fill('');
+    await expect(page.locator('main')).not.toContainText(/\besign\b|black out|disappearing/i);
+  });
+
   test('covers every tool and task page, each linked with a trailing slash', async ({ page }) => {
     const input = await openHome(page);
     const pages = [...TOOLS, ...LANDING_PAGES];

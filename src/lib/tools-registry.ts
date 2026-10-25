@@ -19,6 +19,11 @@ export interface ToolDef {
   category: ToolCategory;
   icon: string;
   primaryKeyword: string;
+  /**
+   * Other words people search for this tool by ("join" for Merge), used only by
+   * the homepage search and never shown. Only words for what the tool really does.
+   */
+  searchKeywords?: string[];
   pageTitle: string;
   metaDescription: string;
   h1: string;
@@ -39,6 +44,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/merge-pdf.svg',
     primaryKeyword: 'merge pdf',
+    searchKeywords: ['join', 'combine'],
     pageTitle: 'Merge PDF Files Online — No Upload | Docukit',
     metaDescription: 'Merge PDF files online, entirely in your browser — no uploads, no sign-up. See every page, drag pages to reorder across files, choose pages, keep bookmarks.',
     h1: 'Merge PDF Files',
@@ -74,6 +80,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/split-pdf.svg',
     primaryKeyword: 'split pdf',
+    searchKeywords: ['separate', 'extract'],
     pageTitle: 'Split PDF Online — Extract Pages | Docukit',
     metaDescription: 'Split PDF files online. Extract pages, split by range, or separate every page. 100% browser-based, no uploads.',
     h1: 'Split PDF Files',
@@ -107,6 +114,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/compress-pdf.svg',
     primaryKeyword: 'compress pdf',
+    searchKeywords: ['reduce', 'shrink', 'smaller'],
     pageTitle: 'Compress PDF Online — Reduce File Size | Docukit',
     metaDescription: 'Compress PDF files in your browser. Preview the quality of a page before compressing, then compare the result with your original. No uploads, no accounts.',
     h1: 'Compress PDF Files',
@@ -143,6 +151,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/rearrange-pdf-pages.svg',
     primaryKeyword: 'rearrange pdf pages',
+    searchKeywords: ['reorder', 'organize', 'organise'],
     pageTitle: 'Rearrange PDF Pages Online | Docukit',
     metaDescription: 'Rearrange, rotate, and delete PDF pages online. Drag-and-drop page reorder with undo/redo. 100% browser-based, no uploads.',
     h1: 'Rearrange PDF Pages',
@@ -179,6 +188,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/sign-pdf.svg',
     primaryKeyword: 'sign pdf online',
+    searchKeywords: ['esign', 'e-sign', 'signature'],
     pageTitle: 'Sign PDF Online — No Upload | Docukit',
     metaDescription: 'Sign PDF files online. Draw, type, or upload your signature, then drag it into place on the page. 100% browser-based — your document never leaves your device.',
     h1: 'Sign PDF Files',
@@ -253,6 +263,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/protect-pdf.svg',
     primaryKeyword: 'password protect pdf',
+    searchKeywords: ['password', 'encrypt'],
     pageTitle: 'Password Protect PDF Online | Docukit',
     metaDescription: 'Add password protection to PDF files online. AES-256 encryption, permission settings, strength meter. 100% browser-based.',
     h1: 'Password Protect PDF',
@@ -287,6 +298,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/unlock-pdf.svg',
     primaryKeyword: 'unlock pdf',
+    searchKeywords: ['remove password', 'decrypt'],
     pageTitle: 'Unlock PDF — Remove Password Online | Docukit',
     metaDescription: 'Remove password protection from PDF files online. Enter the password, download unlocked PDF. 100% browser-based, private.',
     h1: 'Unlock PDF',
@@ -396,6 +408,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/watermark-pdf.svg',
     primaryKeyword: 'add watermark to pdf',
+    searchKeywords: ['stamp'],
     pageTitle: 'Add Watermark to PDF Online | Docukit',
     metaDescription: 'Add text or image watermarks to PDF files in your browser. Choose font, opacity, rotation and position, or tile it across the page. Files stay on your device.',
     h1: 'Add Watermark to PDF',
@@ -430,6 +443,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/edit-pdf.svg',
     primaryKeyword: 'edit pdf online',
+    searchKeywords: ['annotate', 'add text'],
     pageTitle: 'Edit PDF Online — Annotate & Add Text | Docukit',
     metaDescription: 'Edit PDF files in your browser. Add text, images, shapes, highlights, whiteout and stamps, then move and resize them exactly. The file is not uploaded.',
     h1: 'Edit PDF',
@@ -533,6 +547,7 @@ export const TOOLS: ToolDef[] = [
     category: 'pdf',
     icon: '/icons/tools/redact-pdf.svg',
     primaryKeyword: 'redact pdf',
+    searchKeywords: ['black out', 'censor'],
     pageTitle: 'Redact PDF Online — Permanently Remove Content | Docukit',
     metaDescription: 'Permanently redact sensitive content from PDF files online. The text and image pixels under each mark are removed from the file, not just covered. 100% browser-based.',
     h1: 'Redact PDF',
@@ -573,6 +588,7 @@ export const TOOLS: ToolDef[] = [
     category: 'image',
     icon: '/icons/tools/compress-image.svg',
     primaryKeyword: 'compress image online',
+    searchKeywords: ['reduce', 'shrink', 'smaller'],
     pageTitle: 'Compress Image Online — JPG, PNG, WebP | Docukit',
     metaDescription: 'Compress JPG, PNG, WebP, AVIF and HEIC images in your browser. Compare the quality with your original before you download, or fit a size limit.',
     h1: 'Compress Images',
@@ -608,6 +624,7 @@ export const TOOLS: ToolDef[] = [
     category: 'image',
     icon: '/icons/tools/resize-image.svg',
     primaryKeyword: 'resize image',
+    searchKeywords: ['dimensions', 'scale'],
     pageTitle: 'Resize Image Online — Exact Dimensions | Docukit',
     metaDescription: 'Resize images to exact pixel dimensions or a percentage in your browser. See the result before you download; Fit, Cover or Stretch; social media presets.',
     h1: 'Resize Images',
@@ -647,6 +664,7 @@ export const TOOLS: ToolDef[] = [
     category: 'image',
     icon: '/icons/tools/convert-image.svg',
     primaryKeyword: 'convert image format',
+    searchKeywords: ['change format'],
     pageTitle: 'Convert Image Format Online — JPG, PNG, WebP | Docukit',
     metaDescription: 'Convert images to JPG, PNG, WebP or AVIF online, iPhone HEIC photos included. Compare with your original, convert a batch. Runs in your browser.',
     h1: 'Convert Image Format',
@@ -683,6 +701,7 @@ export const TOOLS: ToolDef[] = [
     category: 'image',
     icon: '/icons/tools/lock-image.svg',
     primaryKeyword: 'encrypt image with password',
+    searchKeywords: ['encrypt image'],
     pageTitle: 'Lock Image with Password — Encrypt Online | Docukit',
     metaDescription: 'Password-protect an image in your browser: AES-256-GCM encryption into one HTML file that opens in any current browser with the password. Nothing is uploaded.',
     h1: 'Lock Image with Password',
@@ -719,6 +738,7 @@ export const TOOLS: ToolDef[] = [
     category: 'image',
     icon: '/icons/tools/view-once.svg',
     primaryKeyword: 'share image once self destruct',
+    searchKeywords: ['self-destruct', 'disappearing'],
     pageTitle: 'View-Once Image Link — Share & Self-Destruct | Docukit',
     metaDescription: 'Share an image by a link that opens once. Encrypted in your browser before upload, key only in the link, deleted from the server when first opened or when the link expires.',
     h1: 'Share an Image That Disappears After One View',

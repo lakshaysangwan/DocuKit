@@ -161,3 +161,48 @@ describe('search', () => {
     }
   });
 });
+
+describe('search keywords', () => {
+  it('finds a tool by a word people use for it that its copy does not', () => {
+    const first = {
+      join: 'merge-pdf',
+      combine: 'merge-pdf',
+      esign: 'sign-pdf',
+      'e-sign': 'sign-pdf',
+      shrink: 'compress-pdf',
+      separate: 'split-pdf',
+      encrypt: 'protect-pdf',
+      'remove password': 'unlock-pdf',
+      decrypt: 'unlock-pdf',
+      reorder: 'rearrange-pdf-pages',
+      turn: 'rotate-pdf',
+      'change format': 'convert-image',
+      dimensions: 'resize-image',
+      'black out': 'redact-pdf',
+      censor: 'redact-pdf',
+      annotate: 'edit-pdf',
+      'add text': 'edit-pdf',
+      'encrypt image': 'lock-image',
+      'self-destruct': 'view-once-image',
+      disappearing: 'view-once-image',
+    };
+    for (const [query, slug] of Object.entries(first)) expect(slugs(query)[0], `"${query}"`).toBe(slug);
+  });
+
+  it('finds every tool a shared word belongs to', () => {
+    expect(slugs('smaller')).toEqual(expect.arrayContaining(['compress-pdf', 'compress-image']));
+    expect(slugs('join pdf')[0]).toBe('merge-pdf');
+  });
+
+  it('keeps a task page to its own words, not its base tool\'s', () => {
+    for (const page of LANDING_PAGES) {
+      const entry = index.find((e) => e.slug === page.slug)!;
+      expect(entry.synonyms, page.slug).toBe((page.searchKeywords ?? []).join(','));
+    }
+    expect(slugs('join')).not.toContain('delete-pdf-pages');
+  });
+
+  it('still requires every word: a keyword does not match on its own', () => {
+    expect(slugs('join jpg')).toEqual([]);
+  });
+});
