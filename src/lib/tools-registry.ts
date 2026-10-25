@@ -185,7 +185,7 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['digital-signature-pdf', 'edit-pdf', 'protect-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
-      { q: 'What signature methods are supported?', a: 'Draw with a mouse, finger or pen, type your name in a handwriting style, or upload a picture of your signature (a PNG with a transparent background works best). Whichever you choose is trimmed to the signature itself and keeps its proportions.' },
+      { q: 'What signature methods are supported?', a: 'Draw with a mouse, finger or pen, type your name and pick one of four handwriting styles, or upload a picture of your signature (a PNG with a transparent background works best). Whichever you choose is trimmed to the signature itself and keeps its proportions.' },
       { q: 'Is this a legally binding signature?', a: 'Visual signatures apply an image of your signature. For a cryptographic signature (PKCS#7) that shows whether the file was changed after signing, use our Digital Signature tool.' },
       { q: 'Can I move or resize the signature after placing it?', a: 'Yes. Drag it to move it and pull a corner to resize it — it keeps its proportions. You can also use the Smaller and Larger buttons, type an exact position in millimetres, or nudge it with the arrow keys. Remove deletes a stamp, and Undo and Redo cover every change until you download.' },
       { q: 'Can I sign multiple pages?', a: 'Yes. Go to any page with the page arrows or the thumbnails and add your signature there, or select a stamp and choose "Copy to all pages" to put it in the same position on every page in one step.' },

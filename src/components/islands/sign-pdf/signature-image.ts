@@ -27,10 +27,9 @@ const SAVED_KEY = 'docukit-signature';
  * Handwriting styles for a typed signature. `stack` is used for both the
  * preview (CSS) and the image (canvas), so the two always match.
  *
- * Each names its web font first and then script fonts that ship with Windows,
- * macOS, iOS and Android. The fallbacks matter: the four .woff2 files in
- * public/fonts are subsets with no basic Latin letters or digits in them, so
- * for an English name it is the fallback that is actually drawn.
+ * Each names its web font first (public/fonts, Latin and Latin Extended,
+ * declared in global.css) and then script fonts that ship with Windows, macOS,
+ * iOS and Android, for letters the web font does not have (Greek, Cyrillic…).
  */
 export const SIGNATURE_FONTS = [
   { name: 'Flowing', web: 'Dancing Script', stack: '"Dancing Script", "Segoe Script", "Snell Roundhand", "Apple Chancery", cursive' },
@@ -96,6 +95,9 @@ export function signatureFromCanvas(canvas: HTMLCanvasElement): SigAsset | null 
 export async function signatureFromText(text: string, fontIndex: number): Promise<SigAsset | null> {
   const font = SIGNATURE_FONTS[fontIndex] ?? SIGNATURE_FONTS[0];
   const sizePx = 96;
+  // Wait for the web font (and, through unicode-range, only the subsets these
+  // letters need) before drawing: a canvas does not wait, and would draw the
+  // first signature in the fallback font.
   try {
     await document.fonts.load(`${sizePx}px "${font.web}"`, text);
   } catch {
