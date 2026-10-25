@@ -182,17 +182,6 @@ export type CropOptions = {
   pages: { pageIndex: number; geometry: PageGeometry }[];
 };
 
-export type RedactRegion = {
-  pageIndex: number;
-  x: number; y: number; width: number; height: number;
-};
-
-export type RedactOptions = {
-  regions: RedactRegion[];
-  fillColor?: string;
-  stripMetadata?: boolean;
-};
-
 export type PdfToImageOptions = {
   format: 'png' | 'jpeg' | 'webp' | 'avif';
   dpi: number;
@@ -301,7 +290,6 @@ export type WorkerRequest =
   | { op: 'watermark'; buffer: ArrayBuffer; options: WatermarkOptions; progressPort: MessagePort }
   | { op: 'add-page-numbers'; buffer: ArrayBuffer; options: PageNumberOptions; progressPort: MessagePort }
   | { op: 'crop'; buffer: ArrayBuffer; options: CropOptions; progressPort: MessagePort }
-  | { op: 'redact'; buffer: ArrayBuffer; options: RedactOptions; progressPort: MessagePort }
   | { op: 'pdf-to-image'; buffer: ArrayBuffer; options: PdfToImageOptions; progressPort: MessagePort }
   | { op: 'images-to-pdf'; buffers: ArrayBuffer[]; mimeTypes: string[]; options: ImagesToPdfOptions; progressPort: MessagePort }
   | { op: 'render-thumbnails'; buffer: ArrayBuffer; pageIndices: number[]; size: number; progressPort: MessagePort }
