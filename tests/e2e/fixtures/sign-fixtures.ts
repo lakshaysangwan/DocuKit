@@ -221,3 +221,36 @@ export function signaturePhotoScript(): string {
     return btoa(bin);
   })()`;
 }
+
+/**
+ * Four pages that are not alike, for "put the signature on every page": a
+ * Letter portrait page, a landscape page, a Letter page stored upright but
+ * displayed turned (`/Rotate 90`), and an A5 page whose CropBox does not start
+ * at the origin. Displayed sizes: 612×792, 792×612, 792×612, 380×535.
+ */
+export const MIXED_PAGES = [
+  { widthPt: 612, heightPt: 792 },
+  { widthPt: 792, heightPt: 612 },
+  { widthPt: 792, heightPt: 612 },
+  { widthPt: 380, heightPt: 535 },
+] as const;
+
+export async function makeMixedPagesPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const portrait = doc.addPage([612, 792]);
+  portrait.drawText('Mixed page 1: Letter portrait', { x: 60, y: 720, size: 20, font, color: rgb(0, 0, 0) });
+
+  const landscape = doc.addPage([792, 612]);
+  landscape.drawText('Mixed page 2: landscape', { x: 60, y: 540, size: 20, font, color: rgb(0, 0, 0) });
+
+  const rotated = doc.addPage([612, 792]);
+  rotated.setRotation(degrees(90));
+  rotated.drawText('Mixed page 3: /Rotate 90', { x: 60, y: 60, size: 20, font, rotate: degrees(90), color: rgb(0, 0, 0) });
+
+  const a5 = doc.addPage([420, 595]);
+  a5.setCropBox(20, 30, 380, 535);
+  a5.drawText('Mixed page 4: A5, cropped', { x: 40, y: 520, size: 16, font, color: rgb(0, 0, 0) });
+  a5.drawRectangle({ x: 20, y: 30, width: 380, height: 535, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 1 });
+  return doc.save();
+}

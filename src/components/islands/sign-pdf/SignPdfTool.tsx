@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, Copy, CopyPlus, Minus, Plus, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { Check, Copy, CopyPlus, Minus, Plus, Redo2, Trash2, Undo2, Unlink } from 'lucide-react';
 import DropZone from '@/components/islands/shared/DropZone';
 import ToolWorkspace from '@/components/islands/workspace/ToolWorkspace';
 import ActionBar from '@/components/islands/workspace/ActionBar';
@@ -15,7 +15,6 @@ import { viewRectToPdfDraw, type PageGeometry, type RectNorm } from '@/lib/pdf/p
 import { centreRectAt, moveRect, scaleRect } from '@/lib/workspace/overlay-math';
 import {
   applyMm,
-  copyRectToPage,
   defaultStampRect,
   rectToMm,
   reshapeRect,
@@ -23,6 +22,14 @@ import {
   type StampKind,
 } from '@/lib/sign/placement';
 import { DATE_BOX_HEIGHT_EM, HELVETICA_ASCENT, dateBoxAspect, dateStampText, dateTextDraw, helveticaWidthEm } from '@/lib/sign/date-text';
+import {
+  groupPages,
+  moveLinked,
+  removeStamp as removeFromStamps,
+  setGroupPages,
+  unlinkStamp,
+} from '@/lib/sign/stamp-groups';
+import { formatPageRange, parsePageRange } from '@/lib/pdf-page-range';
 import { downloadBlob } from '@/lib/download';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { cn, formatBytes, generateId } from '@/lib/utils';
@@ -54,7 +61,10 @@ interface Stamp {
   pageIndex: number;
   /** Where it is, as fractions of the displayed page. */
   rect: RectNorm;
-  /** Copies made by "Copy to all pages" share a group, so copying again replaces them. */
+  /**
+   * Copies on other pages share a group: they are linked, so moving or
+   * resizing one moves and resizes them all (see `stamp-groups.ts`).
+   */
   group: string;
   /** Not moved yet: a click on the page moves it there. */
   pristine: boolean;
@@ -79,6 +89,15 @@ const KIND_LABEL: Record<StampKind, string> = {
   initials: 'Initials',
   date: 'Date',
 };
+
+/** "Put this signature on…" */
+const THIS_KIND: Record<StampKind, string> = {
+  signature: 'this signature',
+  initials: 'these initials',
+  date: 'this date',
+};
+
+type Scope = 'this' | 'all' | 'choose';
 
 const ACCEPT = ['application/pdf'];
 /** "Smaller" / "Larger" change the size by this much per press. */
@@ -162,6 +181,72 @@ function NumberField({ label, testId, value, onCommit }: NumberFieldProps) {
   );
 }
 
+interface PageRangeFieldProps {
+  /** Zero-based pages the stamp is on now. */
+  pages: number[];
+  total: number;
+  onApply: (pages: number[]) => void;
+}
+
+/**
+ * "1-3, 5, odd, last": applied on Enter or when the field is left, so the
+ * pages do not change at every keystroke. Shows the pages the stamp is on
+ * otherwise, so the checkboxes and the field always agree.
+ */
+function PageRangeField({ pages, total, onApply }: PageRangeFieldProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  const id = useId();
+  const shown = draft ?? formatPageRange(pages);
+  const apply = () => {
+    if (draft === null) return;
+    const parsed = parsePageRange(draft, total);
+    if (parsed.length === 0) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    setDraft(null);
+    onApply(parsed);
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs text-[var(--color-text-secondary)]">
+        Pages (for example 1-3, 5, odd, even, last)
+      </label>
+      <input
+        id={id}
+        type="text"
+        value={shown}
+        data-testid="scope-pages"
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? `${id}-error` : undefined}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setInvalid(false);
+        }}
+        onBlur={apply}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            apply();
+          } else if (e.key === 'Escape' && draft !== null) {
+            e.preventDefault();
+            setDraft(null);
+            setInvalid(false);
+          }
+        }}
+        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
+      />
+      {invalid && (
+        <p id={`${id}-error`} data-testid="scope-pages-error" className="text-xs font-medium text-[var(--color-error)]">
+          No page of 1 to {total} matches that. Type page numbers, ranges like 2-4, odd, even or last.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function SignPdfTool() {
   const [file, setFile] = useState<File | null>(null);
   const { status, doc, pageCount } = usePdfDocument(file);
@@ -184,6 +269,15 @@ export default function SignPdfTool() {
   const [compare, setCompare] = useState<'after' | 'before'>('after');
   const [pageGeom, setPageGeom] = useState<{ doc: unknown; pageIndex: number; geom: PageGeometry } | null>(null);
   const initialsRef = useRef<HTMLInputElement>(null);
+  // The group the "Put this signature on" choice is about when nothing is selected.
+  const [focusGroup, setFocusGroup] = useState<string | null>(null);
+  // "Choose pages" was picked for this group (it stays picked even on one page).
+  const [choosingGroup, setChoosingGroup] = useState<string | null>(null);
+  // Remove was pressed on a stamp that has linked copies: this page or all?
+  const [removeAsk, setRemoveAsk] = useState<string | null>(null);
+  const removeAskRef = useRef<HTMLButtonElement>(null);
+  // Page sizes already read, so linked copies can follow a drag as it happens.
+  const geomCache = useRef<{ doc: unknown; map: Map<number, PageGeometry> }>({ doc: null, map: new Map() });
 
   const run = useToolRun<File>();
   const output = usePdfDocument(run.result);
@@ -222,6 +316,8 @@ export default function SignPdfTool() {
     let live = true;
     doc.geometry(pageIndex).then(
       (geom) => {
+        if (geomCache.current.doc !== doc) geomCache.current = { doc, map: new Map() };
+        geomCache.current.map.set(pageIndex, geom);
         if (live) setPageGeom({ doc, pageIndex, geom });
       },
       () => {},
@@ -233,6 +329,22 @@ export default function SignPdfTool() {
 
   const { set: commit, preview, cancelPreview, undo, redo, reset, committed } = history;
   const { invalidate, start } = run;
+
+  /** A page's size, read once and kept, so `sizeOf` can answer while dragging. */
+  const geomFor = useCallback(
+    async (i: number): Promise<PageGeometry> => {
+      if (!doc) throw new Error('No document');
+      const geom = await doc.geometry(i);
+      if (geomCache.current.doc !== doc) geomCache.current = { doc, map: new Map() };
+      geomCache.current.map.set(i, geom);
+      return geom;
+    },
+    [doc],
+  );
+  const sizeOf = useCallback(
+    (i: number) => (geomCache.current.doc === doc ? geomCache.current.map.get(i) : undefined),
+    [doc],
+  );
 
   const acceptFile = useCallback(
     (files: File[]) => {
@@ -261,13 +373,14 @@ export default function SignPdfTool() {
   const goToPage = useCallback((next: number) => {
     setPageIndex(next);
     setSelectedId(null);
+    setRemoveAsk(null);
   }, []);
 
   /** Put a new stamp on the current page, selected. */
   const addStamp = useCallback(
     async (kind: StampKind, change: Partial<SignState> = {}, text?: string) => {
       if (!doc) return;
-      const geom = await doc.geometry(pageIndex);
+      const geom = await geomFor(pageIndex);
       const id = generateId();
       commit((s) => {
         const next = { ...s, ...change };
@@ -286,9 +399,10 @@ export default function SignPdfTool() {
         return { ...next, stamps: [...next.stamps, stamp] };
       });
       setSelectedId(id);
+      setFocusGroup(id);
       setAnnouncement(`${KIND_LABEL[kind]} added to page ${pageIndex + 1}.`);
     },
-    [doc, pageIndex, commit],
+    [doc, pageIndex, commit, geomFor],
   );
 
   /**
@@ -304,12 +418,12 @@ export default function SignPdfTool() {
           out.push(stamp);
           continue;
         }
-        const geom = await doc.geometry(stamp.pageIndex);
+        const geom = await geomFor(stamp.pageIndex);
         out.push({ ...stamp, rect: reshapeRect(stamp.rect, aspect, geom) });
       }
       return out;
     },
-    [doc],
+    [doc, geomFor],
   );
 
   const chooseSignature = useCallback(
@@ -345,13 +459,32 @@ export default function SignPdfTool() {
     await addStamp('initials', { initials: asset, stamps: reshaped });
   }, [initialsText, typedText, fontIndex, stamps, reshape, addStamp]);
 
+  /** A new box for one stamp; its linked copies on other pages take the same place on theirs. */
   const updateRect = useCallback(
     (id: string, rect: RectNorm, pristine: boolean) =>
       (s: SignState): SignState => ({
         ...s,
-        stamps: s.stamps.map((x) => (x.id === id ? { ...x, rect, pristine } : x)),
+        stamps: moveLinked(s.stamps, id, rect, pristine, sizeOf),
       }),
-    [],
+    [sizeOf],
+  );
+
+  /** How many pages a stamp is on, counting its linked copies. */
+  const linkedCount = useCallback(
+    (stamp: Stamp) => stamps.reduce((n, s) => n + (s.group === stamp.group ? 1 : 0), 0),
+    [stamps],
+  );
+
+  const positionNote = useCallback(
+    (stamp: Stamp, rect: RectNorm, geom: PageGeometry) => {
+      const mm = rectToMm(rect, geom);
+      const copies = linkedCount(stamp);
+      return (
+        `${KIND_LABEL[stamp.kind]} at ${Math.round(mm.x)} millimetres from the left, ${Math.round(mm.y)} from the top, ${Math.round(mm.width)} wide.` +
+        (copies > 1 ? ` The same on all ${copies} pages it is on.` : '')
+      );
+    },
+    [linkedCount],
   );
 
   const onBoxChange = useCallback(
@@ -363,24 +496,52 @@ export default function SignPdfTool() {
       } else {
         commit(updateRect(stamp.id, rect, false), source === 'keyboard' ? { coalesce: `keys:${stamp.id}` } : undefined);
         if (source === 'keyboard' && geometry) {
-          const mm = rectToMm(rect, geometry);
-          setAnnouncement(
-            `${KIND_LABEL[stamp.kind]} at ${Math.round(mm.x)} millimetres from the left, ${Math.round(mm.y)} from the top, ${Math.round(mm.width)} wide.`,
-          );
+          setAnnouncement(positionNote(stamp, rect, geometry));
+        } else if (linkedCount(stamp) > 1) {
+          setAnnouncement(`${KIND_LABEL[stamp.kind]} moved on all ${linkedCount(stamp)} pages it is on.`);
         }
       }
     },
-    [cancelPreview, preview, commit, updateRect, geometry],
+    [cancelPreview, preview, commit, updateRect, geometry, positionNote, linkedCount],
   );
 
+  /** Take a stamp off this page, or (`everywhere`) off every page its linked copies are on. */
+  const removeStamps = useCallback(
+    (id: string, everywhere: boolean) => {
+      const stamp = stamps.find((x) => x.id === id);
+      const copies = stamp ? linkedCount(stamp) : 1;
+      commit((s) => ({ ...s, stamps: removeFromStamps(s.stamps, id, everywhere) }));
+      setSelectedId(null);
+      setRemoveAsk(null);
+      setAnnouncement(
+        everywhere && copies > 1
+          ? `${KIND_LABEL[stamp!.kind]} removed from all ${copies} pages.`
+          : copies > 1
+            ? `${KIND_LABEL[stamp!.kind]} removed from page ${stamp!.pageIndex + 1}; it stays on the other ${plural(copies - 1, 'page')}.`
+            : 'Stamp removed.',
+      );
+    },
+    [stamps, linkedCount, commit],
+  );
+
+  /** Remove: straight away for a single stamp; a stamp with linked copies asks which. */
   const removeStamp = useCallback(
     (id: string) => {
-      commit((s) => ({ ...s, stamps: s.stamps.filter((x) => x.id !== id) }));
-      setSelectedId(null);
-      setAnnouncement('Stamp removed.');
+      const stamp = stamps.find((x) => x.id === id);
+      if (stamp && linkedCount(stamp) > 1) {
+        setSelectedId(id);
+        setRemoveAsk(id);
+        return;
+      }
+      removeStamps(id, false);
     },
-    [commit],
+    [stamps, linkedCount, removeStamps],
   );
+
+  // The question replaces the toolbar; the keyboard goes to its first answer.
+  useEffect(() => {
+    if (removeAsk) removeAskRef.current?.focus();
+  }, [removeAsk]);
 
   const resizeSelected = useCallback(
     (factor: number) => {
@@ -402,48 +563,69 @@ export default function SignPdfTool() {
     };
     commit((s) => ({ ...s, stamps: [...s.stamps, copy] }));
     setSelectedId(id);
+    setFocusGroup(id);
     setAnnouncement(`${KIND_LABEL[selected.kind]} duplicated.`);
   }, [selected, commit]);
 
-  const copyToAllPages = useCallback(async () => {
-    if (!selected || !doc) return;
-    const from = await doc.geometry(selected.pageIndex);
-    const copies: Stamp[] = [];
-    for (let i = 0; i < doc.pageCount; i++) {
-      if (i === selected.pageIndex) continue;
-      const to = await doc.geometry(i);
-      copies.push({
-        ...selected,
-        id: generateId(),
-        pageIndex: i,
-        pristine: false,
-        rect: copyRectToPage(selected.rect, from, to),
+  /**
+   * Put a stamp, linked, on exactly these pages — in the same place on each.
+   * One undo step, whatever the number of pages.
+   */
+  const putOnPages = useCallback(
+    async (stamp: Stamp, pages: number[]) => {
+      if (!doc || pages.length === 0) return;
+      // Every page involved has to be measured before the copies are placed.
+      await Promise.all([stamp.pageIndex, ...pages].map((i) => geomFor(i)));
+      commit((s) => {
+        const next = setGroupPages(s.stamps, stamp.id, pages, sizeOf, generateId);
+        // The same pages again (a second "All pages") is not a new step.
+        return JSON.stringify(next) === JSON.stringify(s.stamps) ? s : { ...s, stamps: next };
       });
-    }
-    commit((s) => ({
-      ...s,
-      stamps: [
-        // Copying again replaces the earlier copies instead of stacking on them.
-        ...s.stamps
-          .filter((x) => x.group !== selected.group || x.id === selected.id)
-          .map((x) => (x.id === selected.id ? { ...x, pristine: false } : x)),
-        ...copies,
-      ],
-    }));
-    setAnnouncement(`${KIND_LABEL[selected.kind]} copied to all ${doc.pageCount} pages.`);
-  }, [selected, doc, commit]);
+      setFocusGroup(stamp.group);
+      if (!pages.includes(stamp.pageIndex) && selectedId === stamp.id) setSelectedId(null);
+      const kind = KIND_LABEL[stamp.kind];
+      setAnnouncement(
+        pages.length === doc.pageCount
+          ? `${kind} on all ${doc.pageCount} pages, in the same place on each.`
+          : pages.length === 1
+            ? `${kind} on page ${pages[0] + 1} only.`
+            : `${kind} on pages ${formatPageRange(pages)}, in the same place on each.`,
+      );
+    },
+    [doc, geomFor, commit, sizeOf, selectedId],
+  );
+
+  const copyToAllPages = useCallback(() => {
+    if (!selected || !doc) return;
+    setChoosingGroup(null);
+    void putOnPages(
+      selected,
+      Array.from({ length: doc.pageCount }, (_, i) => i),
+    );
+  }, [selected, doc, putOnPages]);
+
+  /** Make one linked copy independent of the others. */
+  const unlink = useCallback(
+    (stamp: Stamp) => {
+      const group = generateId();
+      commit((s) => ({ ...s, stamps: unlinkStamp(s.stamps, stamp.id, group) }));
+      setFocusGroup(group);
+      setChoosingGroup(null);
+      setAnnouncement(
+        `The ${KIND_LABEL[stamp.kind].toLowerCase()} on page ${stamp.pageIndex + 1} is now separate: moving it no longer moves the others.`,
+      );
+    },
+    [commit],
+  );
 
   const editMm = useCallback(
     (edit: Partial<RectMm>) => {
       if (!selected || !geometry) return;
       const rect = applyMm(selected.rect, geometry, edit);
       commit(updateRect(selected.id, rect, false), { coalesce: `field:${selected.id}` });
-      const mm = rectToMm(rect, geometry);
-      setAnnouncement(
-        `${KIND_LABEL[selected.kind]} at ${Math.round(mm.x)} millimetres from the left, ${Math.round(mm.y)} from the top, ${Math.round(mm.width)} wide.`,
-      );
+      setAnnouncement(positionNote(selected, rect, geometry));
     },
-    [selected, geometry, commit, updateRect],
+    [selected, geometry, commit, updateRect, positionNote],
   );
 
   /** A click on the page: a stamp that has not been moved yet goes there; otherwise deselect. */
@@ -555,6 +737,48 @@ export default function SignPdfTool() {
     return counts;
   }, [stamps]);
 
+  // The stamp "Put this signature on" is about: the selected one, else the one
+  // last added or chosen, else the newest on this page.
+  const onThisPage = stamps.filter((s) => s.pageIndex === pageIndex);
+  const target =
+    selected ??
+    onThisPage.find((s) => s.group === focusGroup) ??
+    stamps.find((s) => s.group === focusGroup) ??
+    onThisPage[onThisPage.length - 1] ??
+    null;
+  const targetPages = target ? groupPages(stamps, target.group) : [];
+  const scope: Scope | null = !target
+    ? null
+    : choosingGroup === target.group
+      ? 'choose'
+      : targetPages.length === 1
+        ? 'this'
+        : targetPages.length === pageCount
+          ? 'all'
+          : 'choose';
+  const selectedCopies = selected ? targetPages.length : 0;
+
+  const chooseScope = (next: Scope) => {
+    if (!target) return;
+    if (next === 'choose') {
+      setChoosingGroup(target.group);
+      if (targetPages.length > 0) setAnnouncement('Tick the pages it should be on, or type them.');
+      return;
+    }
+    setChoosingGroup(null);
+    void putOnPages(target, next === 'all' ? Array.from({ length: pageCount }, (_, i) => i) : [target.pageIndex]);
+  };
+
+  const togglePage = (i: number, on: boolean) => {
+    if (!target) return;
+    const next = on ? [...targetPages, i] : targetPages.filter((p) => p !== i);
+    if (next.length === 0) return;
+    // A page ticked is copied from the stamp the choice is about; one unticked
+    // that held that stamp passes the choice to a copy that stays.
+    const source = target.pageIndex === i && !on ? stamps.find((s) => s.group === target.group && s.pageIndex !== i) : target;
+    if (source) void putOnPages(source, next.sort((a, b) => a - b));
+  };
+
   /* ── What the visitor is told ─────────────────────────────────────────── */
 
   // Where the controls are depends on the layout; on a phone they may be closed.
@@ -589,8 +813,12 @@ export default function SignPdfTool() {
       : `Press Signature ${beside} to add your signature to this page.`;
   } else if (selected?.pristine) {
     prompt = `Drag your ${KIND_LABEL[selected.kind].toLowerCase()} into place, or ${press} the spot where it should go.`;
+  } else if (selected && selectedCopies > 1) {
+    prompt = `Drag to move it, pull a corner to resize it — ${selectedCopies === 2 ? 'the copy on the other page follows' : `the copies on the other ${selectedCopies - 1} pages follow`} — or press Sign PDF when it looks right.`;
   } else if (selected) {
     prompt = 'Drag to move it, pull a corner to resize it, or press Sign PDF when it looks right.';
+  } else if (target && targetPages.length > 1) {
+    prompt = `Your ${KIND_LABEL[target.kind].toLowerCase()} is on ${targetPages.length} of ${plural(pageCount, 'page')}. ${press === 'tap' ? 'Tap' : 'Click'} it to change it, or press Sign PDF when it looks right.`;
   } else {
     prompt = `${press === 'tap' ? 'Tap' : 'Click'} a stamp to change it, or press Sign PDF when it looks right.`;
   }
@@ -619,7 +847,10 @@ export default function SignPdfTool() {
               label={`${KIND_LABEL[s.kind]}, page ${s.pageIndex + 1}`}
               selected={s.id === selectedId}
               disabled={!editing}
-              onSelect={() => setSelectedId(s.id)}
+              onSelect={() => {
+                setSelectedId(s.id);
+                setFocusGroup(s.group);
+              }}
               onDeselect={() => setSelectedId(null)}
               onRemove={() => removeStamp(s.id)}
               onChange={(rect, phase, source) => onBoxChange(s, rect, phase, source)}
@@ -678,10 +909,35 @@ export default function SignPdfTool() {
 
   const selectionBar = (
     <div className="flex h-14 items-center gap-1 px-2 sm:h-12 sm:gap-2 sm:px-3" data-testid="selection-bar">
-      {selected ? (
+      {selected && removeAsk === selected.id ? (
+        <div
+          role="group"
+          aria-label={`Remove the ${KIND_LABEL[selected.kind].toLowerCase()}`}
+          data-testid="remove-ask"
+          className="flex flex-1 items-center gap-1.5 sm:gap-2"
+        >
+          <p className="mr-auto min-w-0 text-xs font-medium text-[var(--color-text-primary)]">
+            Remove the {KIND_LABEL[selected.kind].toLowerCase()} from
+          </p>
+          <button ref={removeAskRef} type="button" onClick={() => removeStamps(selected.id, false)} data-testid="remove-this-page" className={toolbarButton}>
+            This page
+          </button>
+          <button
+            type="button"
+            onClick={() => removeStamps(selected.id, true)}
+            data-testid="remove-all-pages"
+            className={cn(toolbarButton, 'text-[var(--color-error)]')}
+          >
+            All {selectedCopies} pages
+          </button>
+          <button type="button" onClick={() => setRemoveAsk(null)} data-testid="remove-cancel" className={toolbarButton}>
+            Cancel
+          </button>
+        </div>
+      ) : selected ? (
         <>
           <p className="mr-auto truncate text-xs font-medium text-[var(--color-text-primary)] max-sm:hidden">
-            {KIND_LABEL[selected.kind]} selected
+            {KIND_LABEL[selected.kind]} selected{selectedCopies > 1 ? ` · on ${selectedCopies} pages` : ''}
           </p>
           <div role="toolbar" aria-label={`${KIND_LABEL[selected.kind]} actions`} className="flex flex-1 items-center justify-between gap-1 sm:flex-none sm:justify-end sm:gap-1.5">
             <button type="button" onClick={() => resizeSelected(1 / SIZE_STEP)} data-testid="stamp-smaller" className={barButton}>
@@ -870,6 +1126,93 @@ export default function SignPdfTool() {
 
       {state.signature && !creatorOpen && (
         <>
+          {target && pageCount > 1 && (
+            <section className="flex flex-col gap-2" data-testid="stamp-scope" data-scope={scope ?? undefined}>
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className={cn(heading, 'mb-1.5')}>Put {THIS_KIND[target.kind]} on</legend>
+                {(['this', 'all', 'choose'] as const).map((value) => (
+                  <label key={value} className="flex min-h-8 cursor-pointer items-center gap-2 text-sm text-[var(--color-text-primary)]">
+                    <input
+                      type="radio"
+                      name="sign-scope"
+                      value={value}
+                      checked={scope === value}
+                      onChange={() => chooseScope(value)}
+                      data-testid={`scope-${value}`}
+                      className="size-4 accent-[var(--color-primary)]"
+                    />
+                    {value === 'this'
+                      ? target.pageIndex === pageIndex
+                        ? 'This page only'
+                        : `Page ${target.pageIndex + 1} only`
+                      : value === 'all'
+                        ? `All pages (${pageCount})`
+                        : 'Choose pages'}
+                  </label>
+                ))}
+              </fieldset>
+              {scope === 'choose' && (
+                <div className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] p-2">
+                  <PageRangeField
+                    pages={targetPages}
+                    total={pageCount}
+                    onApply={(pages) => {
+                      const source = pages.includes(target.pageIndex)
+                        ? target
+                        : (stamps.find((s) => s.group === target.group && pages.includes(s.pageIndex)) ?? target);
+                      void putOnPages(source, pages);
+                    }}
+                  />
+                  <fieldset>
+                    <legend className="mb-1 text-xs text-[var(--color-text-secondary)]">Or tick the pages</legend>
+                    <div className="grid max-h-40 grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] gap-1 overflow-y-auto" data-testid="scope-page-list">
+                      {Array.from({ length: pageCount }, (_, i) => {
+                        const on = targetPages.includes(i);
+                        return (
+                          <label
+                            key={i}
+                            className={cn(
+                              'flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-1.5 text-xs tabular-nums',
+                              on
+                                ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 font-semibold text-[var(--color-primary)]'
+                                : 'border-[var(--color-border)] text-[var(--color-text-primary)]',
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              disabled={on && targetPages.length === 1}
+                              onChange={(e) => togglePage(i, e.target.checked)}
+                              aria-label={`Page ${i + 1}`}
+                              data-testid={`scope-page-${i + 1}`}
+                              className="size-3.5 accent-[var(--color-primary)]"
+                            />
+                            {i + 1}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                </div>
+              )}
+              <p className="text-xs text-[var(--color-text-secondary)]" data-testid="stamp-pages-summary">
+                {KIND_LABEL[target.kind]} on {targetPages.length} of {plural(pageCount, 'page')}
+                {targetPages.length > 1 ? ', in the same place on each. Moving or resizing one moves them all.' : '.'}
+              </p>
+              {targetPages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => unlink(target)}
+                  data-testid="stamp-unlink"
+                  className={cn(outlineButton, 'self-start')}
+                >
+                  <Unlink className="size-4" aria-hidden="true" />
+                  Unlink page {target.pageIndex + 1}
+                </button>
+              )}
+            </section>
+          )}
+
           <section className="flex flex-col gap-3" aria-labelledby="sign-add">
             <h3 id="sign-add" className={heading}>
               Add to this page

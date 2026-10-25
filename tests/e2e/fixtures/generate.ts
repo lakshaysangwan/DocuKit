@@ -12,7 +12,7 @@ import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeMaskedImagesPdf, makeOnlyMaskedPdf } from './masked-images';
-import { makeCropOffsetPdf, makeMarkerPng, makeRotatedPdf, makeUnbalancedPdf, signaturePhotoScript } from './sign-fixtures';
+import { makeCropOffsetPdf, makeMarkerPng, makeMixedPagesPdf, makeRotatedPdf, makeUnbalancedPdf, signaturePhotoScript } from './sign-fixtures';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 export const FIXTURES_DIR = path.join(DIR, 'files');
@@ -70,6 +70,9 @@ export const FIXTURE = {
   pdfRotate90: path.join(FIXTURES_DIR, 'doc-rotate90.pdf'),
   pdfCropOffset: path.join(FIXTURES_DIR, 'doc-crop-offset.pdf'),
   pdfUnbalanced: path.join(FIXTURES_DIR, 'doc-unbalanced-cm.pdf'),
+  // Four unlike pages (portrait, landscape, /Rotate 90, offset-CropBox A5) for
+  // a signature put on every page. See sign-fixtures.ts.
+  pdfMixedPages: path.join(FIXTURES_DIR, 'doc-mixed-pages.pdf'),
   // A four-coloured image: shows where a stamp landed and which way up.
   signMarker: path.join(FIXTURES_DIR, 'sign-marker.png'),
   // A phone photo of a blue-ink signature on yellowish, unevenly lit paper,
@@ -181,6 +184,7 @@ export async function generateFixtures(): Promise<void> {
   await writeFile(FIXTURE.pdfRotate90, await makeRotatedPdf());
   await writeFile(FIXTURE.pdfCropOffset, await makeCropOffsetPdf());
   await writeFile(FIXTURE.pdfUnbalanced, await makeUnbalancedPdf());
+  await writeFile(FIXTURE.pdfMixedPages, await makeMixedPagesPdf());
   await writeFile(FIXTURE.signMarker, makeMarkerPng());
 
   // ── P7 corpus ──────────────────────────────────────────────────────────────
