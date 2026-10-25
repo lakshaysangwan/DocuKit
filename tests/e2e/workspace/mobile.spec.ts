@@ -124,7 +124,7 @@ test.describe('Image to PDF on a phone', () => {
     await expect(page.getByTestId('ws-controls')).toBeVisible();
     await page.getByTestId('i2p-size-fit').tap();
     await expect(page.getByTestId('page-grid-caption')).toHaveText('Fit Image · each page is exactly its image');
-    expect((await previewPages(page)).map((p) => [p.pageW, p.pageH])).toEqual([[1200, 800], [900, 1200], [800, 800]]);
+    expect((await previewPages(page)).map((p) => [p.pageW, p.pageH])).toEqual([[576, 384], [432, 576], [384, 384]]);
     expectPhoneLayout(await layout(page), 'options open');
 
     // One tap makes the PDF, and it is what the pages showed.

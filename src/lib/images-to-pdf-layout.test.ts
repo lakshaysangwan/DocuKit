@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FIT_DEFAULT_DPI,
+  FIT_MAX_LONG_EDGE,
   PAGE_SIZES,
+  fitPageSize,
   formatPageMm,
   hasRoomForImage,
   layoutImagePage,
@@ -30,7 +33,10 @@ const keyOf = (row: (typeof PINNED_LAYOUTS)[number]) =>
  * still produce exactly what it produced before the preview existed.
  *
  *   • "Fit Image" pages have no margin: the page is the image, edge to edge,
- *     whatever the placement (16 rows).
+ *     whatever the placement (16 rows). And the page is no longer one point
+ *     per pixel (a 12 MP photo made a page 1.4 m wide): it is the image at
+ *     150 DPI, or at the DPI its file states, with the long edge at most A3's
+ *     420 mm — so 1200 × 800 px is 576 × 384 pt and 900 × 1200 px 432 × 576.
  *   • Orientation defaults to Auto: on A4, Letter and Legal a landscape image
  *     gets a landscape page (24 rows). Portrait images keep a portrait page.
  *
@@ -39,22 +45,22 @@ const keyOf = (row: (typeof PINNED_LAYOUTS)[number]) =>
  * width, 785.19 × 523.46, centred 35.91 pt up from the bottom.
  */
 const DECIDED = new Map<string, { pageW: number; pageH: number; draw: { x: number; y: number; w: number; h: number } }>([
-  ['fit/center/900x1200/28.35', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/center/900x1200/108', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/center/1200x800/28.35', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/center/1200x800/108', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/fit/900x1200/28.35', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/fit/900x1200/108', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/fit/1200x800/28.35', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/fit/1200x800/108', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/stretch/900x1200/28.35', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/stretch/900x1200/108', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/stretch/1200x800/28.35', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/stretch/1200x800/108', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/cover/900x1200/28.35', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/cover/900x1200/108', {"pageW":900,"pageH":1200,"draw":{"x":0,"y":0,"w":900,"h":1200}}],
-  ['fit/cover/1200x800/28.35', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
-  ['fit/cover/1200x800/108', {"pageW":1200,"pageH":800,"draw":{"x":0,"y":0,"w":1200,"h":800}}],
+  ['fit/center/900x1200/28.35', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/center/900x1200/108', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/center/1200x800/28.35', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/center/1200x800/108', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/fit/900x1200/28.35', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/fit/900x1200/108', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/fit/1200x800/28.35', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/fit/1200x800/108', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/stretch/900x1200/28.35', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/stretch/900x1200/108', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/stretch/1200x800/28.35', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/stretch/1200x800/108', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/cover/900x1200/28.35', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/cover/900x1200/108', {"pageW":432,"pageH":576,"draw":{"x":0,"y":0,"w":432,"h":576}}],
+  ['fit/cover/1200x800/28.35', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
+  ['fit/cover/1200x800/108', {"pageW":576,"pageH":384,"draw":{"x":0,"y":0,"w":576,"h":384}}],
   ['a4/center/1200x800/28.35', {"pageW":841.89,"pageH":595.28,"draw":{"x":28.35,"y":35.910000000000004,"w":785.1899999999999,"h":523.4599999999999}}],
   ['a4/center/1200x800/108', {"pageW":841.89,"pageH":595.28,"draw":{"x":108,"y":38.00999999999999,"w":697.89,"h":465.26}}],
   ['a4/fit/1200x800/28.35', {"pageW":841.89,"pageH":595.28,"draw":{"x":28.35,"y":35.910000000000004,"w":785.1899999999999,"h":523.4599999999999}}],
@@ -133,9 +139,55 @@ describe('layoutImagePage — what each option means', () => {
   it('"Fit Image" makes the page exactly the image, with no margin, whatever is set', () => {
     for (const placement of ['fit', 'center', 'stretch', 'cover'] as const) {
       const layout = layoutImagePage(landscape, options({ pageSize: 'fit', placement, orientation: 'portrait' }));
-      expect([layout.pageW, layout.pageH]).toEqual([1200, 800]);
-      expect(layout.draw).toEqual({ x: 0, y: 0, w: 1200, h: 800 });
+      expect([layout.pageW, layout.pageH]).toEqual([576, 384]);
+      expect(layout.draw).toEqual({ x: 0, y: 0, w: 576, h: 384 });
     }
+  });
+
+  describe('"Fit Image" page size', () => {
+    const mm = (pt: number) => (pt * 25.4) / 72;
+
+    it(`is the image at ${FIT_DEFAULT_DPI} DPI when the file states no density`, () => {
+      expect(fitPageSize({ width: 1200, height: 800 })).toEqual([576, 384]);
+      expect(fitPageSize({ width: 900, height: 1200 })).toEqual([432, 576]);
+    });
+
+    it('uses a stated density between 100 and 1200 DPI', () => {
+      // A 300 DPI scan of an A4 sheet comes back as A4.
+      const [w, h] = fitPageSize({ width: 2480, height: 3508, dpi: 300 });
+      expect([Math.round(mm(w)), Math.round(mm(h))]).toEqual([210, 297]);
+      expect(fitPageSize({ width: 4000, height: 3000, dpi: 300 })).toEqual([960, 720]);
+      expect(fitPageSize({ width: 600, height: 400, dpi: 100 })).toEqual([432, 288]);
+      expect(fitPageSize({ width: 1200, height: 1200, dpi: 1200 })).toEqual([72, 72]);
+    });
+
+    it('ignores the 72 and 96 written by cameras and screenshots, and nonsense', () => {
+      for (const dpi of [0, 1, 72, 96, 99.9, 1201, 4000, Number.NaN]) {
+        expect(fitPageSize({ width: 1200, height: 800, dpi }), String(dpi)).toEqual([576, 384]);
+      }
+    });
+
+    it('caps the long edge at 420 mm (A3) and keeps the proportions exactly', () => {
+      // A 12 MP photo: 4000 × 3000 px was 4000 × 3000 pt, 1.41 × 1.06 m.
+      const [w, h] = fitPageSize({ width: 4000, height: 3000 });
+      expect(w).toBe(FIT_MAX_LONG_EDGE);
+      expect(h).toBeCloseTo(892.9125, 10);
+      expect(formatPageMm(w, h)).toBe('420 × 315 mm');
+      const [pw, ph] = fitPageSize({ width: 3000, height: 4000, dpi: 100 });
+      expect(pw).toBeCloseTo((FIT_MAX_LONG_EDGE * 3) / 4, 10);
+      expect(ph).toBe(FIT_MAX_LONG_EDGE);
+      for (const img of [{ width: 4000, height: 3000 }, { width: 7, height: 50000 }, { width: 12345, height: 6789, dpi: 200 }]) {
+        const [a, b] = fitPageSize(img);
+        expect(Math.max(a, b)).toBeLessThanOrEqual(FIT_MAX_LONG_EDGE);
+        expect(a / b).toBeCloseTo(img.width / img.height, 12);
+      }
+    });
+
+    it('only "Fit Image" uses the density', () => {
+      const img = { width: 1200, height: 800, dpi: 300 };
+      expect(layoutImagePage(img, options())).toStrictEqual(layoutImagePage({ width: 1200, height: 800 }, options()));
+      expect(layoutImagePage(img, options({ pageSize: 'fit' })).pageW).toBe(288);
+    });
   });
 
   it('fit places the whole image, as large as the margins allow, in the middle ("center" is the same)', () => {
@@ -183,7 +235,8 @@ describe('page helpers', () => {
     expect(standardPageMm('a4')).toBe('210 × 297 mm');
     expect(standardPageMm('letter')).toBe('216 × 279 mm');
     expect(standardPageMm('legal')).toBe('216 × 356 mm');
-    // "Fit Image": pixels become points, so a 1200 × 800 photo is a very large sheet.
     expect(formatPageMm(1200, 800)).toBe('423 × 282 mm');
+    // "Fit Image": a 1200 × 800 photo at 150 DPI.
+    expect(formatPageMm(576, 384)).toBe('203 × 135 mm');
   });
 });

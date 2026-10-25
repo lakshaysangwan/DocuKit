@@ -497,6 +497,7 @@ async function crop(
 async function imagesToPdf(
   buffers: ArrayBuffer[],
   mimeTypes: string[],
+  dpis: (number | undefined)[] | undefined,
   options: ImagesToPdfOptions,
   sendProgress: (pct: number, label?: string) => void
 ): Promise<ArrayBuffer> {
@@ -521,7 +522,7 @@ async function imagesToPdf(
     }
 
     // The geometry is shared with the on-screen preview, so the two cannot disagree.
-    const { pageW, pageH, draw } = layoutImagePage(image, options);
+    const { pageW, pageH, draw } = layoutImagePage({ width: image.width, height: image.height, dpi: dpis?.[i] }, options);
     const page = doc.addPage([pageW, pageH]);
 
     if (options.backgroundColor) {
@@ -627,7 +628,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
 
       case 'images-to-pdf': {
-        const result = await imagesToPdf(msg.buffers, msg.mimeTypes, msg.options, sendProgress);
+        const result = await imagesToPdf(msg.buffers, msg.mimeTypes, msg.dpis, msg.options, sendProgress);
         response = { status: 'success', result, stats: { outputSize: result.byteLength, durationMs: Date.now() - start } };
         break;
       }

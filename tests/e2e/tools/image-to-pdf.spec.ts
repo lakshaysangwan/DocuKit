@@ -60,7 +60,7 @@ test.describe('Image to PDF', () => {
     await expect(page.getByRole('spinbutton')).toHaveCount(0);
     // A "Fit Image" page is the image: no margin, and the tool says so.
     await expect(page.getByTestId('i2p-size-note')).toHaveText(
-      'Each page is exactly the size of its image, with no margin.',
+      'Each page is its image, with no margin, at the DPI the image states or 150 DPI, and at most 420 mm on its long side.',
     );
 
     await page.getByTestId('tool-action').click();

@@ -291,7 +291,7 @@ export type WorkerRequest =
   | { op: 'add-page-numbers'; buffer: ArrayBuffer; options: PageNumberOptions; progressPort: MessagePort }
   | { op: 'crop'; buffer: ArrayBuffer; options: CropOptions; progressPort: MessagePort }
   | { op: 'pdf-to-image'; buffer: ArrayBuffer; options: PdfToImageOptions; progressPort: MessagePort }
-  | { op: 'images-to-pdf'; buffers: ArrayBuffer[]; mimeTypes: string[]; options: ImagesToPdfOptions; progressPort: MessagePort }
+  | { op: 'images-to-pdf'; buffers: ArrayBuffer[]; mimeTypes: string[]; /** Per image: the DPI its file states, if any ("Fit Image" page size). */ dpis?: (number | undefined)[]; options: ImagesToPdfOptions; progressPort: MessagePort }
   | { op: 'render-thumbnails'; buffer: ArrayBuffer; pageIndices: number[]; size: number; progressPort: MessagePort }
   | { op: 'extract-text'; buffer: ArrayBuffer; progressPort: MessagePort }
   | { op: 'compress-image'; buffer: ArrayBuffer; options: CompressImageOptions; progressPort: MessagePort }

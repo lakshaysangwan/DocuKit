@@ -44,6 +44,11 @@ export const FIXTURE = {
   // photo.jpg's pixels (1200×800) with EXIF Orientation 6: a phone photo held
   // upright, which every viewer shows turned a quarter clockwise, 800×1200.
   jpgRotated: path.join(FIXTURES_DIR, 'photo-rotated.jpg'),
+  // A 12-megapixel photo, 4000×3000, stating no density (a canvas JPEG's JFIF
+  // is an aspect ratio only): "Fit Image" must not make it a 1.4 m page.
+  jpgLarge: path.join(FIXTURES_DIR, 'photo-large.jpg'),
+  // The same pixels with a JFIF density of 300 DPI, as a scanner writes it.
+  jpgLarge300dpi: path.join(FIXTURES_DIR, 'photo-large-300dpi.jpg'),
   /**
    * A real HEVC-coded HEIC, as an iPhone produces. Committed rather than
    * generated: nothing in the toolchain can encode HEIC (it was made once with
@@ -139,6 +144,20 @@ export async function generateFixtures(): Promise<void> {
       }
       return c;
     };
+    // No randomness: the same picture on every run.
+    const drawPlain = (w, h) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, 'hsl(30,70%,55%)');
+      g.addColorStop(1, 'hsl(200,70%,35%)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 4;
+      for (let x = 0; x <= w; x += 250) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 0; y <= h; y += 250) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      return c;
+    };
     const toB64 = async (c, type, q) => {
       const blob = await new Promise((res) => c.toBlob((b) => res(b), type, q));
       const buf = await blob.arrayBuffer();
@@ -152,9 +171,10 @@ export async function generateFixtures(): Promise<void> {
       jpg2: await toB64(draw(900, 1200, 20), 'image/jpeg', 0.9),
       png: await toB64(draw(800, 800, 140), 'image/png'),
       webp: await toB64(draw(1000, 700, 300), 'image/webp', 0.9),
+      large: await toB64(drawPlain(4000, 3000), 'image/jpeg', 0.85),
     };
   })()`;
-  const encoded = await page.evaluate(browserScript) as Record<'jpg' | 'jpg2' | 'png' | 'webp', string>;
+  const encoded = await page.evaluate(browserScript) as Record<'jpg' | 'jpg2' | 'png' | 'webp' | 'large', string>;
   const signPhoto = await page.evaluate(signaturePhotoScript()) as string;
   await browser.close();
 
@@ -162,6 +182,8 @@ export async function generateFixtures(): Promise<void> {
   await writeFile(FIXTURE.jpg2, Buffer.from(encoded.jpg2, 'base64'));
   await writeFile(FIXTURE.png, Buffer.from(encoded.png, 'base64'));
   await writeFile(FIXTURE.webp, Buffer.from(encoded.webp, 'base64'));
+  await writeFile(FIXTURE.jpgLarge, Buffer.from(encoded.large, 'base64'));
+  await writeFile(FIXTURE.jpgLarge300dpi, withJfifDpi(Buffer.from(encoded.large, 'base64'), 300));
   await writeFile(FIXTURE.signPhoto, Buffer.from(signPhoto, 'base64'));
 
   // ── Image-heavy PDF (node) ─────────────────────────────────────────────────
@@ -482,6 +504,22 @@ function withExif(jpeg: Buffer): Buffer {
   ]);
   // Insert directly after the SOI marker.
   return Buffer.concat([jpeg.subarray(0, 2), app1, jpeg.subarray(2)]);
+}
+
+/**
+ * Give a JPEG a JFIF density in dots per inch: rewrite its JFIF APP0 segment
+ * when it has one (a canvas JPEG does, with an aspect ratio only), else add one.
+ */
+function withJfifDpi(jpeg: Buffer, dpi: number): Buffer {
+  const out = Buffer.from(jpeg);
+  if (out[2] === 0xff && out[3] === 0xe0 && out.toString('latin1', 6, 11) === 'JFIF\0') {
+    out[13] = 1; // units: dots per inch
+    out.writeUInt16BE(dpi, 14);
+    out.writeUInt16BE(dpi, 16);
+    return out;
+  }
+  const app0 = Buffer.from([0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x02, 0x01, dpi >> 8, dpi & 0xff, dpi >> 8, dpi & 0xff, 0, 0]);
+  return Buffer.concat([out.subarray(0, 2), app0, out.subarray(2)]);
 }
 
 /**

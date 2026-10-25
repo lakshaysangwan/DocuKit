@@ -137,7 +137,8 @@ test.describe('Image to PDF — the preview is the file', () => {
         await page.getByRole('button', { name: 'Fit Image' }).click();
       },
       check: (pages) => {
-        expect(pages.map((p) => [p.pageW, p.pageH])).toEqual([[1200, 800], [900, 1200], [800, 800], [1000, 700]]);
+        // Each image at 150 DPI (none of them states a density): 1200 px is 576 pt, 8 inches.
+        expect(pages.map((p) => [p.pageW, p.pageH])).toEqual([[576, 384], [432, 576], [384, 384], [480, 336]]);
         for (const p of pages) expect(p.draw).toEqual({ x: 0, y: 0, w: p.pageW, h: p.pageH });
       },
     },
@@ -171,6 +172,50 @@ test.describe('Image to PDF — the preview is the file', () => {
 
       // And the pages still on show after the PDF is made are the same pages.
       expectPreviewMatchesFile(await previewPages(page), written);
+    });
+  }
+});
+
+test.describe('Image to PDF — "Fit Image" pages have a sensible physical size', () => {
+  const A3_LONG = 1190.55;
+
+  const CASES = [
+    {
+      name: 'a 12-megapixel photo stating no density is capped at 420 mm (A3) on its long side',
+      file: () => FIXTURE.jpgLarge,
+      page: [A3_LONG, (A3_LONG * 3000) / 4000],
+      mm: '420 × 315 mm',
+    },
+    {
+      name: 'a photo stating 300 DPI gets the size it states',
+      file: () => FIXTURE.jpgLarge300dpi,
+      page: [960, 720],
+      mm: '339 × 254 mm',
+    },
+  ];
+
+  for (const { name, file, page: expected, mm } of CASES) {
+    test(name, async ({ page }) => {
+      test.slow(); // a 4000 × 3000 image to decode and embed
+      await openImages(page, file());
+      await page.getByRole('button', { name: 'Fit Image' }).click();
+
+      const [shown] = await previewPages(page);
+      expect(shown.pageW).toBeCloseTo(expected[0], 6);
+      expect(shown.pageH).toBeCloseTo(expected[1], 6);
+      await expect(page.getByTestId('file-card')).toContainText(mm);
+
+      const pdf = await createAndDownload(page);
+      const [written] = await readOutputPages(pdf);
+      // The MediaBox is the page the preview showed, no larger than A3, the
+      // image's proportions exactly, the image edge to edge.
+      expectPreviewMatchesFile([shown], [written]);
+      expect(Math.max(written.pageW, written.pageH)).toBeLessThanOrEqual(A3_LONG + 0.005);
+      expect(written.pageW / written.pageH).toBeCloseTo(4000 / 3000, 4);
+      expect(written.draw).toEqual({ x: 0, y: 0, w: written.pageW, h: written.pageH });
+      // Every pixel is still there: the image is not downsampled, and is the original file.
+      expect([written.image.width, written.image.height]).toEqual([4000, 3000]);
+      expect(pdf.includes(await readFile(file())), 'the original JPEG bytes are inside the PDF').toBe(true);
     });
   }
 });
@@ -249,7 +294,7 @@ test.describe('Image to PDF — the preview follows the options', () => {
     expect(wide).toBeCloseTo(1200 / 800, 2);
     expect(tall).toBeCloseTo(900 / 1200, 2);
     await expect(caption).toHaveText('Fit Image · each page is exactly its image');
-    await expect(cards.nth(0)).toContainText('423 × 282 mm');
+    await expect(cards.nth(0)).toContainText('203 × 135 mm');
     await expect(page.getByTestId('i2p-orientation-auto')).toHaveCount(0);
   });
 
@@ -484,9 +529,9 @@ test.describe('Image to PDF — images a PDF cannot hold as they are', () => {
     await openImages(page, { name: 'phone-photo.jpg', mimeType: 'image/jpeg', buffer: sideways });
     await page.getByRole('button', { name: 'Fit Image' }).click();
 
-    // The browser shows it 600 × 400, upright — and so does the preview.
+    // The browser shows it 600 × 400, upright — and so does the preview (at 150 DPI).
     const [shown] = await previewPages(page);
-    expect([shown.pageW, shown.pageH]).toEqual([600, 400]);
+    expect([shown.pageW, shown.pageH]).toEqual([288, 192]);
     await expect(page.getByTestId('file-card')).toContainText('turned upright');
 
     const pdf = await createAndDownload(page);
@@ -525,7 +570,9 @@ test.describe('Image to PDF — images a PDF cannot hold as they are', () => {
       await page.getByRole('button', { name: 'Fit Image' }).click();
 
       const [shown] = await previewPages(page);
-      expect([shown.pageW, shown.pageH]).toEqual(size);
+      // The page is the image at 150 DPI: re-encoded formats state no density.
+      expect(shown.pageW).toBeCloseTo((size[0] * 72) / 150, 6);
+      expect(shown.pageH).toBeCloseTo((size[1] * 72) / 150, 6);
 
       const pdf = await createAndDownload(page);
       const [written] = await readOutputPages(pdf);

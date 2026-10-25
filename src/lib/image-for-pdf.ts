@@ -35,6 +35,12 @@ export interface PreparedImage {
   reencoded: boolean;
   /** True when it was re-encoded only to undo a stored orientation. */
   turned: boolean;
+  /**
+   * The density the ORIGINAL file states (JPEG JFIF/EXIF, PNG pHYs), in dots
+   * per inch, when it states one that is the same both ways. Kept when the
+   * image is re-encoded, because a canvas writes no density of its own.
+   */
+  dpi?: number;
 }
 
 export type SniffedType = 'jpeg' | 'png' | 'other';
@@ -53,10 +59,34 @@ export interface JpegInfo {
   /** Stored pixel size from the frame header, when it was within the bytes given. */
   width?: number;
   height?: number;
+  /** Dots per inch, when JFIF or EXIF states the same density both ways. JFIF wins. */
+  dpi?: number;
 }
 
-/** Read the EXIF orientation out of an APP1 segment's payload. */
-function exifOrientation(view: DataView, start: number, length: number): number | null {
+const CM_PER_INCH = 2.54;
+
+/** One density from a horizontal and a vertical value, or none when they differ or are not positive. */
+function squareDensity(x: number, y: number, perInch: number): number | undefined {
+  if (!(x > 0) || !(y > 0) || Math.abs(x - y) > 1e-6 * Math.max(x, y)) return undefined;
+  return x * perInch;
+}
+
+/** The density in a JFIF APP0 payload: units 1 = per inch, 2 = per cm, 0 = an aspect ratio only. */
+function jfifDpi(view: DataView, start: number, length: number): number | undefined {
+  // "JFIF\0", version (2), units (1), X density (2), Y density (2).
+  if (length < 12 || view.getUint32(start) !== 0x4a464946 || view.getUint8(start + 4) !== 0) return undefined;
+  const units = view.getUint8(start + 7);
+  if (units !== 1 && units !== 2) return undefined;
+  return squareDensity(view.getUint16(start + 8), view.getUint16(start + 10), units === 1 ? 1 : CM_PER_INCH);
+}
+
+interface ExifInfo {
+  orientation: number | null;
+  dpi?: number;
+}
+
+/** Read the orientation and resolution tags out of an EXIF APP1 payload's first IFD. */
+function readExif(view: DataView, start: number, length: number): ExifInfo | null {
   // "Exif\0\0", then a TIFF header.
   if (length < 14 || view.getUint32(start) !== 0x45786966 || view.getUint16(start + 4) !== 0) return null;
   const tiff = start + 6;
@@ -68,15 +98,33 @@ function exifOrientation(view: DataView, start: number, length: number): number 
   const ifd = tiff + view.getUint32(tiff + 4, little);
   if (ifd + 2 > end) return null;
   const count = view.getUint16(ifd, little);
+  const info: ExifInfo = { orientation: null };
+  let xRes: number | undefined;
+  let yRes: number | undefined;
+  let unit = 2; // inches, the TIFF default
+  /** A RATIONAL's value: two LONGs at an offset from the TIFF header. */
+  const rational = (entry: number): number | undefined => {
+    if (view.getUint16(entry + 2, little) !== 5) return undefined;
+    const at = tiff + view.getUint32(entry + 8, little);
+    if (at + 8 > end) return undefined;
+    const den = view.getUint32(at + 4, little);
+    return den === 0 ? undefined : view.getUint32(at, little) / den;
+  };
   for (let i = 0; i < count; i++) {
     const entry = ifd + 2 + i * 12;
-    if (entry + 12 > end) return null;
-    if (view.getUint16(entry, little) === 0x0112) {
+    if (entry + 12 > end) break;
+    const tag = view.getUint16(entry, little);
+    if (tag === 0x0112) {
       const value = view.getUint16(entry + 8, little);
-      return value >= 1 && value <= 8 ? value : null;
-    }
+      info.orientation = value >= 1 && value <= 8 ? value : null;
+    } else if (tag === 0x011a) xRes = rational(entry);
+    else if (tag === 0x011b) yRes = rational(entry);
+    else if (tag === 0x0128) unit = view.getUint16(entry + 8, little);
   }
-  return null;
+  if (xRes !== undefined && yRes !== undefined && (unit === 2 || unit === 3)) {
+    info.dpi = squareDensity(xRes, yRes, unit === 2 ? 1 : CM_PER_INCH);
+  }
+  return info;
 }
 
 /**
@@ -88,6 +136,8 @@ export function readJpegInfo(bytes: Uint8Array): JpegInfo {
   if (sniffImageType(bytes) !== 'jpeg') return info;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let orientationSeen = false;
+  let jfif: number | undefined;
+  let exifDpi: number | undefined;
   let at = 2;
   while (at + 4 <= bytes.length) {
     if (bytes[at] !== 0xff) break;
@@ -106,11 +156,17 @@ export function readJpegInfo(bytes: Uint8Array): JpegInfo {
     const payload = at + 4;
     const payloadLength = length - 2;
     if (length < 2) break;
+    if (marker === 0xe0 && jfif === undefined && payload + payloadLength <= bytes.length) {
+      jfif = jfifDpi(view, payload, payloadLength);
+    }
     if (marker === 0xe1 && !orientationSeen && payload + payloadLength <= bytes.length) {
-      const found = exifOrientation(view, payload, payloadLength);
+      const found = readExif(view, payload, payloadLength);
       if (found !== null) {
-        info.orientation = found;
-        orientationSeen = true;
+        if (exifDpi === undefined) exifDpi = found.dpi;
+        if (found.orientation !== null) {
+          info.orientation = found.orientation;
+          orientationSeen = true;
+        }
       }
     }
     // SOF0–SOF15, except DHT (C4), JPG (C8) and DAC (CC), carry the frame size.
@@ -122,7 +178,32 @@ export function readJpegInfo(bytes: Uint8Array): JpegInfo {
     }
     at = payload + payloadLength;
   }
+  const dpi = jfif ?? exifDpi;
+  if (dpi !== undefined) info.dpi = dpi;
   return info;
+}
+
+/**
+ * A PNG's density from its pHYs chunk, in dots per inch, when it is given per
+ * metre and the same both ways. pHYs must come before the image data, so the
+ * start of the file is enough.
+ */
+export function readPngDpi(bytes: Uint8Array): number | undefined {
+  if (sniffImageType(bytes) !== 'png') return undefined;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 8;
+  while (at + 8 <= bytes.length) {
+    const length = view.getUint32(at);
+    const type = view.getUint32(at + 4);
+    if (type === 0x49444154 || type === 0x49454e44) return undefined; // IDAT, IEND
+    if (type === 0x70485973) {
+      // pHYs: X per unit (4), Y per unit (4), unit (1): 1 = metre, 0 = aspect only.
+      if (length < 9 || at + 17 > bytes.length || view.getUint8(at + 16) !== 1) return undefined;
+      return squareDensity(view.getUint32(at + 8), view.getUint32(at + 12), CM_PER_INCH / 100);
+    }
+    at += 12 + length; // length, type, data, CRC
+  }
+  return undefined;
 }
 
 /** A PNG's stored pixel size, from its IHDR chunk. */
@@ -219,7 +300,12 @@ async function reencode(decoded: Decoded, as: EmbedMime | 'auto'): Promise<{ blo
 export async function prepareImageForPdf(file: Blob): Promise<PreparedImage> {
   const head = new Uint8Array(await file.slice(0, HEAD_BYTES).arrayBuffer());
   const type = sniffImageType(head);
+  const prepared = await prepareBytes(file, head, type);
+  const dpi = type === 'jpeg' ? readJpegInfo(head).dpi : type === 'png' ? readPngDpi(head) : undefined;
+  return dpi === undefined ? prepared : { ...prepared, dpi };
+}
 
+async function prepareBytes(file: Blob, head: Uint8Array, type: SniffedType): Promise<PreparedImage> {
   let decoded: Decoded;
   try {
     decoded = await decode(file);

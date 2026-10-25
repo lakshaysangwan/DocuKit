@@ -52,6 +52,60 @@ export const PAGE_SIZE_LABEL: Record<StandardPageSize, string> = {
 
 export type PageOrientation = 'portrait' | 'landscape' | 'auto';
 
+/** An image as the layout needs it: its pixel size, upright, and the density its file states. */
+export interface LayoutImage {
+  width: number;
+  height: number;
+  /** Dots per inch stated by the file's metadata, if any. Only "Fit Image" uses it. */
+  dpi?: number;
+}
+
+/**
+ * "Fit Image" density when the file states none, or one that does not describe
+ * a real size. 150 DPI is the usual floor for a print that does not look
+ * pixelated, so a page made at it prints sharply at its own size; at 96 or 72
+ * (screen pixels) every page would be half as large again or twice as large.
+ */
+export const FIT_DEFAULT_DPI = 150;
+
+/**
+ * Stated densities outside this range are ignored. Below 100 are the 72 and 96
+ * that cameras, phones and screenshot tools write when they know nothing of a
+ * physical size; above 1200 are film-scanner densities, where the true size
+ * (a 36 mm slide) is too small to be a useful page.
+ */
+export const FIT_DPI_RANGE = [100, 1200] as const;
+
+/**
+ * The longest a "Fit Image" page's long edge may be: A3's 420 mm, the largest
+ * sheet an office printer takes. A 12-megapixel photo at 150 DPI would be
+ * 677 × 508 mm; capped it is 420 × 315 mm and still holds every pixel (about
+ * 240 to the inch). PDF itself allows up to 200 inches.
+ */
+export const FIT_MAX_LONG_EDGE = 1190.55;
+
+/** The density a "Fit Image" page is made at: the stated one when plausible, otherwise the default. */
+export function fitDpi(img: LayoutImage): number {
+  const stated = img.dpi;
+  return stated !== undefined && stated >= FIT_DPI_RANGE[0] && stated <= FIT_DPI_RANGE[1] ? stated : FIT_DEFAULT_DPI;
+}
+
+/**
+ * A "Fit Image" page: the image's own shape, its pixels at `fitDpi`, scaled
+ * down as a whole when the long edge would pass `FIT_MAX_LONG_EDGE`. Only the
+ * page's size in points is decided here: the image is embedded at full
+ * resolution whatever size its page is.
+ */
+export function fitPageSize(img: LayoutImage): [number, number] {
+  const dpi = fitDpi(img);
+  const w = (img.width * 72) / dpi;
+  const h = (img.height * 72) / dpi;
+  if (Math.max(w, h) <= FIT_MAX_LONG_EDGE) return [w, h];
+  return img.width >= img.height
+    ? [FIT_MAX_LONG_EDGE, (FIT_MAX_LONG_EDGE * img.height) / img.width]
+    : [(FIT_MAX_LONG_EDGE * img.width) / img.height, FIT_MAX_LONG_EDGE];
+}
+
 /**
  * Turn a portrait page for the given orientation. `auto` follows the image:
  * landscape for an image wider than it is tall.
@@ -67,12 +121,12 @@ export function orientPage(
 }
 
 /**
- * The page an image gets: its own size for "fit", otherwise the chosen sheet,
+ * The page an image gets: its own shape for "fit" (see `fitPageSize`), otherwise the chosen sheet,
  * turned as `options.orientation` says. That defaults to `auto`: a landscape
  * image gets a landscape sheet, a portrait or square one a portrait sheet.
  */
-export function pageSizeFor(img: { width: number; height: number }, options: ImagesToPdfOptions): [number, number] {
-  if (options.pageSize === 'fit') return [img.width, img.height];
+export function pageSizeFor(img: LayoutImage, options: ImagesToPdfOptions): [number, number] {
+  if (options.pageSize === 'fit') return fitPageSize(img);
   if (options.pageSize === 'custom' && options.customWidth && options.customHeight) {
     return [options.customWidth, options.customHeight];
   }
@@ -101,7 +155,7 @@ export function marginsFor(options: ImagesToPdfOptions): Margins {
  *   stretch       exactly the area inside the margins, proportions not kept
  */
 export function layoutImagePage(
-  img: { width: number; height: number },
+  img: LayoutImage,
   options: ImagesToPdfOptions,
 ): ImagePageLayout {
   const imgW = img.width;

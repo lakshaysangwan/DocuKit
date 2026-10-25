@@ -12,12 +12,15 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import { downloadBlob } from '@/lib/download';
 import { prepareImageForPdf, type PreparedImage } from '@/lib/image-for-pdf';
 import {
+  FIT_DEFAULT_DPI,
+  FIT_MAX_LONG_EDGE,
   PAGE_SIZES,
   PAGE_SIZE_LABEL,
   formatPageMm,
   hasRoomForImage,
   layoutImagePage,
   marginsFor,
+  pointsToMm,
   standardPageMm,
   type ImagePageLayout,
 } from '@/lib/images-to-pdf-layout';
@@ -259,11 +262,12 @@ export default function ImageToPdfTool() {
     void start(async (work) => {
       const buffers = await Promise.all(pages.map((i) => i.image!.blob.arrayBuffer()));
       const mimeTypes = pages.map((i) => i.image!.mime);
+      const dpis = pages.map((i) => i.image!.dpi);
       const { port1, port2 } = new MessageChannel();
       try {
         const response = await work(
           'pdf',
-          { op: 'images-to-pdf', buffers, mimeTypes, options: sent, progressPort: port2 },
+          { op: 'images-to-pdf', buffers, mimeTypes, dpis, options: sent, progressPort: port2 },
           [...buffers, port2],
         );
         if (!response) return null;
@@ -457,7 +461,7 @@ export default function ImageToPdfTool() {
         </div>
         <p className={note} data-testid="i2p-size-note">
           {pageSize === 'fit'
-            ? 'Each page is exactly the size of its image, with no margin.'
+            ? `Each page is its image, with no margin, at the DPI the image states or ${FIT_DEFAULT_DPI} DPI, and at most ${pointsToMm(FIT_MAX_LONG_EDGE)} mm on its long side.`
             : `Every page is ${PAGE_SIZE_LABEL[pageSize]}, ${standardPageMm(pageSize)}.`}
         </p>
       </section>

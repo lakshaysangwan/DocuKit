@@ -280,7 +280,7 @@ export const LANDING_PAGES: LandingDef[] = [
     faqs: [
       { q: 'Can I put several JPGs into one PDF?', a: 'Yes — add as many images as you need. Each one becomes a page, and they are all saved into a single PDF.' },
       { q: 'How do I change the page order?', a: 'Drag the pages into the order you want, or move one with its handle and the arrow keys. The PDF follows the order on screen.' },
-      { q: 'What page size will the PDF have?', a: 'You choose: "Fit Image" makes each page exactly its photo, with no margin, or pick A4, Letter or Legal for a standard document. On those, a landscape photo gets a landscape page and a portrait photo a portrait one, unless you choose Portrait or Landscape for all. The pages are shown at that size before you create the PDF.' },
+      { q: 'What page size will the PDF have?', a: 'You choose: "Fit Image" makes each page the shape of its photo, with no margin, sized from the DPI the photo states or at 150 DPI, and at most 420 mm (A3) on its long side; or pick A4, Letter or Legal for a standard document. On those, a landscape photo gets a landscape page and a portrait photo a portrait one, unless you choose Portrait or Landscape for all. The pages are shown at that size before you create the PDF.' },
       { q: 'Does it work with photos from my phone?', a: 'Yes — JPG photos from any phone camera work directly, and iPhone HEIC photos do too. A photo stored sideways is turned upright, as you see it on screen.' },
       { q: 'Can I add PNG or other images too?', a: 'Yes — you can mix JPG with PNG, WebP, GIF, BMP and HEIC images in the same PDF.' },
     ],
