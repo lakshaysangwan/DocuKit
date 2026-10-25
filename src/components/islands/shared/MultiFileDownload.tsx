@@ -58,7 +58,7 @@ const secondaryButton =
   'inline-flex items-center justify-center rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-medium ' +
   'text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] ' +
-  'disabled:cursor-not-allowed disabled:opacity-40';
+  'disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:min-h-11';
 
 /**
  * One object URL per output blob, for thumbnails. The <img> reads the output
@@ -279,7 +279,10 @@ export default function MultiFileDownload({
           <section aria-label={listLabel} data-testid="result-gallery"
             className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-3 sm:p-4">
             <p className="mb-3 text-sm font-medium text-[var(--color-text-primary)]">{count(n)} ready</p>
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {/* Columns follow the gallery's own width, not the viewport: it usually
+                sits in the workspace's narrow controls pane, where viewport
+                breakpoints would squeeze three or four cards into ~320 px. */}
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(8.5rem,100%),1fr))] gap-3">
               {c.files.map((file, i) => (
                 <li key={file.name} data-testid="result-card"
                   className="flex min-w-0 flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2">
@@ -293,7 +296,8 @@ export default function MultiFileDownload({
                   )}
                   <div className="min-w-0 flex-1">
                     {file.label && <p className="text-sm font-medium text-[var(--color-text-primary)]">{file.label}</p>}
-                    <p data-testid="result-name" className="break-all text-xs text-[var(--color-text-secondary)]">{file.name}</p>
+                    <p data-testid="result-name" title={file.name}
+                      className="line-clamp-2 text-xs [overflow-wrap:anywhere] text-[var(--color-text-secondary)]">{file.name}</p>
                     <p data-testid="result-meta" className="text-xs text-[var(--color-text-secondary)] tabular-nums">
                       {file.width && file.height ? `${file.width} × ${file.height} px · ` : ''}{formatBytes(file.blob.size)}
                     </p>
