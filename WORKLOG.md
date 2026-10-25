@@ -296,3 +296,13 @@ Cloudflare KV (eventually consistent: two near-simultaneous opens from different
 succeed); the copy claims only "deleted the first time it is opened". Not tested on a real iPhone /
 Safari; whether mail or Quick Look previews run the locked HTML is unknown (`<noscript>` note shown).
 **CI is green** on `main` again from `ae4aaf0` (runs 40120237750, 40121241773).
+| `12099bc` (F1) | Typed signatures are drawn in the handwriting style picked: the four `public/fonts/*.woff2` files were the wrong Google Fonts subsets (Dancing Script = Vietnamese, only A and B; Caveat and Pacifico = Cyrillic-ext; Sacramento = Latin-ext, none of A–Z / a–z / 0–9 — read from each cmap), so every typed signature fell back to a system font. Replaced with the official Latin files (same names, same four styles) plus a `-latin-ext` file each loaded only by `unicode-range` when a name needs it; `public/fonts/OFL.txt` added (SIL OFL 1.1); Sign FAQ says "pick one of four handwriting styles" | Clean worktree: 773 Chromium, 935 Firefox/WebKit (WebKit large-file known flake, 3/3 solo; `image-to-pdf-preview.spec.ts:685` flaky once), 75 mobile, 17 visual, 1056 unit. Live (~1 min after the push): new `sign-pdf-fonts.spec.ts` (failed against production before the deploy) passes on three engines, reading each style's signature image out of the downloaded PDF; Sign mobile 6/6 |
+
+F1 notes: Caveat's Latin file is 48.8 KB (over the 40 KB aim; a custom subset came out larger). The
+service worker caches every `*.woff2`, ~100 KB more. The fonts spec repeats the fallback stacks from
+`signature-image.ts` instead of importing them.
+
+Lakshay's requests on 2026-10-25, queued: **F2** — Sign PDF upload: pick out only the signature from a
+photo of it (paper made transparent, cropped to the ink); **F3** — Sign PDF: an obvious "add to all
+pages / chosen pages" at the same place on each page ("Copy to all pages" exists but sits only in the
+selection bar under the page).
