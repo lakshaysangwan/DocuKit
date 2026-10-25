@@ -247,8 +247,14 @@ W13 Resize Image, W14 Convert Image, W15 Lock Image + View-Once — **all 20 too
 workspace**. CI1 + CI2 made the CI `e2e` job green again (90-minute limit; Linux WebKit black page
 renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
+### 1b. Lakshay's Sign PDF requests (2026-10-25), in this order
+
+- **F2** — uploaded signature photo: pick out only the signature (paper → transparent with soft edges, crop to the ink, keep or darken ink colour, sensitivity slider, before/after on a checkerboard). All in the browser.
+- **F3** — "Add to pages: This page / All pages / Choose pages" in the controls pane (rail checkboxes), same place relative to each page, copies stay linked (move one, all follow; Unlink), rail ticks and "Signature on N pages". Today "Copy to all pages" exists only in the selection bar under the page.
+
 ### 2. Follow-ups found during the migration
 
+- ~~Signature fonts~~ — done (F1).
 - CI flakes still unexplained: WebKit `protect-pdf-permissions.spec.ts:108` (goto load timeout), Firefox `organize-pages.spec.ts:102` (lost first click), Firefox `compress-image-preview.spec.ts:241` (HEIC slow), Firefox/WebKit `landing-pages.spec.ts` Extract PDF Pages lost first click. The e2e job takes ~1h–1h20 of its 90 minutes — shard it.
 - Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
 
