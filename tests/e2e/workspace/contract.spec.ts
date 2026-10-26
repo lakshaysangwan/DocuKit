@@ -18,6 +18,9 @@ import { MIGRATED } from './migrated';
  *   • no serious accessibility violations with the workspace open.
  */
 
+/** Any script, with or without a query string (Astro re-imports a failed island script with `?astro-retry=`). */
+const ANY_SCRIPT = /\.js(\?.*)?$/;
+
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 interface Box {
@@ -124,11 +127,12 @@ for (const tool of MIGRATED) {
     });
 
     test('hydration does not move or resize the tool before a file is added', async ({ page }) => {
-      // What the server sent, before any script has run…
-      await page.route('**/*.js', (route) => route.abort());
+      // What the server sent, before any script has run… (the regex also
+      // catches Astro's `?astro-retry=` re-import of a failed island script)
+      await page.route(ANY_SCRIPT, (route) => route.abort());
       await page.goto(`/${tool.slug}`);
       const server = (await page.locator('.tool-shell').boundingBox())!;
-      await page.unroute('**/*.js');
+      await page.unroute(ANY_SCRIPT);
       // …and the same page once the island is live.
       await page.goto(`/${tool.slug}`);
       await expect(page.locator('[data-testid="dropzone"][data-hydrated="true"]').first()).toBeVisible();

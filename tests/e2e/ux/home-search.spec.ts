@@ -21,6 +21,14 @@ async function openHome(page: Page) {
   return page.getByRole('combobox', { name: 'Search tools' });
 }
 
+/**
+ * The search island's script, including Astro's retry of it: when the import
+ * fails, astro-island imports the same URL again a second later with
+ * `?astro-retry=<timestamp>` added. A glob ending in `.js` does not match that
+ * URL, so the retry got through and the island hydrated.
+ */
+const TOOL_SEARCH_SCRIPT = /\/_astro\/ToolSearch\.[^/?]*\.js(\?.*)?$/;
+
 /** The first card in the grid — not the search result that links to the same page. */
 const FIRST_CARD = '#tools a[href="/merge-pdf/"]:not([role="option"])';
 
@@ -297,7 +305,7 @@ test.describe('Homepage search — the page does not move', () => {
 
   test('hydrating the search leaves the field and the grid where the server put them', async ({ page }) => {
     // First load: block the island's script, so this is the layout before hydration.
-    await page.route('**/_astro/ToolSearch.*.js', (route) => route.abort());
+    await page.route(TOOL_SEARCH_SCRIPT, (route) => route.abort());
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     const search = page.getByTestId('tool-search');
@@ -308,7 +316,7 @@ test.describe('Homepage search — the page does not move', () => {
       firstCard: await documentTop(page, FIRST_CARD),
     };
 
-    await page.unroute('**/_astro/ToolSearch.*.js');
+    await page.unroute(TOOL_SEARCH_SCRIPT);
     const input = await openHome(page);
     const after = {
       field: await input.boundingBox(),
@@ -364,7 +372,7 @@ test.describe('Homepage search — before it has loaded', () => {
   test('text typed into the field early is searched as soon as the search loads', async ({ page }) => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
-    await page.route('**/_astro/ToolSearch.*.js', async (route) => {
+    await page.route(TOOL_SEARCH_SCRIPT, async (route) => {
       await held;
       await route.continue();
     });
