@@ -90,7 +90,7 @@ export const TOOLS: ToolDef[] = [
       { q: 'What split modes are available?', a: 'Extract Pages, Split by Range, Split Every N Pages, Extract Each Page as Individual PDF, and Remove Pages.' },
       { q: 'Can I visually select which pages to extract?', a: 'Yes — every page is shown as a thumbnail. In Extract Pages and Remove Pages, click a page to add it to or take it out of the selection; the pages and the page field stay in sync. In every mode each page is marked with what will happen to it, such as "PDF 2", "Removed" or "Not included".' },
       { q: 'How does the output work for multiple splits?', a: 'Extract Pages and Remove Pages make one PDF, named like report-split.pdf, which downloads directly. Split by Range, Split Every N and Extract Each Page make one PDF per part, named report-part1.pdf, report-part2.pdf and so on. Up to 10 download as separate files with "Download all", and each has its own Download button, with a ZIP of them all as an option. With more than 10, the main download is one ZIP, and each file still has its own Download button.' },
-      { q: 'Is there a page limit?', a: 'Docukit handles up to 500 pages reliably. For larger documents, processing may be slower depending on your device.' },
+      { q: 'Is there a page limit?', a: 'There is no fixed limit. Everything runs on your device, so a very long PDF takes longer and needs more memory; how far you can go depends on your device.' },
     ],
     howToSteps: [
       { title: 'Upload your PDF', description: 'Drop your PDF file into the upload area or click to browse.' },
@@ -235,7 +235,7 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['sign-pdf', 'protect-pdf', 'edit-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
-      { q: 'What is the difference between a visual signature and a digital signature?', a: 'A visual signature is just an image stamped on the PDF. A digital signature is a cryptographic proof that verifies the signer\'s identity and proves the document was not modified after signing.' },
+      { q: 'What is the difference between a visual signature and a digital signature?', a: 'A visual signature is just an image stamped on the PDF. A digital signature is cryptographic: it records which certificate signed the document and shows whether the document was modified after signing. Whether that certificate proves who the signer is depends on who issued it.' },
       { q: 'Can I use my own company certificate?', a: 'Yes, if it is a .p12 or .pfx file with an RSA key. Choose Upload Existing, add the file, type its password and press Load: the name, issuer and expiry date are shown, and the document is signed with that certificate\'s private key. The file and its password are only used in your browser.' },
       { q: 'Can I choose where the signature appears?', a: 'Yes. With Visible signature box, a box showing the signer\'s name, the date and the algorithm is drawn on the page: drag it, pull a corner to resize it, move it to any page, or type its position and size in millimetres. It is written exactly there, on rotated and cropped pages too. Choose Invisible signature to add nothing to the pages.' },
       { q: 'Will a PDF reader trust the signature?', a: 'That depends on the certificate, not on the file. A self-signed certificate is not trusted until the person opening the file chooses to trust it; a certificate from an authority the reader already trusts can be. After signing, Docukit checks the signed file in your browser: the signature covers the whole file, the SHA-256 digest matches and the RSA signature verifies. It does not check trust.' },
@@ -321,7 +321,7 @@ export const TOOLS: ToolDef[] = [
       'Detects encryption automatically',
       'Removes user and owner passwords',
       'Shows original encryption details',
-      'Instant decryption in-browser',
+      'Decrypted in your browser',
     ],
   },
   {

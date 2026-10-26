@@ -124,7 +124,7 @@ export const COVERAGE: Record<string, Record<string, Coverage>> = {
     'Detects encryption automatically': C([T('protect-unlock-pdf'), T('protect-unlock-workspace')], 'a file that asks for a password shows a locked placeholder and asks for it; a restrictions-only file opens at once with its restrictions shown; an unencrypted file and a non-PDF are each named as such'),
     'Removes user and owner passwords': C([T('protect-unlock-pdf'), T('protect-pdf-permissions'), T('protect-unlock-workspace')], 'unlocks with the open password and with the permissions password; a restrictions-only file unlocks with no password (qpdf removes encryption with any password that opens the file); every download has no /Encrypt and pdf.js reports no permissions'),
     'Shows original encryption details': CU(['src/lib/pdf-encryption-info.test.ts'], 'the /Encrypt dictionary is parsed and shown; the unit test pins the handler revisions and /P decoding', [CLOSED]),
-    'Instant decryption in-browser': C([T('protect-unlock-pdf'), GUARD]),
+    'Decrypted in your browser': C([T('protect-unlock-pdf'), GUARD], 'qpdf (WebAssembly) decrypts in the page and the downloaded copy has no /Encrypt; the guard shows the PDF tools fetch nothing from another origin'),
   },
   'pdf-to-image': {
     'PNG, JPEG, WebP, AVIF output': C([T('pdf-to-image'), P2I_WS], 'a download in each of the four formats is checked by its magic bytes (WebP in the workspace spec, which also checks the WebP preview)'),
