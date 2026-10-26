@@ -353,6 +353,45 @@ test.describe('Compress PDF — the quality preview, before anything is compress
     expect(meanDiff(first.before, second.before), 'page 2 is another photo').toBeGreaterThan(5);
   });
 
+  test('the file is sent to the preview worker once: changing page or level sends no file data', async ({ page }) => {
+    // Count the bytes of every buffer handed to a worker, by operation.
+    await page.addInitScript(() => {
+      const log: Array<{ op: string; bytes: number }> = [];
+      (window as unknown as { __workerPosts: typeof log }).__workerPosts = log;
+      const post = Worker.prototype.postMessage;
+      Worker.prototype.postMessage = function (this: Worker, message: unknown, transfer?: unknown) {
+        const list = Array.isArray(transfer) ? transfer : [];
+        const bytes = list.reduce((sum: number, t: unknown) => sum + (t instanceof ArrayBuffer ? t.byteLength : 0), 0);
+        log.push({ op: String((message as { op?: unknown })?.op), bytes });
+        return post.call(this, message, transfer as StructuredSerializeOptions);
+      } as typeof Worker.prototype.postMessage;
+    });
+    const posts = () => page.evaluate(() => (window as unknown as { __workerPosts: Array<{ op: string; bytes: number }> }).__workerPosts.slice());
+    const fileSize = (await readFile(FIXTURE.pdfPhoto)).length;
+
+    await openCompress(page, FIXTURE.pdfPhoto);
+    await settledPreview(page);
+    for (const n of [2, 3, 4]) {
+      await page.getByTestId('page-next').click();
+      await expect(page.getByTestId('page-indicator')).toHaveText(`Page ${n} of 4`);
+      await settledPreview(page);
+      await expect(page.getByTestId('quality-facts')).toContainText(`Preview of page ${n}`);
+    }
+    await chooseLevel(page, 'High'); // and a level change, on page 4
+    await settledPreview(page);
+    await expect(page.getByTestId('quality-facts')).toContainText('JPEG quality 50');
+
+    const probes = (await posts()).filter((p) => p.op === 'compress-probe');
+    console.log(`compress-probe posts: ${JSON.stringify(probes.map((p) => p.bytes))} (file ${fileSize} bytes)`);
+    expect(probes.length, 'the first probe and one per new page').toBe(4);
+    expect(probes[0].bytes, 'the file, once').toBe(fileSize);
+    expect(probes.slice(1).every((p) => p.bytes === 0), 'no file data on a page change').toBe(true);
+    // What a change does send is the one page being previewed, as a PDF of its
+    // own (to a pool worker; where workers cannot draw, it is compressed on
+    // the page and nothing is posted at all).
+    for (const p of (await posts()).filter((p) => p.op === 'compress-pdf')) expect(p.bytes).toBeLessThan(fileSize);
+  });
+
   test('Target size has no preview: its result depends on the whole file', async ({ page }) => {
     await openCompress(page, FIXTURE.pdfPhoto);
     await setTarget(page, 100);

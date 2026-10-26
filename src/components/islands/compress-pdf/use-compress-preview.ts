@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { workerPool } from '@/workers/worker-pool';
+import { workerPool, type WorkerSession } from '@/workers/worker-pool';
 import { previewOptionsFor, settingsKey, type CompressSettings } from '@/lib/pdf-compress-presets';
 import type { ProbePageInfo, ProcessingStats, WorkerResponse } from '@/types/worker-messages';
 
@@ -7,8 +7,11 @@ import type { ProbePageInfo, ProcessingStats, WorkerResponse } from '@/types/wor
  * The live quality preview: one page, compressed with the chosen settings by
  * the same `compressPdf` the real run uses, before anything is downloaded.
  *
- *  1. A probe (pure pdf-lib, in the worker) cuts the page out as a one-page PDF
- *     and inventories every page's images. One probe per page, cached.
+ *  1. A probe (pure pdf-lib, in a worker of its own) cuts the page out as a
+ *     one-page PDF and inventories every page's images. The file is sent to
+ *     that worker once and kept there; another page is cut from the kept copy,
+ *     so changing page sends no file data. The worker ends with the file (a new
+ *     file, or the tool closing). One probe per page, cached.
  *  2. Each settled change of settings sends that one-page PDF through the
  *     ordinary `compress-pdf` op. Settled: 250 ms after the last change. One
  *     job at a time; a change made meanwhile waits and only the latest runs.
@@ -80,12 +83,30 @@ interface Options {
 
 const isAbort = (err: unknown) => (err as Error)?.name === 'AbortError';
 
+/** A probe on the file's own worker: with `buffer` the first, which sends the file. */
+async function probe(
+  holder: { session: WorkerSession; docId: string },
+  args: { buffer?: ArrayBuffer; pageIndex?: number },
+  signal: AbortSignal,
+) {
+  const response: WorkerResponse = await holder.session.submit(
+    { op: 'compress-probe', docId: holder.docId, ...args, progressPort: undefined as never },
+    args.buffer ? [args.buffer] : [],
+    signal,
+  );
+  if (response.status === 'error') throw new Error(response.message || 'The preview could not be made.');
+  return response;
+}
+
 async function submit(message: Parameters<NonNullable<typeof workerPool>['submit']>[0]['message'], transfer: Transferable[], signal: AbortSignal) {
   if (!workerPool) throw new Error('This browser cannot run the preview.');
   const response: WorkerResponse = await workerPool.submit({ module: 'pdf', message, transfer, signal });
   if (response.status === 'error') throw new Error(response.message || 'The preview could not be made.');
   return response;
 }
+
+const newDocId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
 function remember<K, V>(map: Map<K, V>, key: K, value: V, limit: number): Map<K, V> {
   const next = new Map(map);
@@ -109,15 +130,20 @@ export function useCompressPreview({ file, pageIndex, settings, auto, paused, on
   const live = auto && (pages?.[pageIndex]?.eligiblePixels ?? 0) <= LIVE_PIXEL_BUDGET;
   const chosen = useRef(onPageChosen);
   chosen.current = onPageChosen;
+  /** The worker holding this file for the probe, and the id it holds it under. */
+  const probeSession = useRef<{ file: File; session: WorkerSession; docId: string } | null>(null);
 
-  // 1a. A new file: inventory it and cut out the page to open on.
+  // 1a. A new file: send it to a worker of its own, inventory it and cut out
+  // the page to open on. The worker ends when the file does.
   useEffect(() => {
-    if (!file) return;
+    if (!file || !workerPool) return;
     const controller = new AbortController();
+    const holder = { file, session: workerPool.openSession('pdf'), docId: newDocId() };
+    probeSession.current = holder;
     (async () => {
       try {
         const buffer = await file.arrayBuffer();
-        const response = await submit({ op: 'compress-probe', buffer, progressPort: undefined as never }, [buffer], controller.signal);
+        const response = await probe(holder, { buffer }, controller.signal);
         if (response.status !== 'success-probe' || controller.signal.aborted) return;
         setInventory({ file, pages: response.pages });
         setProbes((prev) => ({
@@ -129,7 +155,11 @@ export function useCompressPreview({ file, pageIndex, settings, auto, paused, on
         if (!isAbort(err)) setFailed({ key: 'probe', message: (err as Error).message });
       }
     })();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      holder.session.close();
+      if (probeSession.current === holder) probeSession.current = null;
+    };
   }, [file]);
 
   // 1b. Any other page: cut it out when it is first shown. Leaving the page cancels it.
@@ -140,8 +170,10 @@ export function useCompressPreview({ file, pageIndex, settings, auto, paused, on
     const controller = new AbortController();
     (async () => {
       try {
-        const buffer = await file.arrayBuffer();
-        const response = await submit({ op: 'compress-probe', buffer, pageIndex, progressPort: undefined as never }, [buffer], controller.signal);
+        const holder = probeSession.current;
+        if (!holder || holder.file !== file) return;
+        // No file data: the worker cuts the page from the copy it kept.
+        const response = await probe(holder, { pageIndex }, controller.signal);
         if (response.status !== 'success-probe' || controller.signal.aborted) return;
         setProbes((prev) => ({
           file,

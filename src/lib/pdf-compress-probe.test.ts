@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as pdfLib from 'pdf-lib';
-import { choosePreviewPage, probePdf } from './pdf-compress-probe';
+import { choosePreviewPage, cutProbePage, openProbe, probePdf } from './pdf-compress-probe';
 import { pageImageRefs } from './pdf-page-images';
 import { makeMaskedImagesPdf, makeOnlyMaskedPdf, SWEEP_TILES } from '../../tests/e2e/fixtures/masked-images';
 import type { ProbePageInfo } from '../types/worker-messages';
@@ -75,5 +75,21 @@ describe('probePdf', () => {
   it('a document of masked images has nothing eligible', async () => {
     const result = await probePdf(toArrayBuffer(await makeOnlyMaskedPdf()));
     expect(result.pages.every((p) => p.eligible === 0 && p.eligibleBytes === 0)).toBe(true);
+  });
+});
+
+describe('openProbe / cutProbePage', () => {
+  it('reads the PDF once and cuts any page from it, as often as asked, the same as a one-off probe', async () => {
+    const input = await makeMaskedImagesPdf();
+    const opened = await openProbe(toArrayBuffer(input));
+    for (const pageIndex of [1, 0, 1]) {
+      const cut = await cutProbePage(opened, pageIndex);
+      const once = await probePdf(toArrayBuffer(input), pageIndex);
+      expect(cut.pageIndex).toBe(pageIndex);
+      expect(cut.pages).toEqual(once.pages);
+      expect(Buffer.from(cut.pagePdf).equals(Buffer.from(once.pagePdf)), `page ${pageIndex}`).toBe(true);
+    }
+    // The source document is untouched by cutting pages from it.
+    expect(opened.doc.getPageCount()).toBe(2);
   });
 });

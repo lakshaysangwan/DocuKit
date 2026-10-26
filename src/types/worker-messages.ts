@@ -287,7 +287,13 @@ export type WorkerRequest =
   | { op: 'split'; buffer: ArrayBuffer; options: SplitOptions; progressPort: MessagePort }
   | { op: 'compress-pdf'; buffer: ArrayBuffer; options: CompressPdfOptions; progressPort: MessagePort }
   /** One page cut out as its own PDF, plus the image inventory of every page. Pure pdf-lib: no canvas. */
-  | { op: 'compress-probe'; buffer: ArrayBuffer; pageIndex?: number; progressPort: MessagePort }
+  /**
+   * The quality preview's probe. With `buffer`, the worker reads the PDF and
+   * keeps it under `docId`; without, it reuses the copy it kept, so moving to
+   * another page sends no file data. Meant for a worker of its own
+   * (`workerPool.openSession`), which is ended when the file changes.
+   */
+  | { op: 'compress-probe'; docId: string; buffer?: ArrayBuffer; pageIndex?: number; progressPort: MessagePort }
   | { op: 'reorder'; buffer: ArrayBuffer; options: ReorderOptions; progressPort: MessagePort }
   | { op: 'sign-visual'; buffer: ArrayBuffer; options: SignVisualOptions; progressPort: MessagePort }
   | { op: 'encrypt'; buffer: ArrayBuffer; options: EncryptOptions; progressPort: MessagePort }

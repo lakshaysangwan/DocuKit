@@ -21,6 +21,58 @@ interface WorkerEntry {
   busy: boolean;
 }
 
+/**
+ * A worker of one's own, for work that keeps state between messages — the
+ * quality preview holds the visitor's PDF in it so that it is sent only once.
+ * Messages are handled one at a time, in order. Aborting a job only stops
+ * waiting for it: the worker is not stopped, since that would lose its state.
+ * `close` ends the worker and everything it holds.
+ */
+export class WorkerSession {
+  private readonly worker: Worker;
+  private queue: Promise<unknown> = Promise.resolve();
+  private closed = false;
+
+  constructor(url: string) {
+    this.worker = new Worker(url, { type: 'module' });
+  }
+
+  submit(message: WorkerRequest, transfer: Transferable[] = [], signal?: AbortSignal): Promise<WorkerResponse> {
+    const aborted = () => new DOMException('Aborted', 'AbortError');
+    const send = () =>
+      new Promise<WorkerResponse>((resolve, reject) => {
+        if (this.closed) return reject(new Error('This preview has ended.'));
+        // Not sent at all when given up on while waiting its turn.
+        if (signal?.aborted) return reject(aborted());
+        const { port1, port2 } = new MessageChannel();
+        const done = () => {
+          this.worker.removeEventListener('message', onMessage);
+          this.worker.removeEventListener('error', onError);
+          port1.close();
+        };
+        const onMessage = (e: MessageEvent<WorkerResponse>) => { done(); resolve(e.data); };
+        const onError = (e: ErrorEvent) => { done(); reject(new Error(e.message || 'Worker error')); };
+        this.worker.addEventListener('message', onMessage);
+        this.worker.addEventListener('error', onError);
+        this.worker.postMessage({ ...message, progressPort: port2 }, [port2, ...transfer]);
+      });
+    const job = this.queue.then(send, send);
+    this.queue = job.catch(() => {});
+    if (!signal) return job;
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) return reject(aborted());
+      signal.addEventListener('abort', () => reject(aborted()), { once: true });
+      job.then(resolve, reject);
+    });
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.worker.terminate();
+  }
+}
+
 interface PendingJob {
   options: JobOptions;
   resolve: (response: WorkerResponse) => void;
@@ -233,6 +285,11 @@ class WorkerPool {
       if (err instanceof DOMException && err.name === 'AbortError') throw err;
       return { status: 'error', message: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  /** A dedicated worker, outside the pool, that keeps its state between jobs. */
+  openSession(module: WorkerModule): WorkerSession {
+    return new WorkerSession(WORKER_URLS[module]);
   }
 
   /** Terminate all workers (e.g., on page unload) */

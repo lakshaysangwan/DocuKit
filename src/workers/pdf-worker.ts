@@ -9,7 +9,7 @@
  */
 
 import { compressPdf } from '../lib/pdf-compress';
-import { probePdf } from '../lib/pdf-compress-probe';
+import { cutProbePage, openProbe, type ProbeDocument } from '../lib/pdf-compress-probe';
 import { layoutImagePage } from '../lib/images-to-pdf-layout';
 import { countUnclosedGraphicsStates } from '../lib/pdf/content-balance';
 import type {
@@ -541,6 +541,13 @@ async function imagesToPdf(
 
 // ─── Worker message handler ───────────────────────────────────────────────────
 
+/**
+ * Quality-preview documents this worker holds, by id. Only one at a time: the
+ * preview gives each file a worker of its own and ends it when the file
+ * changes, which is what frees the memory.
+ */
+const probeDocuments = new Map<string, Promise<ProbeDocument>>();
+
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
   const progressPort = (msg as WorkerRequest & { progressPort: MessagePort }).progressPort;
@@ -592,7 +599,16 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
 
       case 'compress-probe': {
-        const { pagePdf, pageIndex, pageCount, pages } = await probePdf(msg.buffer, msg.pageIndex);
+        // The file is sent once; later pages are cut from the copy kept here.
+        if (msg.buffer) {
+          const opening = openProbe(msg.buffer);
+          probeDocuments.clear();
+          probeDocuments.set(msg.docId, opening);
+          opening.catch(() => probeDocuments.delete(msg.docId));
+        }
+        const probe = probeDocuments.get(msg.docId);
+        if (!probe) throw new Error('The preview no longer has this PDF; open it again.');
+        const { pagePdf, pageIndex, pageCount, pages } = await cutProbePage(await probe, msg.pageIndex);
         response = { status: 'success-probe', pagePdf, pageIndex, pageCount, pages };
         break;
       }

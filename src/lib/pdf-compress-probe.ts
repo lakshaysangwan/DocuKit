@@ -12,6 +12,7 @@
  */
 import { planImagePass } from './pdf-compress';
 import { pageImageRefs } from './pdf-page-images';
+import type { PDFDocument } from 'pdf-lib';
 import type { ProbePageInfo } from '../types/worker-messages';
 
 export interface ProbeResult {
@@ -43,8 +44,14 @@ export function choosePreviewPage(pages: ProbePageInfo[]): number {
   return most && most.images > 0 ? most.pageIndex : 0;
 }
 
-/** Inventory every page and cut out `pageIndex` (or the page `choosePreviewPage` picks). */
-export async function probePdf(buffer: ArrayBuffer, pageIndex?: number): Promise<ProbeResult> {
+/** A PDF read once, with its inventory, for cutting out any number of pages. */
+export interface ProbeDocument {
+  doc: PDFDocument;
+  pages: ProbePageInfo[];
+}
+
+/** Read the PDF and inventory every page. */
+export async function openProbe(buffer: ArrayBuffer): Promise<ProbeDocument> {
   const lib = await import('pdf-lib');
   const { PDFDocument, PDFRawStream } = lib;
   const doc = await PDFDocument.load(buffer, { ignoreEncryption: true, updateMetadata: false });
@@ -61,7 +68,16 @@ export async function probePdf(buffer: ArrayBuffer, pageIndex?: number): Promise
     }
     return info;
   });
+  return { doc, pages };
+}
 
+/**
+ * Cut out `pageIndex` (or the page `choosePreviewPage` picks) as a PDF of its
+ * own. Copying a page leaves the source document as it was, so one
+ * `ProbeDocument` serves every page.
+ */
+export async function cutProbePage({ doc, pages }: ProbeDocument, pageIndex?: number): Promise<ProbeResult> {
+  const { PDFDocument } = await import('pdf-lib');
   const pageCount = doc.getPageCount();
   const chosen = pageIndex !== undefined && pageIndex >= 0 && pageIndex < pageCount ? pageIndex : choosePreviewPage(pages);
 
@@ -71,4 +87,9 @@ export async function probePdf(buffer: ArrayBuffer, pageIndex?: number): Promise
   const bytes = await out.save({ useObjectStreams: false, addDefaultPage: false });
   const pagePdf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   return { pagePdf, pageIndex: chosen, pageCount, pages };
+}
+
+/** Inventory every page and cut out one, in one go. */
+export async function probePdf(buffer: ArrayBuffer, pageIndex?: number): Promise<ProbeResult> {
+  return cutProbePage(await openProbe(buffer), pageIndex);
 }
