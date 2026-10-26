@@ -53,16 +53,28 @@ jobs:
   # WebKit failure.
   #
   # Run as one job, the four projects took 1h20m–1h30m by October 2026 and hit
-  # the 90-minute limit. Each shard below runs one engine on its own runner
-  # (installing only that browser, plus Chromium, which the global setup uses to
-  # build the PDF fixtures), and the slow engines are split further with
-  # --shard, so every shard finishes in about a quarter of that. The build takes
-  # seconds, so each shard builds for itself rather than passing an artifact.
-  # Measured worker time per project: WebKit ~60–85 min, Firefox ~32–47,
-  # Chromium ~21–31, mobile ~2 (two workers per runner).
+  # the 90-minute limit. Each shard below runs one engine on its own runner, and
+  # the slow engines are split further with --shard, so every shard finishes in
+  # about a quarter of that. The build takes seconds, so each shard builds for
+  # itself rather than passing an artifact. Measured worker time per project:
+  # WebKit ~60–85 min, Firefox ~32–47, Chromium ~21–31, mobile ~2 (two workers
+  # per runner).
+  #
+  # The shards run in Playwright's own image, which already holds every
+  # browser and the system libraries they need. Installing them on the runner
+  # (`playwright install --with-deps`) pulled ~160 packages from the Ubuntu
+  # mirror, and on some runners that crawled for over ten minutes. The image's
+  # tag must match the @playwright/test version in package-lock.json (a
+  # step after npm ci checks it). --user 1001 is the runner's own user, which
+  # owns the
+  # workspace and HOME mounted into the container, as Playwright's CI guide
+  # recommends (Firefox will not run as root with a HOME it does not own).
   e2e:
     name: e2e (${{ matrix.browser }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --user 1001
     timeout-minutes: 40
     strategy:
       # One shard failing must not cancel the others and hide their results.
@@ -70,15 +82,15 @@ jobs:
       matrix:
         include:
           # `mobile` is the Pixel 5 profile, a Chromium browser.
-          - { browser: chromium, install: chromium, projects: --project=chromium --project=mobile, shard: 1, total: 2 }
-          - { browser: chromium, install: chromium, projects: --project=chromium --project=mobile, shard: 2, total: 2 }
-          - { browser: firefox, install: chromium firefox, projects: --project=firefox, shard: 1, total: 3 }
-          - { browser: firefox, install: chromium firefox, projects: --project=firefox, shard: 2, total: 3 }
-          - { browser: firefox, install: chromium firefox, projects: --project=firefox, shard: 3, total: 3 }
-          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 1, total: 4 }
-          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 2, total: 4 }
-          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 3, total: 4 }
-          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 4, total: 4 }
+          - { browser: chromium, projects: --project=chromium --project=mobile, shard: 1, total: 2 }
+          - { browser: chromium, projects: --project=chromium --project=mobile, shard: 2, total: 2 }
+          - { browser: firefox, projects: --project=firefox, shard: 1, total: 3 }
+          - { browser: firefox, projects: --project=firefox, shard: 2, total: 3 }
+          - { browser: firefox, projects: --project=firefox, shard: 3, total: 3 }
+          - { browser: webkit, projects: --project=webkit, shard: 1, total: 4 }
+          - { browser: webkit, projects: --project=webkit, shard: 2, total: 4 }
+          - { browser: webkit, projects: --project=webkit, shard: 3, total: 4 }
+          - { browser: webkit, projects: --project=webkit, shard: 4, total: 4 }
     steps:
       - uses: actions/checkout@v7
 
@@ -90,27 +102,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Read the Playwright version
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      # Browser binaries are cached per engine and Playwright version; the
-      # system libraries they need are not in the cache, so a hit still
-      # installs those.
-      - name: Cache the Playwright browser
-        id: browser-cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-
-      - name: Install the Playwright browser
-        if: steps.browser-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps ${{ matrix.install }}
-
-      - name: Install the browser's system dependencies
-        if: steps.browser-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps ${{ matrix.install }}
+      - name: Check the image matches the locked Playwright
+        run: |
+          locked=$(node -p "require('@playwright/test/package.json').version")
+          test "$locked" = "1.62.1" || { echo "package-lock has Playwright $locked; update the e2e container image tag to v$locked" >&2; exit 1; }
 
       - name: Build
         run: npm run build
@@ -119,7 +114,7 @@ jobs:
         run: |
           node scripts/serve-dist.mjs &
           for i in $(seq 1 30); do
-            curl -sf http://localhost:4322/ >/dev/null && exit 0
+            node -e "fetch('http://localhost:4322/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" && exit 0
             sleep 1
           done
           echo "dist server did not come up" >&2
