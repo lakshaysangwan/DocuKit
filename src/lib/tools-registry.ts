@@ -121,7 +121,7 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['merge-pdf', 'split-pdf', 'crop-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs', 'image-wasm'],
     faqs: [
-      { q: 'How much will my PDF be compressed?', a: 'It depends on what the PDF holds. Only images can be made much smaller: a scanned or photo-heavy PDF shrinks a lot at Medium or High, while a PDF that is mostly text shrinks little at any level. Before you compress, the preview shows what the chosen level does to the images on one page; afterwards you see the exact sizes before and after.' },
+      { q: 'How much will my PDF be compressed?', a: 'It depends on what the PDF holds. Only images can be made much smaller: a scanned or photo-heavy PDF shrinks a lot at Medium or High, while a PDF that is mostly text shrinks little at any level. At every level, including Low, an image the file holds several identical copies of is stored once. Before you compress, the preview shows what the chosen level does to the images on one page; afterwards you see the exact sizes before and after.' },
       { q: 'Will compression reduce visual quality?', a: 'Low keeps every image exactly as it is. Medium and High re-encode images as JPEG, and High also scales them down. On a computer the page beside the controls shows the chosen level next to your original as soon as you pick it; on a phone, press Preview quality. After compressing you can compare any page of the result at up to 200%, and if a page has come out badly wrong — dark, inverted or with parts missing — you are warned before you download.' },
       { q: 'What is the Custom mode?', a: 'Custom lets you set the JPEG quality (1–100); an Image DPI value, which below 150 scales images to that value ÷ 150 of their width and height; and grayscale for images. Fonts and text are never removed at any level.' },
       { q: 'Does this work for scanned PDFs?', a: 'Yes. A scanned page is an image, which is what compression can shrink. Images in a form the tool does not re-encode — with transparency, in CMYK or with a colour palette, for example — are left exactly as they are, and the result says so for each page.' },
@@ -138,6 +138,7 @@ export const TOOLS: ToolDef[] = [
       'Any page compared with your original at Fit, 100% or 200%',
       'A warning when a page comes out badly wrong',
       'Before/after file size comparison',
+      'An image the file repeats is stored once, at every level',
       'Custom image scale and JPEG quality controls',
       'Grayscale conversion option',
       'Target size mode: fit under a KB or MB limit',

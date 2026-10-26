@@ -114,6 +114,16 @@ export function buildFacts(input: FactsInput): Facts {
     lines.push('Text and vector graphics are not changed; document properties are cleared.');
   }
 
+  const repeated = onPage?.filter((image) => (image.copiesMerged ?? 0) > 0) ?? [];
+  if (!returnedOriginal && repeated.length > 0) {
+    const copies = repeated.reduce((sum, image) => sum + (image.copiesMerged ?? 0), 0);
+    lines.push(
+      repeated.length === 1
+        ? `The file stored ${onPage!.length === 1 ? 'the image on this page' : 'one of the images on this page'} ${copies + 1} times over; it is now stored once.`
+        : `The file stored ${repeated.length} of the images on this page more than once; each is now stored once.`,
+    );
+  }
+
   if (pageHasText === false) {
     lines.push(
       onPage && onPage.length > 0

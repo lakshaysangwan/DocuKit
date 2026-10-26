@@ -98,6 +98,8 @@ export interface CompressImageOutcome {
   bytesAfter: number;
   action: 'recompressed' | 'kept';
   reason?: ImageKeptReason;
+  /** Identical copies of this image the file held as separate objects, now merged into it. */
+  copiesMerged?: number;
 }
 
 /** One page of the per-page image inventory a probe returns. */
@@ -309,6 +311,8 @@ export interface ProcessingStats {
    *  nothing — the output is structurally optimised only. */
   imagesTotal?: number;
   imagesRecompressed?: number;
+  /** compress-pdf: duplicate image objects merged into an identical one. */
+  imagesMerged?: number;
   /** compress-pdf with `report`: the settings used. */
   applied?: CompressApplied;
   /** compress-pdf with `report`: one entry per image XObject that pages draw. */

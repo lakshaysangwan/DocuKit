@@ -12,6 +12,7 @@ import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeMaskedImagesPdf, makeOnlyMaskedPdf } from './masked-images';
+import { makeDuplicateImagesPdf } from './duplicate-images';
 import { makeCropOffsetPdf, makeMarkerPng, makeMixedPagesPdf, makeRotatedPdf, makeUnbalancedPdf, signaturePhotoScript } from './sign-fixtures';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,9 @@ export const FIXTURE = {
   pdfMaskedImages: path.join(FIXTURES_DIR, 'doc-masked-images.pdf'),
   // The overlay alone: every image is masked or is a mask.
   pdfOnlyMasked: path.join(FIXTURES_DIR, 'doc-only-masked.pdf'),
+  // The same photo, logo and masked stamp as separate objects on every page,
+  // plus two near-copies that must stay separate. See duplicate-images.ts.
+  pdfDuplicateImages: path.join(FIXTURES_DIR, 'doc-duplicate-images.pdf'),
   // Pages a place-on-page tool gets wrong if it assumes an upright page that
   // starts at 0,0: a /Rotate 90 scan, a CropBox with an offset origin, and a
   // content stream that leaves the coordinate system transformed. See
@@ -201,6 +205,7 @@ export async function generateFixtures(): Promise<void> {
     await makeMaskedImagesPdf({ logo: Buffer.from(encoded.jpg, 'base64'), logoMasked: Buffer.from(encoded.jpg2, 'base64') })
   );
   await writeFile(FIXTURE.pdfOnlyMasked, await makeOnlyMaskedPdf());
+  await writeFile(FIXTURE.pdfDuplicateImages, await makeDuplicateImagesPdf(Buffer.from(encoded.jpg, 'base64')));
 
   // ── Place-on-page geometry ─────────────────────────────────────────────────
   await writeFile(FIXTURE.pdfRotate90, await makeRotatedPdf());

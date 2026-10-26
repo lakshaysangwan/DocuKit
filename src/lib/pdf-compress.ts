@@ -7,6 +7,7 @@
  * worker cannot draw at all. One implementation, two realms.
  */
 import { createCanvas2D } from './canvas-2d';
+import { deduplicateImages } from './pdf-dedupe';
 import { encodeImageData } from './image-codec';
 import { imagePages, pageImageRefs } from './pdf-page-images';
 import type {
@@ -31,6 +32,8 @@ export interface CompressResult {
   buffer: ArrayBuffer;
   imagesTotal: number;
   imagesRecompressed: number;
+  /** Duplicate image objects merged into an identical one (lossless, every level). */
+  imagesMerged: number;
   /** The settings the pass that produced `buffer` used. */
   applied: CompressApplied;
   /** With `options.report`: what happened to each image a page draws. */
@@ -54,6 +57,7 @@ export async function compressPdf(
     ...result,
     buffer: buffer.slice(0),
     imagesRecompressed: 0,
+    imagesMerged: 0,
     returnedOriginal: true,
     // Every image is as it was in the original, whatever the pass did to it.
     images: result.images?.map((image) => ({
@@ -63,6 +67,7 @@ export async function compressPdf(
       outWidth: image.width,
       outHeight: image.height,
       bytesAfter: image.bytesBefore,
+      copiesMerged: undefined,
     })),
   };
 }
@@ -166,6 +171,18 @@ async function compressPdfOnce(
   let imagesTotal = 0;
   let imagesRecompressed = 0;
 
+  // Lossless and first, so a repeated image is also re-encoded only once.
+  sendProgress(7, 'Merging repeated images…');
+  let copies = new Map<PDFRef, number>();
+  let imagesMerged = 0;
+  try {
+    const merged = await deduplicateImages(pdfLib, doc.context);
+    copies = merged.copies;
+    imagesMerged = merged.imagesMerged;
+  } catch {
+    /* leave the document as it was loaded */
+  }
+
   // Per-image outcomes, for the images some page draws, in page order.
   const outcomes = new Map<PDFRef, CompressImageOutcome>();
   if (options.report) {
@@ -181,6 +198,7 @@ async function compressPdfOnce(
       const bytes = stream.contents.byteLength;
       outcomes.set(ref, {
         pages, width, height, outWidth: width, outHeight: height, bytesBefore: bytes, bytesAfter: bytes, action: 'kept',
+        ...(copies.has(ref) ? { copiesMerged: copies.get(ref) } : {}),
       });
     }
   }
@@ -333,6 +351,7 @@ async function compressPdfOnce(
         ) as ArrayBuffer,
         imagesTotal,
         imagesRecompressed,
+        imagesMerged,
         applied,
         images,
       };
@@ -341,7 +360,7 @@ async function compressPdfOnce(
     /* keep pdf-lib output */
   }
 
-  return { buffer: savedBytes.buffer as ArrayBuffer, imagesTotal, imagesRecompressed, applied, images };
+  return { buffer: savedBytes.buffer as ArrayBuffer, imagesTotal, imagesRecompressed, imagesMerged, applied, images };
 }
 
 /** The reason code for a plan that says "leave it", for the report. */

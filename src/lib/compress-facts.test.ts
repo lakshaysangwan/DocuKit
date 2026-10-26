@@ -95,6 +95,16 @@ describe('buildFacts', () => {
     expect(text.lines.join(' ')).not.toMatch(/selectable/);
   });
 
+  it('says when an image the page draws was stored more than once', () => {
+    const one = buildFacts({ phase: 'result', pageIndex: 0, applied: LOW, images: [image({ copiesMerged: 2 })] });
+    expect(one.lines).toContain('The file stored the image on this page 3 times over; it is now stored once.');
+    const two = buildFacts({ phase: 'result', pageIndex: 0, applied: HIGH, images: [image({ copiesMerged: 1 }), image({ copiesMerged: 4 }), image({})] });
+    expect(two.lines).toContain('The file stored 2 of the images on this page more than once; each is now stored once.');
+    expect(buildFacts({ phase: 'result', pageIndex: 0, applied: HIGH, images: [image({})] }).lines.join(' ')).not.toMatch(/stored/);
+    // Handed back unchanged: nothing was merged in the file the visitor gets.
+    expect(buildFacts({ phase: 'result', pageIndex: 0, applied: LOW, images: [image({ copiesMerged: 2 })], returnedOriginal: true }).lines.join(' ')).not.toMatch(/stored/);
+  });
+
   it('says text is left alone: no setting removes fonts', () => {
     const facts = buildFacts({ phase: 'result', pageIndex: 0, applied: HIGH, images: [image({})] });
     expect(facts.lines[1]).toBe('Text and vector graphics are not changed; document properties are cleared.');
