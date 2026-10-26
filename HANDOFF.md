@@ -1,6 +1,7 @@
 # DocuKit — handoff for the coordinator session
 
-Rewritten 2026-10-23 at the end of the second coordinator session (11–23 October). The next session
+Rewritten 2026-10-23 at the end of the second coordinator session (11–23 October); brought up to date
+2026-10-26 at the end of the third (24–26 October), which stopped at Lakshay's request after T3. The next session
 runs as a **coordinator** that gives every task to a sub-agent, **one sub-agent at a time**, and ships
 each verified task to production. This file is the brief; `WORKLOG.md` is the running log (read it
 from the 2026-10-11 heading); `docs/design/tool-workspace.md` is the workspace design.
@@ -13,13 +14,13 @@ Read sections 1–5 before spawning anything. Section 6 is the queue.
 
 - **Production** is `https://docukit.uk`, deployed by Cloudflare Pages from `main`. Builds now start
   up to ~10 minutes after a push; allow 15 minutes before calling a deploy stuck.
-- **`main` is `52db184`** plus this documentation commit. Everything in `WORKLOG.md` through W12 is
-  pushed, verified in a clean worktree and checked on the live site.
-- **Nothing in flight:** no task branches, no worktrees besides the main checkout. An empty leftover
-  folder `D:\Project\docukit-wt\verify` may exist — harmless.
-- **The main tree** at `D:\Project\DocuKit` shows only noise in `git status`:
-  `.claude/settings.local.json` and regenerated fixtures under `tests/e2e/fixtures/files/`. Never
-  stage them. `remediation/phases-0-3` is an old unused branch.
+- **`main` is `88c907c`** plus the documentation commits after it. Everything in `WORKLOG.md` through T3
+  (2026-10-26) is pushed, verified in a clean worktree and checked on the live site. CI is green.
+- **Nothing in flight:** no task branches, no worktrees besides the main checkout. Empty leftover
+  folders `D:\Project\docukit-wt\verify` and `ci1` were held open by Windows — harmless; verify agents
+  used `verify-<task>` folders instead.
+- **The main tree** at `D:\Project\DocuKit` shows only `.claude/settings.local.json` in `git status`
+  (never stage it). Since F8 the generated fixtures under `tests/e2e/fixtures/files/` are git-ignored. `remediation/phases-0-3` is an old unused branch.
 - **CI** (`.github/workflows/ci.yml`): job `ci` = typecheck, lint, unit tests, build, Lighthouse
   (non-blocking), `npm audit --audit-level=critical`; job `e2e` = Playwright suite sharded into 9 jobs (Chromium+mobile ×2, Firefox ×3, WebKit ×4) in the Playwright Docker image against a production build, ~15 min (CI3). `gh run list --branch main --limit 5`.
 - **Stack:** Astro 7 (static output) + React islands + Tailwind 4, Vite 8. PDF work via pdf-lib,
@@ -198,7 +199,7 @@ These are the rules in force (Lakshay's, as of 2026-10-23).
 
 ## 5. What has shipped (all live)
 
-The headline: **every PDF tool and Compress Image now run in the shared workspace**
+The headline: **all 20 tools run in the shared workspace** (W13–W15 finished the image tools)
 (`src/components/islands/workspace/`). `docs/design/tool-workspace.md` is the design; the component
 contract lives in the files themselves; `tests/e2e/workspace/migrated.ts` lists migrated tools.
 Commits, verification figures and per-task notes are in `WORKLOG.md`.
@@ -219,6 +220,12 @@ Commits, verification figures and per-task notes are in `WORKLOG.md`.
 - **W4** — Watermark PDF. **W5** — Add Page Numbers. **W6** — Crop PDF. **W7** — Rearrange / Rotate.
 - **W8** — PDF to Image. **W9** — Redact PDF. **W10** — Protect and Unlock PDF. **W11** — Digital Signature PDF.
 - **W12** — Compress Image with the new shared `workspace/ImageStage.tsx` and `CompareView`.
+- **W13** — Resize Image. **W14** — Convert Image. **W15** — Lock Image and View-Once (two View-Once security fixes).
+- **CI1, CI2, CI3** — CI green again; Linux WebKit black page renders fixed; e2e sharded to ~15 min; Firefox HEIC-cancel crash fixed.
+- **F1** — signature fonts with Latin letters. **F2** — signature picked out of an uploaded photo. **F3** — sign all or chosen pages, linked copies.
+- **F4** — result gallery, Sign legal FAQ, search synonyms. **F5** — Fit Image page size, phrase-only redaction. **F6** — Compress PDF dedupe, real DPI, soft-masked images.
+- **F7** — Watermark drag-to-position. **F8** — copy-truth sweep, free-word guard, fixtures untracked. **F9** — search test retry pattern, design doc refresh.
+- **T3** — HEIC / AVIF / GIF / BMP in every tool that takes an image, `.heic` recognised by extension.
 
 Dropped: workspace step 1c (splitting `pdf-worker.ts`) — it only served parallel agents.
 
@@ -229,8 +236,12 @@ Dropped: workspace step 1c (splitting `pdf-worker.ts`) — it only served parall
 ### Waiting on Lakshay
 
 - **Cloudflare dashboard:** switch off Web Analytics (Pages project → Metrics → Web Analytics) and the
-  bot-detection script (zone → Security → Bots → Bot Fight Mode / JavaScript detections). The second
-  POSTs browser signals from every page and contradicts the privacy page's "no tracking scripts".
+  bot-detection script (zone → Security → Bots → Bot Fight Mode / JavaScript detections). Measured on
+  2026-10-26 (F8): a plain homepage visit loads `/cdn-cgi/challenge-platform/.../jsd/main.js`, POSTs to
+  `.../jsd/oneshot/...` and sets `cf_clearance` (`.docukit.uk`, httpOnly, one year). Until it is off,
+  the privacy page says "Docukit's code sets no cookies…"; once it is off, simplify that wording.
+- **Question from F8:** should the site-wide "No Uploads" taglines (default share image, manifest,
+  WebSite JSON-LD, meta descriptions) be qualified for View-Once, or stay short?
 - **Decisions:** Page Numbers "Page X of N" with a start number (start 3 on 5 pages ends "Page 7 of
   5" — should N be the last number printed?); Image to PDF "Cover" crops past the margins on one side
   — keep, or stop at the margins?; Edit PDF — bring back drag-to-draw shapes?
@@ -256,11 +267,14 @@ renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
 ### 3. Older backlog still open
 
-- **T3 remainder** — HEIC in any tool not yet covered.
 - **T6** — PWA / offline.
 - **T7** — titles; needs `Queries.csv` from Lakshay.
 - **T9** — new tools.
 - **T10** — guides.
+
+T9 and T10 are open-ended: ask Lakshay which tools or guides he wants before briefing them.
+Small leftovers from T3: no AVIF fixture (AVIF input untested end to end); Sign's decode error
+message suggests only four formats.
 
 ---
 
