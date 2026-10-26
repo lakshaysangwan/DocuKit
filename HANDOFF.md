@@ -254,12 +254,10 @@ renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
 ### 2. Follow-ups found during the migration
 
-- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5).
+- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5); Compress PDF dedupe, real DPI, soft-masked images, fonts option removed, preview copies once (F6).
 - CI flakes still unexplained: WebKit `protect-pdf-permissions.spec.ts:108` (goto load timeout), Firefox `organize-pages.spec.ts:102` (lost first click), Firefox `compress-image-preview.spec.ts:241` (HEIC slow), Firefox/WebKit `landing-pages.spec.ts` Extract PDF Pages lost first click. The e2e job takes ~1h–1h20 of its 90 minutes — shard it.
 - Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
 
-- Compress PDF size wins: dedupe identical image streams; alpha-aware compression of masked images.
-- Compress PDF: the DPI slider is a scale, not a DPI; "Strip embedded fonts" loses text; the probe re-copies the file to the worker per page.
 - Watermark: drag-to-position (only nine presets today).
 - Copy truth sweep for anything not yet migrated.
 - Untrack the nine fixtures under `tests/e2e/fixtures/files/` and ignore the folder.
