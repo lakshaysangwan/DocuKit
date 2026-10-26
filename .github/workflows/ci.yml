@@ -66,9 +66,8 @@ jobs:
   # mirror, and on some runners that crawled for over ten minutes. The image's
   # tag must match the @playwright/test version in package-lock.json (a
   # step after npm ci checks it). --user 1001 is the runner's own user, which
-  # owns the
-  # workspace and HOME mounted into the container, as Playwright's CI guide
-  # recommends (Firefox will not run as root with a HOME it does not own).
+  # owns the workspace and HOME mounted into the container, as Playwright's CI
+  # guide recommends (Firefox will not run as root with a HOME it does not own).
   e2e:
     name: e2e (${{ matrix.browser }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
