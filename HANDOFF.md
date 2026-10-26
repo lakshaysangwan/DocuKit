@@ -130,10 +130,7 @@ then worktree and branch cleanup.
 - **`sync-pdfjs-worker.mjs` leaves `public/pdfjs/pdf.worker.min.mjs` modified** (line endings only) in
   a worktree. Never stage it.
 - **Every file under `tests/e2e/fixtures/files/` is generated** by `tests/e2e/fixtures/generate.ts`
-  from Playwright's `globalSetup`, including the untracked ones. A test run rewrites the nine tracked
-  ones, so they always show as modified. Never commit them. New fixtures are added to `generate.ts`
-  (seeded, so identical on every run), not checked in. Ignoring the folder in `.gitignore` does not
-  work while nine files are tracked — see the cleanup task in section 6.
+  from Playwright's `globalSetup`, including the untracked ones. Since F8 the folder is git-ignored and none are tracked; a clean checkout generates all of them. New fixtures are added to `generate.ts` (seeded, so identical on every run), not checked in.
 - **A lower-case drive letter in the shell's working directory** (`d:\…`) makes `npm test` fail in
   every file with "Cannot read properties of undefined (reading 'config')". `cd /c/ && cd
   "D:/Project/DocuKit"` fixes it. It happens after an agent is resumed.
@@ -253,12 +250,10 @@ renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
 ### 2. Follow-ups found during the migration
 
-- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5); Compress PDF dedupe, real DPI, soft-masked images, fonts option removed, preview copies once (F6); Watermark drag-to-position (F7).
-- CI flakes still unexplained (e2e is now sharded, ~15 min — CI3): WebKit `home-search.spec.ts:298` (island hydrates though its script is blocked), Chromium `sign-pdf-all-pages.spec.ts:164` (drag not registered). The CI container tag `mcr.microsoft.com/playwright:v1.62.1-noble` must be bumped together with `@playwright/test`. Pushing a `task/**` branch runs CI.
+- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5); Compress PDF dedupe, real DPI, soft-masked images, fonts option removed, preview copies once (F6); Watermark drag-to-position (F7); copy-truth sweep, free-word guard, fixtures untracked (F8).
+- CI flakes still unexplained (e2e is now sharded, ~15 min — CI3): WebKit `home-search.spec.ts:298` (cause found in F8: Astro retries the island script as `?astro-retry=…`, which the test route pattern misses — fix the pattern), Chromium `sign-pdf-all-pages.spec.ts:164` (drag not registered). The CI container tag `mcr.microsoft.com/playwright:v1.62.1-noble` must be bumped together with `@playwright/test`. Pushing a `task/**` branch runs CI.
 - Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
 
-- Copy truth sweep for anything not yet migrated.
-- Untrack the nine fixtures under `tests/e2e/fixtures/files/` and ignore the folder.
 
 ### 3. Older backlog still open
 

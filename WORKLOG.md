@@ -340,3 +340,15 @@ the test blocks its script; 2 of 8 runs), Chromium `sign-pdf-all-pages.spec.ts:1
 registered, 1 of 8), a one-off WebKit `page.goto` internal error. `protect-pdf-permissions:108` and
 `organize-pages:102` did not recur in 8 runs. Whether stock Firefox (not Playwright's) also crashed
 on the HEIC cancel is unverified.
+| `1de4b62`…`fcf2326` (F8, 7 commits) | Copy-truth sweep and fixture untracking. View-Once uploads an encrypted copy, so "Files never leave your device" / "never uploaded" / "No uploads, no accounts, no limits" (hero, footer, homepage meta) now say files are processed on the device and not uploaded except View-Once's encrypted copy (real limits exist: Merge 50 files, View-Once 10 MB, Resize 10,000 px); View-Once share image tagline "Encrypted in Your Browser · Link Opens Once"; Edit PDF and Lock Image share images redrawn with current text. Privacy page (Oct 2026): what View-Once sends (encrypted image + expiry; key after `#` never sent; server sees the IP, our function stores nothing), and "Docukit's code sets no cookies and includes no analytics or tracking scripts" — scoped to our code because of Cloudflare's injected script (below). Registry: Split "up to 500 pages reliably" (unbacked), Unlock "Instant", Digital Signature "verifies the signer's identity" corrected. Unused `HowItWorks.astro` / `TrustSection.astro` (untrue claims) deleted. New guard `parity/no-free-copy.spec.ts` (every built page's visible text, titles, meta, alt/aria/placeholder, manifest, share-image strings). The nine generated fixtures under `tests/e2e/fixtures/files/` untracked and the folder ignored (a clean checkout generates all 31 at globalSetup). Home-search position checks tolerate < 0.05 px (the longer hero put the heading on a fractional y; Firefox rounded it differently) | Clean worktree (895fb2a): 854 Chromium, 1011 Firefox/WebKit, 76 mobile, 17 visual, 1132 unit; one Firefox sub-pixel failure fixed in `fcf2326`, re-gated (home-search ×3 on Firefox 69/69, Chromium / WebKit / mobile, parity 102). Live (~2 min after the push): new hero, privacy wording and share image served; parity incl. the free-word guard 102/102 against docukit.uk; landing pages and home-search functional passes (beacon-only failures) |
+
+F8 notes: **Measured on production** (fresh Chromium, plain homepage visit): Cloudflare's JavaScript
+Detections load `/cdn-cgi/challenge-platform/.../jsd/main.js` and POST to `.../jsd/oneshot/...`, and
+set one cookie, `cf_clearance` (`.docukit.uk`, httpOnly, expires in one year). The site's own code
+sets none — hence the scoped privacy wording until Lakshay switches JS detections off. **Found:**
+`ux/home-search.spec.ts:298` fails every time against production (and was the WebKit CI flake): the
+test blocks `**/_astro/ToolSearch.*.js`, but Astro retries the island script as
+`ToolSearch.<hash>.js?astro-retry=<ts>`, which the pattern misses, so the island hydrates — a test
+gap, queued. Remaining unproven bullets: Merge "Up to 50 files at once", Protect "Password strength
+meter"; partial: Compress PDF grayscale, PDF to Image folder/share, Convert GIF/AVIF input and AVIF
+transparency, View-Once expiry.
