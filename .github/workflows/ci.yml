@@ -2,17 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # task/** lets a task branch be checked on GitHub's Linux runners before it
+    # reaches main; nothing deploys from those branches.
+    branches: [main, 'task/**']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -43,23 +46,42 @@ jobs:
 
   # The Playwright suite is the actual release gate — the parity meta-test that
   # catches copy drift, the document corpus, and every tool's functional cover.
-  # It lived outside CI until now, which meant Phase 7's gates only ran when
-  # someone remembered to run them locally.
   #
   # It runs against a production build served by scripts/serve-dist.mjs, not the
   # dev server: Vite serves workers as transformed modules rather than the static
   # hashed files users get, and that difference has already hidden one real
   # WebKit failure.
+  #
+  # Run as one job, the four projects took 1h20m–1h30m by October 2026 and hit
+  # the 90-minute limit. Each shard below runs one engine on its own runner
+  # (installing only that browser), and the slow engines are split further with
+  # --shard, so every shard finishes in about a quarter of that. The build takes
+  # seconds, so each shard builds for itself rather than passing an artifact.
+  # Measured worker time per project: WebKit ~60–85 min, Firefox ~32–47,
+  # Chromium ~21–31, mobile ~2 (two workers per runner).
   e2e:
+    name: e2e (${{ matrix.browser }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
-    # The suite (four projects, two workers, retries) took 52 minutes in October
-    # 2026 and passed 60 as tools were added, so the job was cancelled before it
-    # could report. Leave headroom; a hung run still stops.
-    timeout-minutes: 90
+    timeout-minutes: 40
+    strategy:
+      # One shard failing must not cancel the others and hide their results.
+      fail-fast: false
+      matrix:
+        include:
+          # `mobile` is the Pixel 5 profile, a Chromium browser.
+          - { browser: chromium, projects: --project=chromium --project=mobile, shard: 1, total: 2 }
+          - { browser: chromium, projects: --project=chromium --project=mobile, shard: 2, total: 2 }
+          - { browser: firefox, projects: --project=firefox, shard: 1, total: 3 }
+          - { browser: firefox, projects: --project=firefox, shard: 2, total: 3 }
+          - { browser: firefox, projects: --project=firefox, shard: 3, total: 3 }
+          - { browser: webkit, projects: --project=webkit, shard: 1, total: 4 }
+          - { browser: webkit, projects: --project=webkit, shard: 2, total: 4 }
+          - { browser: webkit, projects: --project=webkit, shard: 3, total: 4 }
+          - { browser: webkit, projects: --project=webkit, shard: 4, total: 4 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -67,8 +89,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Browser binaries are cached per engine and Playwright version; the
+      # system libraries they need are not in the cache, so a hit still
+      # installs those.
+      - name: Cache the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
+
+      - name: Install the Playwright browser
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Install the browser's system dependencies
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps ${{ matrix.browser }}
 
       - name: Build
         run: npm run build
@@ -88,14 +129,27 @@ jobs:
       # that they would fail on antialiasing alone. Generate Linux baselines with
       # the visual-baselines workflow, commit them, then drop this filter.
       - name: Run e2e
-        run: npx playwright test --grep-invert "visual regression"
+        run: npx playwright test ${{ matrix.projects }} --shard=${{ matrix.shard }}/${{ matrix.total }} --grep-invert "visual regression"
         env:
           E2E_BASE_URL: http://localhost:4322
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
+
+  # One status that is green only when every shard passed, so a single check
+  # can be required however the matrix is split.
+  e2e-passed:
+    name: e2e passed
+    if: always()
+    needs: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every e2e shard passed
+        run: test "${{ needs.e2e.result }}" = success
