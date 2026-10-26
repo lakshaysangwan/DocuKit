@@ -54,7 +54,8 @@ jobs:
   #
   # Run as one job, the four projects took 1h20m–1h30m by October 2026 and hit
   # the 90-minute limit. Each shard below runs one engine on its own runner
-  # (installing only that browser), and the slow engines are split further with
+  # (installing only that browser, plus Chromium, which the global setup uses to
+  # build the PDF fixtures), and the slow engines are split further with
   # --shard, so every shard finishes in about a quarter of that. The build takes
   # seconds, so each shard builds for itself rather than passing an artifact.
   # Measured worker time per project: WebKit ~60–85 min, Firefox ~32–47,
@@ -69,15 +70,15 @@ jobs:
       matrix:
         include:
           # `mobile` is the Pixel 5 profile, a Chromium browser.
-          - { browser: chromium, projects: --project=chromium --project=mobile, shard: 1, total: 2 }
-          - { browser: chromium, projects: --project=chromium --project=mobile, shard: 2, total: 2 }
-          - { browser: firefox, projects: --project=firefox, shard: 1, total: 3 }
-          - { browser: firefox, projects: --project=firefox, shard: 2, total: 3 }
-          - { browser: firefox, projects: --project=firefox, shard: 3, total: 3 }
-          - { browser: webkit, projects: --project=webkit, shard: 1, total: 4 }
-          - { browser: webkit, projects: --project=webkit, shard: 2, total: 4 }
-          - { browser: webkit, projects: --project=webkit, shard: 3, total: 4 }
-          - { browser: webkit, projects: --project=webkit, shard: 4, total: 4 }
+          - { browser: chromium, install: chromium, projects: --project=chromium --project=mobile, shard: 1, total: 2 }
+          - { browser: chromium, install: chromium, projects: --project=chromium --project=mobile, shard: 2, total: 2 }
+          - { browser: firefox, install: chromium firefox, projects: --project=firefox, shard: 1, total: 3 }
+          - { browser: firefox, install: chromium firefox, projects: --project=firefox, shard: 2, total: 3 }
+          - { browser: firefox, install: chromium firefox, projects: --project=firefox, shard: 3, total: 3 }
+          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 1, total: 4 }
+          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 2, total: 4 }
+          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 3, total: 4 }
+          - { browser: webkit, install: chromium webkit, projects: --project=webkit, shard: 4, total: 4 }
     steps:
       - uses: actions/checkout@v7
 
@@ -105,11 +106,11 @@ jobs:
 
       - name: Install the Playwright browser
         if: steps.browser-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.install }}
 
       - name: Install the browser's system dependencies
         if: steps.browser-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps ${{ matrix.browser }}
+        run: npx playwright install-deps ${{ matrix.install }}
 
       - name: Build
         run: npm run build
