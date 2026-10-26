@@ -92,6 +92,18 @@ const WORKER_URLS: Record<WorkerModule, string> = {
  */
 const CANVAS_OPS: ReadonlySet<string> = new Set(['compress-image', 'resize-image', 'convert-image', 'compress-pdf']);
 
+/**
+ * Workers that are let finish an aborted job, and only then ended, instead of
+ * being ended at once. The image worker decodes HEIC with libheif, which runs
+ * in a worker of its own nested inside it, and Firefox crashes the whole tab
+ * when a worker is terminated while a worker nested in it is busy (an idle one
+ * is fine). Running a Convert or Compress while a HEIC preview was decoding
+ * did exactly that. An image job is one image, so the leftover work is short;
+ * the aborted job's caller is still answered at once, and the pool replaces
+ * the worker for the next job.
+ */
+const FINISH_BEFORE_ENDING: ReadonlySet<WorkerModule> = new Set(['image']);
+
 class WorkerPool {
   private pools = new Map<WorkerModule, WorkerEntry[]>();
   private queues = new Map<WorkerModule, PendingJob[]>();
@@ -146,7 +158,8 @@ class WorkerPool {
     if (options.signal) {
       options.signal.addEventListener('abort', () => {
         aborted = true;
-        entry.worker.terminate();
+        // Otherwise ended by the message or error handler below, once idle.
+        if (!FINISH_BEFORE_ENDING.has(module)) entry.worker.terminate();
         // Replace the terminated worker
         const pool = this.getPool(module);
         const idx = pool.indexOf(entry);
@@ -157,7 +170,10 @@ class WorkerPool {
     }
 
     entry.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-      if (aborted) return;
+      if (aborted) {
+        entry.worker.terminate();
+        return;
+      }
       port1.close();
       entry.busy = false;
       resolve(e.data);
@@ -165,7 +181,10 @@ class WorkerPool {
     };
 
     entry.worker.onerror = (e) => {
-      if (aborted) return;
+      if (aborted) {
+        entry.worker.terminate();
+        return;
+      }
       port1.close();
       entry.busy = false;
       // A worker that errors here has usually failed to LOAD (bad script, or a
