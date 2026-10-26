@@ -328,3 +328,8 @@ F6 notes: a preview page can differ from the full run when the same image is als
 another page (the per-image DPI rule uses the largest placement). Lakshay's T4 scan gains from
 dedupe only: its overlay carries a /Mask and stays untouched. `docs/design/compress-preview.md`
 still mentions `stripFonts` and the scale-based DPI (historical).
+| `71bebaa` (F7) | Watermark PDF: drag a single watermark anywhere on the page (mouse, touch, pen); the position becomes Custom, stored as the centre as fractions of the displayed page, so every page in "Apply to" gets it at the same relative spot; only the centre is kept on the page (the watermark may hang over the edge, clipped as in the file); arrow keys nudge 0.5% (Shift 5%), "Centre from left / top (mm)" fields, "Reset position", and the nine presets still snap; tiled mode has no drag box and says why. One layout function (`watermark-layout.ts`, new `'custom'` position) still drives preview and file. Shared `OverlayLayer` / `OverlayBox` gained `resizable`, `keepOnPage` and `help` (defaults unchanged). Copy: two bullets, new FAQ | Clean worktree: 814 Chromium, 1007 Firefox/WebKit, 76 mobile, 17 visual, 1132 unit — no flakes; Sign / Edit / Digital Signature (shared overlay) pass on every engine. Live (~1 min after the push): Watermark specs against docukit.uk 18 functional passes per engine on three engines (2 each the CSP-blocked Cloudflare beacon), Sign placement 16/16 on Chromium and WebKit, phone drag 3/3 |
+
+F7 notes: Watermark has no undo history (Reset position and presets are the way back). The mm fields
+measure on the page shown; on mixed page sizes the same fraction is different mm elsewhere (the help
+text says so). Not checked in a desktop PDF reader or on a real phone.
