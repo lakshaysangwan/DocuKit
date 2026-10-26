@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import DropZone from '@/components/islands/shared/DropZone';
 import NextStep from '@/components/islands/shared/NextStep';
 import ToolWorkspace from '@/components/islands/workspace/ToolWorkspace';
@@ -6,6 +6,7 @@ import ActionBar from '@/components/islands/workspace/ActionBar';
 import WorkspaceFileBar from '@/components/islands/workspace/WorkspaceFileBar';
 import PageViewer, { type PageFrame } from '@/components/islands/workspace/PageViewer';
 import PageRail from '@/components/islands/workspace/PageRail';
+import { OverlayBox, OverlayLayer, type OverlayChangePhase } from '@/components/islands/workspace/OverlayLayer';
 import { useToolRun } from '@/components/islands/workspace/use-tool-run';
 import WatermarkPreview from './WatermarkPreview';
 import { usePdfDocument } from '@/hooks/use-pdf-document';
@@ -20,12 +21,18 @@ import {
   DEFAULT_MARGIN,
   DEFAULT_SPACING,
   WATERMARK_POSITIONS,
+  clampCentre,
   layoutWatermark,
+  turnedExtent,
   watermarkedPages,
   type WatermarkApplyTo,
+  type WatermarkCentre,
   type WatermarkLayoutOptions,
   type WatermarkPosition,
+  type WatermarkPositionChoice,
 } from '@/lib/watermark-layout';
+import type { PageGeometry, RectNorm } from '@/lib/pdf/page-geometry';
+import { MM_PER_PT } from '@/lib/sign/placement';
 import { WATERMARK_FONTS, unsupportedChars, type WatermarkFont } from '@/lib/watermark-fonts';
 import type { WatermarkOptions } from '@/types/worker-messages';
 
@@ -94,6 +101,51 @@ const chip = (on: boolean) =>
 const sliderLabel = 'mb-1 flex justify-between text-xs text-[var(--color-text-secondary)]';
 const heading = 'text-sm font-semibold text-[var(--color-text-primary)]';
 
+interface MmFieldProps {
+  label: string;
+  testId: string;
+  value: number | null;
+  onCommit: (value: number) => void;
+}
+
+/** A millimetre field, as Sign PDF has. Shows what is typed while typing, the real value otherwise. */
+function MmField({ label, testId, value, onCommit }: MmFieldProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const id = useId();
+  const shown = draft ?? (value === null ? '' : String(Math.round(value * 10) / 10));
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <label htmlFor={id} className="text-xs text-[var(--color-text-secondary)]">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        step="1"
+        min="0"
+        value={shown}
+        disabled={value === null}
+        data-testid={testId}
+        onFocus={() => setDraft(shown)}
+        onBlur={() => setDraft(null)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const parsed = Number.parseFloat(e.target.value);
+          if (Number.isFinite(parsed)) onCommit(parsed);
+        }}
+        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm tabular-nums text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)] disabled:opacity-50"
+      />
+    </div>
+  );
+}
+
+/** The centre of the (single) watermark on a page, as fractions of it; null when nothing is drawn. */
+function centreOn(geometry: PageGeometry, options: WatermarkLayoutOptions): WatermarkCentre | null {
+  const p = layoutWatermark(geometry, options).placements[0];
+  return p ? { x: p.rect.x + p.rect.width / 2, y: p.rect.y + p.rect.height / 2 } : null;
+}
+
 export default function WatermarkPdfTool() {
   const [file, setFile] = useState<File | null>(null);
   const { status, doc, pageCount } = usePdfDocument(file);
@@ -107,7 +159,14 @@ export default function WatermarkPdfTool() {
   const [opacity, setOpacity] = useState(30);
   const [rotation, setRotation] = useState(-45);
   const [placement, setPlacement] = useState<Placement>('single');
-  const [position, setPosition] = useState<WatermarkPosition>('center');
+  const [position, setPosition] = useState<WatermarkPositionChoice>('center');
+  /** Where it was dragged to (used while `position` is `custom`), as fractions of the page. */
+  const [centre, setCentre] = useState<WatermarkCentre>({ x: 0.5, y: 0.5 });
+  /** The centre while a drag is under way: shown, not yet the position. */
+  const [dragCentre, setDragCentre] = useState<WatermarkCentre | null>(null);
+  const [boxSelected, setBoxSelected] = useState(false);
+  const [positionNote, setPositionNote] = useState('');
+  const [pageGeom, setPageGeom] = useState<{ doc: unknown; index: number; geom: PageGeometry } | null>(null);
   const [margin, setMargin] = useState(DEFAULT_MARGIN);
   const [spacing, setSpacing] = useState(DEFAULT_SPACING);
   const [imageScale, setImageScale] = useState(50);
@@ -205,6 +264,9 @@ export default function WatermarkPdfTool() {
   const targetSet = useMemo(() => new Set(targets), [targets]);
   const onThisPage = targetSet.has(index);
 
+  // While a drag is under way the watermark follows it; it becomes the position on release.
+  const shownPosition: WatermarkPositionChoice = dragCentre ? 'custom' : position;
+  const shownCentre = dragCentre ?? centre;
   const layoutOptions = useMemo<WatermarkLayoutOptions>(
     () => ({
       type,
@@ -216,11 +278,88 @@ export default function WatermarkPdfTool() {
       imageScale: imageScale / 100,
       rotation,
       placement,
-      position,
+      position: shownPosition,
+      centre: shownPosition === 'custom' ? shownCentre : undefined,
       margin,
       spacing,
     }),
-    [type, text, font, fontSize, image, imageScale, rotation, placement, position, margin, spacing],
+    [type, text, font, fontSize, image, imageScale, rotation, placement, shownPosition, shownCentre, margin, spacing],
+  );
+
+  // The current page's size, for the millimetre fields.
+  useEffect(() => {
+    if (!doc || index >= doc.pageCount) return;
+    let live = true;
+    doc.geometry(index).then(
+      (geom) => {
+        if (live) setPageGeom({ doc, index, geom });
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [doc, index]);
+  const geometry = pageGeom && pageGeom.doc === doc && pageGeom.index === index ? pageGeom.geom : null;
+
+  /* ── Position: presets, dragging, nudging, millimetres ──────────────── */
+
+  const describeCentre = useCallback(
+    (c: WatermarkCentre, geom: PageGeometry | null) =>
+      geom
+        ? `Watermark centre ${Math.round(c.x * geom.widthPt * MM_PER_PT)} mm from the left and ${Math.round(c.y * geom.heightPt * MM_PER_PT)} mm from the top of page ${index + 1}.`
+        : '',
+    [index],
+  );
+
+  /** Make a centre (fractions of the page) the custom position. */
+  const placeAt = useCallback(
+    (next: WatermarkCentre) => {
+      const c = clampCentre(next);
+      setCentre(c);
+      setPosition('custom');
+      setDragCentre(null);
+      invalidate();
+      return c;
+    },
+    [invalidate],
+  );
+
+  const choosePreset = useCallback(
+    (p: WatermarkPosition) => {
+      setPosition(p);
+      setDragCentre(null);
+      setPositionNote('');
+      invalidate();
+    },
+    [invalidate],
+  );
+
+  const onBoxChange = useCallback(
+    (rect: RectNorm, phase: OverlayChangePhase, source: 'pointer' | 'keyboard') => {
+      const c = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      if (phase === 'preview') setDragCentre(clampCentre(c));
+      else if (phase === 'cancel') setDragCentre(null);
+      else {
+        const placed = placeAt(c);
+        if (source === 'keyboard') setPositionNote(describeCentre(placed, geometry));
+      }
+    },
+    [placeAt, describeCentre, geometry],
+  );
+
+  // The centre the fields show: the custom one, or where the preset puts it on this page.
+  const fieldCentre = geometry && placement === 'single' ? centreOn(geometry, layoutOptions) : null;
+  const editMm = useCallback(
+    (edit: { x?: number; y?: number }) => {
+      if (!geometry || !fieldCentre) return;
+      const c = placeAt({
+        x: edit.x !== undefined ? edit.x / MM_PER_PT / geometry.widthPt : fieldCentre.x,
+        y: edit.y !== undefined ? edit.y / MM_PER_PT / geometry.heightPt : fieldCentre.y,
+      });
+      setPositionNote(describeCentre(c, geometry));
+    },
+    [geometry, fieldCentre, placeAt, describeCentre],
   );
 
   const badChars = type === 'text' ? unsupportedChars(text) : [];
@@ -288,25 +427,66 @@ export default function WatermarkPdfTool() {
   const showingOutput = done && compare === 'after' && !!output.doc;
   const viewerDoc = showingOutput ? output.doc : doc;
 
+  const drawable = type === 'text' ? text.length > 0 : !!image;
+  const running = run.phase === 'running';
+
   const renderOverlay = useCallback(
     (frame: PageFrame) => {
       if (!targetSet.has(frame.pageIndex)) return null;
+      const layout = layoutWatermark(frame.geometry, layoutOptions);
+      const single = placement === 'single' ? layout.placements[0] : undefined;
+      // The handle to drag by: the upright box around the turned watermark, about the same centre.
+      let handle: RectNorm | null = null;
+      if (single && drawable) {
+        const W = frame.geometry.widthPt;
+        const H = frame.geometry.heightPt;
+        const t = turnedExtent(layout.boxWidthPt, layout.boxHeightPt, single.rotation);
+        const cx = single.rect.x + single.rect.width / 2;
+        const cy = single.rect.y + single.rect.height / 2;
+        handle = { x: cx - t.width / W / 2, y: cy - t.height / H / 2, width: t.width / W, height: t.height / H };
+      }
       return (
-        <WatermarkPreview
-          frame={frame}
-          layout={layoutWatermark(frame.geometry, layoutOptions)}
-          type={type}
-          text={text}
-          font={font}
-          fontSize={fontSize}
-          color={color}
-          opacity={opacity / 100}
-          imageUrl={image?.url ?? null}
-          layer={layer}
-        />
+        <>
+          <WatermarkPreview
+            frame={frame}
+            layout={layout}
+            type={type}
+            text={text}
+            font={font}
+            fontSize={fontSize}
+            color={color}
+            opacity={opacity / 100}
+            imageUrl={image?.url ?? null}
+            layer={layer}
+          />
+          {handle && (
+            // Clipped to the page: a watermark dragged half off the page shows only what the file keeps.
+            <div className="absolute inset-0 overflow-hidden">
+              <OverlayLayer
+                onBackgroundClick={() => setBoxSelected(false)}
+                disabled={running}
+                help="Arrow keys move the watermark, Shift with an arrow moves it further, Escape deselects it."
+              >
+                <OverlayBox
+                  kind="watermark-box"
+                  rect={handle}
+                  resizable={false}
+                  keepOnPage="centre"
+                  label={`Watermark, page ${frame.pageIndex + 1}`}
+                  selected={boxSelected}
+                  disabled={running}
+                  onSelect={() => setBoxSelected(true)}
+                  onDeselect={() => setBoxSelected(false)}
+                  onChange={onBoxChange}
+                  hint="Drag to move"
+                />
+              </OverlayLayer>
+            </div>
+          )}
+        </>
       );
     },
-    [targetSet, layoutOptions, type, text, font, fontSize, color, opacity, image, layer],
+    [targetSet, layoutOptions, placement, drawable, type, text, font, fontSize, color, opacity, image, layer, running, boxSelected, onBoxChange],
   );
 
   let pageNote: string;
@@ -321,7 +501,10 @@ export default function WatermarkPdfTool() {
   } else if (type === 'image' && !image) {
     pageNote = `Page ${index + 1}: choose an image to see it here.`;
   } else {
-    pageNote = `Page ${index + 1}, as it will be watermarked.`;
+    pageNote =
+      placement === 'single'
+        ? `Page ${index + 1}, as it will be watermarked. Drag the watermark to move it.`
+        : `Page ${index + 1}, as it will be watermarked.`;
   }
 
   const previewBar = (
@@ -600,52 +783,90 @@ export default function WatermarkPdfTool() {
           ))}
         </div>
         {placement === 'single' ? (
-          <div className="flex items-start gap-4">
-            <div className="grid shrink-0 grid-cols-3 gap-1" role="group" aria-label="Position">
-              {WATERMARK_POSITIONS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => change(setPosition)(p)}
-                  aria-pressed={position === p}
-                  aria-label={POSITION_LABEL[p]}
-                  title={POSITION_LABEL[p]}
-                  data-testid={`wm-position-${p}`}
-                  className={cn(
-                    'flex size-8 items-center justify-center rounded-md border transition-colors',
-                    position === p
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
-                      : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50',
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={cn('size-2 rounded-full', position === p ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-text-muted)]')}
-                  />
-                </button>
-              ))}
-            </div>
-            {position !== 'center' && (
-              <div className="min-w-0 flex-1">
-                <label htmlFor="wm-margin" className={sliderLabel}>
-                  <span>Distance from edge</span>
-                  <span>{margin}pt</span>
-                </label>
-                <input
-                  id="wm-margin"
-                  data-testid="wm-margin"
-                  type="range"
-                  min={0}
-                  max={144}
-                  value={margin}
-                  onChange={(e) => change(setMargin)(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
+          <>
+            <div className="flex items-start gap-4">
+              <div className="grid shrink-0 grid-cols-3 gap-1" role="group" aria-label="Position">
+                {WATERMARK_POSITIONS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => choosePreset(p)}
+                    aria-pressed={position === p}
+                    aria-label={POSITION_LABEL[p]}
+                    title={POSITION_LABEL[p]}
+                    data-testid={`wm-position-${p}`}
+                    className={cn(
+                      'flex size-8 items-center justify-center rounded-md border transition-colors',
+                      position === p
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
+                        : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50',
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn('size-2 rounded-full', position === p ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-text-muted)]')}
+                    />
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
+              {position === 'custom' && (
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-2" data-testid="wm-position-custom">
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    <span className="font-medium text-[var(--color-text-primary)]">Custom position.</span> The same spot on
+                    every watermarked page. Pick one of the nine positions to snap back.
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="wm-position-reset"
+                    onClick={() => choosePreset('center')}
+                    className="h-8 rounded-lg border border-[var(--color-border)] px-3 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-background)]"
+                  >
+                    Reset position
+                  </button>
+                </div>
+              )}
+              {position !== 'center' && position !== 'custom' && (
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="wm-margin" className={sliderLabel}>
+                    <span>Distance from edge</span>
+                    <span>{margin}pt</span>
+                  </label>
+                  <input
+                    id="wm-margin"
+                    data-testid="wm-margin"
+                    type="range"
+                    min={0}
+                    max={144}
+                    value={margin}
+                    onChange={(e) => change(setMargin)(Number(e.target.value))}
+                    className="w-full accent-[var(--color-primary)]"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <MmField
+                label="Centre from left (mm)"
+                testId="wm-centre-x"
+                value={fieldCentre && geometry ? fieldCentre.x * geometry.widthPt * MM_PER_PT : null}
+                onCommit={(x) => editMm({ x })}
+              />
+              <MmField
+                label="Centre from top (mm)"
+                testId="wm-centre-y"
+                value={fieldCentre && geometry ? fieldCentre.y * geometry.heightPt * MM_PER_PT : null}
+                onCommit={(y) => editMm({ y })}
+              />
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Drag the watermark on the page, use the arrow keys on it, or type where its centre goes on page {index + 1}.
+            </p>
+          </>
         ) : (
           <div>
+            <p className="mb-2 text-xs text-[var(--color-text-secondary)]" data-testid="wm-tiled-note">
+              Tiled copies cover the whole page, so there is no single watermark to drag.
+            </p>
             <label htmlFor="wm-spacing" className={sliderLabel}>
               <span>Spacing</span>
               <span>{spacing}pt</span>
@@ -724,6 +945,10 @@ export default function WatermarkPdfTool() {
           </p>
         )}
       </section>
+
+      <p className="sr-only" role="status" aria-live="polite" data-testid="wm-position-announce">
+        {positionNote}
+      </p>
     </div>
   );
 

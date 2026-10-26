@@ -4,6 +4,7 @@ import {
   centreRectAt,
   clampRect,
   moveRect,
+  moveRectCentre,
   resizeFromCorner,
   sameRect,
   scaleRect,
@@ -128,6 +129,23 @@ describe('scaleRect', () => {
     expect(max.width).toBeCloseTo(1, 9);
     expect(onPage(max)).toBe(true);
     expect(scaleRect(BOX, 0.0001).width).toBeCloseTo(MIN_BOX_WIDTH, 9);
+  });
+});
+
+describe('moveRectCentre', () => {
+  it('moves freely while the centre is on the page, letting the box hang over the edge', () => {
+    const big: RectNorm = { x: 0.1, y: 0.1, width: 0.6, height: 0.2 };
+    const moved = moveRectCentre(big, -0.3, 0);
+    expect(moved.x).toBeCloseTo(-0.2, 9);
+    expect(moved.width).toBe(0.6);
+  });
+
+  it('stops the centre at the page edge and never resizes', () => {
+    const big: RectNorm = { x: 0.1, y: 0.1, width: 1.4, height: 0.2 };
+    const moved = moveRectCentre(big, 5, -5);
+    expect(moved.x + moved.width / 2).toBeCloseTo(1, 9);
+    expect(moved.y + moved.height / 2).toBeCloseTo(0, 9);
+    expect(moved.width).toBe(1.4);
   });
 });
 

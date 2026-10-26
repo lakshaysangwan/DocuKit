@@ -42,6 +42,16 @@ export function moveRect(rect: RectNorm, dx: number, dy: number): RectNorm {
   return clampRect({ ...rect, x: rect.x + dx, y: rect.y + dy });
 }
 
+/**
+ * Slide a box by a delta keeping only its CENTRE on the page: the box may hang
+ * over the edge (a watermark can sit half off a corner). Size is unchanged.
+ */
+export function moveRectCentre(rect: RectNorm, dx: number, dy: number): RectNorm {
+  const cx = clamp01(rect.x + rect.width / 2 + dx);
+  const cy = clamp01(rect.y + rect.height / 2 + dy);
+  return { x: cx - rect.width / 2, y: cy - rect.height / 2, width: rect.width, height: rect.height };
+}
+
 /** Put the centre of a box at a point of the page, stopping at the page edges. */
 export function centreRectAt(rect: RectNorm, x: number, y: number): RectNorm {
   return clampRect({ ...rect, x: x - rect.width / 2, y: y - rect.height / 2 });

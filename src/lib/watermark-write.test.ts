@@ -139,6 +139,7 @@ describe('writeWatermark — placements match the layout', () => {
     for (const variant of [
       { label: 'text, single, turned', options: TEXT },
       { label: 'text, tiled, unturned', options: { ...TEXT, placement: 'tiled' as const, rotation: 0 } },
+      { label: 'text, custom position near a corner, turned', options: { ...TEXT, position: 'custom' as const, centre: { x: 0.15, y: 0.85 }, rotation: 25 } },
       { label: 'image, single, turned', options: { ...TEXT, type: 'image' as const, imageBytes: new Uint8Array(PNG), imageMime: 'image/png' as const, imageWidthPx: 2, imageHeightPx: 1, imageScale: 0.3, rotation: 30 } },
       { label: 'image, tiled, turned', options: { ...TEXT, type: 'image' as const, imageBytes: new Uint8Array(PNG), imageMime: 'image/png' as const, imageWidthPx: 2, imageHeightPx: 1, imageScale: 0.2, rotation: -20, placement: 'tiled' as const } },
     ]) {

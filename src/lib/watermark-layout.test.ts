@@ -4,6 +4,7 @@ import {
   DEFAULT_SPACING,
   MAX_TILES,
   WATERMARK_POSITIONS,
+  clampCentre,
   layoutWatermark,
   turnedExtent,
   watermarkBox,
@@ -143,6 +144,40 @@ describe('layoutWatermark — single', () => {
     expect(layout.boxWidthPt).toBeCloseTo(153, 9);
     expect(layout.boxHeightPt).toBeCloseTo(76.5, 9);
     expect(layout.baselinePt).toBe(0);
+  });
+
+  it('puts a custom position’s centre at the same fraction of every page, turned about it', () => {
+    for (const page of [LETTER, A4, { widthPt: 792, heightPt: 612 }]) {
+      for (const rotation of [0, -45, 30]) {
+        const p = layoutWatermark(page, text({ position: 'custom', centre: { x: 0.2, y: 0.75 }, rotation })).placements[0];
+        expect(p.rotation).toBe(rotation);
+        const [cx, cy] = centre(p, page);
+        expect(cx).toBeCloseTo(0.2 * page.widthPt, 9);
+        expect(cy).toBeCloseTo(0.75 * page.heightPt, 9);
+      }
+    }
+  });
+
+  it('keeps a custom centre on the page, letting the watermark hang over the edge', () => {
+    const p = layoutWatermark(LETTER, text({ position: 'custom', centre: { x: -0.3, y: 1.4 } })).placements[0];
+    const [cx, cy] = centre(p);
+    expect(cx).toBeCloseTo(0, 9);
+    expect(cy).toBeCloseTo(792, 9);
+    expect(p.rect.x).toBeLessThan(0);
+    expect(clampCentre({ x: Number.NaN, y: 0.4 })).toEqual({ x: 0.5, y: 0.4 });
+  });
+
+  it('ignores the margin and the custom centre where they do not apply', () => {
+    const custom = layoutWatermark(LETTER, text({ position: 'custom', centre: { x: 0.3, y: 0.3 }, margin: 100 }));
+    expect(centre(custom.placements[0])).toEqual([0.3 * 612, 0.3 * 792].map((v) => expect.closeTo(v, 9)));
+    // A preset after a custom drag snaps back, whatever centre is still stored.
+    const preset = layoutWatermark(LETTER, text({ position: 'center', centre: { x: 0.3, y: 0.3 } }));
+    expect(centre(preset.placements[0])).toEqual([expect.closeTo(306, 9), expect.closeTo(396, 9)]);
+    // Without a centre, custom is the middle of the page.
+    expect(centre(layoutWatermark(LETTER, text({ position: 'custom' })).placements[0])).toEqual([
+      expect.closeTo(306, 9),
+      expect.closeTo(396, 9),
+    ]);
   });
 
   it('places nothing without text or an image', () => {

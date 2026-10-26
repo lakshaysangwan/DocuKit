@@ -7,6 +7,7 @@ import { openEdit, objectViewRect, readDrawnObjects, selectedObject } from '../h
 import { openCompress, chooseLevel, settledPreview } from '../helpers/compress-pdf';
 import { openPdfToImage, openPreview } from '../helpers/pdf-to-image';
 import { drawMark, markViewRect, openOptions as openRedactOptions, openRedact, pageText } from '../helpers/redact-pdf';
+import { openWatermark, screenMarks, fileMarks, expectSameMarks, watermarkAndDownload } from '../helpers/watermark';
 import { MIGRATED } from './migrated';
 
 /**
@@ -404,4 +405,52 @@ test.describe('Redact PDF on a phone', () => {
     await page.getByTestId('add-mark').tap();
     await expect(page.getByTestId('overlay-item')).toHaveCount(1);
   });
+});
+
+test('a finger can drag the watermark, and the file has it where it was dropped', async ({ page }) => {
+  await openWatermark(page, FIXTURE.pdf1page);
+  const item = page.getByTestId('overlay-item');
+  await expect(item).toBeInViewport();
+  const centre = (c: [number, number][]) => [(c[0][0] + c[2][0]) / 2, (c[0][1] + c[2][1]) / 2];
+  const [before] = await screenMarks(page);
+
+  // Touch pointer events, as a finger sends them: down on the watermark, move, up.
+  const box = (await item.boundingBox())!;
+  const image = (await page.getByTestId('page-image').boundingBox())!;
+  const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const [dx, dy] = [-60, 80];
+  await item.evaluate(
+    (el, { start, dx, dy }) => {
+      const fire = (type: string, x: number, y: number) =>
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: 9,
+            pointerType: 'touch',
+            isPrimary: true,
+            button: 0,
+            buttons: type === 'pointerup' ? 0 : 1,
+            clientX: x,
+            clientY: y,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      fire('pointerdown', start.x, start.y);
+      for (let i = 1; i <= 5; i++) fire('pointermove', start.x + (dx * i) / 5, start.y + (dy * i) / 5);
+      fire('pointerup', start.x + dx, start.y + dy);
+    },
+    { start, dx, dy },
+  );
+
+  const shown = await screenMarks(page);
+  const [bx, by] = centre(before);
+  const [ax, ay] = centre(shown[0]);
+  expect(Math.abs(ax - (bx + dx / image.width))).toBeLessThan(0.004);
+  expect(Math.abs(ay - (by + dy / image.height))).toBeLessThan(0.004);
+  expect(await item.evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
+  // The page around it still scrolls with a finger.
+  expect(await page.getByTestId('page-viewer').evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+
+  const bytes = await watermarkAndDownload(page);
+  expectSameMarks(await fileMarks(bytes, 0, { text: 'CONFIDENTIAL', font: 'Helvetica-Bold' }), shown);
 });

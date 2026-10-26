@@ -47,6 +47,15 @@ export const WATERMARK_POSITIONS: readonly WatermarkPosition[] = [
   'bottom-right',
 ];
 
+/** One of the nine presets, or `custom`: wherever the visitor dragged it, given by `centre`. */
+export type WatermarkPositionChoice = WatermarkPosition | 'custom';
+
+/** A point of the displayed page as fractions of it, top-left origin, y down. */
+export interface WatermarkCentre {
+  x: number;
+  y: number;
+}
+
 export type WatermarkApplyTo = 'all' | 'odd' | 'even' | 'range';
 
 /** What decides where the watermark goes and how big it is. */
@@ -64,7 +73,13 @@ export interface WatermarkLayoutOptions {
   rotation: number;
   /** One watermark at `position`, or copies repeated over the whole page. */
   placement: 'single' | 'tiled';
-  position?: WatermarkPosition;
+  position?: WatermarkPositionChoice;
+  /**
+   * Single, `custom` position: the watermark's centre as fractions of the
+   * displayed page, so every watermarked page gets it at the same relative
+   * spot. Kept on the page (0–1); the watermark itself may hang over the edge.
+   */
+  centre?: WatermarkCentre;
   /** Single, away from the centre: the gap between the (turned) watermark and the page edges, in points. */
   margin?: number;
   /** Tiled: the gap between neighbouring copies, in points. */
@@ -121,6 +136,13 @@ export function watermarkBox(
   return { width, height: (width * hPx) / wPx, baseline: 0 };
 }
 
+const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
+
+/** A custom centre kept on the page: each coordinate within 0–1 (0.5 if it is not a number). */
+export function clampCentre(c: WatermarkCentre): WatermarkCentre {
+  return { x: clamp01(c.x), y: clamp01(c.y) };
+}
+
 /** Width and height of the upright box that contains a w×h box turned by `deg`. */
 export function turnedExtent(width: number, height: number, deg: number): { width: number; height: number } {
   const t = (deg * Math.PI) / 180;
@@ -134,7 +156,9 @@ export function turnedExtent(width: number, height: number, deg: number): { widt
  * points), as the visitor sees it.
  *
  *   single  one box. At the centre its centre is the page's; at an edge or
- *           corner the turned box keeps `margin` points from those edges.
+ *           corner the turned box keeps `margin` points from those edges; at
+ *           `custom` its centre is `centre` (fractions of the page, clamped
+ *           to it) and the box may reach past the edge.
  *   tiled   a lattice turned with the watermark: copies follow each other along
  *           the reading direction `spacing` points apart, rows are `spacing`
  *           apart, every other row is shifted by half a step (a brick pattern),
@@ -160,7 +184,10 @@ export function layoutWatermark(
   });
 
   const placements: WatermarkPlacement[] = [];
-  if (options.placement === 'single') {
+  if (options.placement === 'single' && options.position === 'custom') {
+    const c = clampCentre(options.centre ?? { x: 0.5, y: 0.5 });
+    placements.push(at(c.x * W, c.y * H));
+  } else if (options.placement === 'single') {
     const position = options.position ?? 'center';
     const margin = Math.max(0, options.margin ?? DEFAULT_MARGIN);
     const [row, col] = position === 'center' ? ['middle', 'center'] : position.split('-');

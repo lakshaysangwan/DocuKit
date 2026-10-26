@@ -4,6 +4,7 @@ import {
   CORNERS,
   MIN_BOX_WIDTH,
   moveRect,
+  moveRectCentre,
   rectFromPoints,
   resizeFromCorner,
   sameRect,
@@ -68,6 +69,11 @@ export interface OverlayLayerProps {
   draftClassName?: string;
   /** Stops all interaction (while the file is being written). */
   disabled?: boolean;
+  /**
+   * The keyboard instructions screen readers hear on every box, when the boxes
+   * cannot do everything the default ones say (be resized or removed).
+   */
+  help?: string;
 }
 
 interface Draw {
@@ -76,7 +82,7 @@ interface Draw {
   rect: RectNorm | null;
 }
 
-export function OverlayLayer({ children, onBackgroundClick, onDraw, draftClassName, disabled = false }: OverlayLayerProps) {
+export function OverlayLayer({ children, onBackgroundClick, onDraw, draftClassName, disabled = false, help }: OverlayLayerProps) {
   const layer = useRef<HTMLDivElement>(null);
   const helpId = useId();
   const draw = useRef<Draw | null>(null);
@@ -154,8 +160,8 @@ export function OverlayLayer({ children, onBackgroundClick, onDraw, draftClassNa
         onPointerCancel={(e) => finishDraw(e, true)}
       >
         <span id={helpId} className="sr-only">
-          Arrow keys move it, Shift with an arrow moves it further, plus and minus resize it, Delete removes it,
-          Escape deselects.
+          {help ??
+            'Arrow keys move it, Shift with an arrow moves it further, plus and minus resize it, Delete removes it, Escape deselects.'}
         </span>
         {children}
         {draft && (
@@ -202,6 +208,13 @@ export interface OverlayBoxProps {
   lockAspect?: boolean;
   /** Smallest width as a fraction of the page width. */
   minWidth?: number;
+  /** Corner handles and the plus / minus keys. Defaults to true; off when the size is set elsewhere. */
+  resizable?: boolean;
+  /**
+   * What a move keeps on the page: the whole `box` (the default), or only its
+   * `centre`, so the box may hang over the edge.
+   */
+  keepOnPage?: 'box' | 'centre';
   /** The accessible name: "Signature, page 3". */
   label: string;
   /** A short tag shown on the selected box: "Drag to move · corners to resize". */
@@ -264,6 +277,8 @@ export function OverlayBox({
   onRemove,
   lockAspect = true,
   minWidth = MIN_BOX_WIDTH,
+  resizable = true,
+  keepOnPage = 'box',
   label,
   hint,
   disabled = false,
@@ -274,6 +289,7 @@ export function OverlayBox({
   const drag = useRef<Drag | null>(null);
   const rectRef = useRef(rect);
   rectRef.current = rect;
+  const move = keepOnPage === 'centre' ? moveRectCentre : moveRect;
 
   const begin = (e: React.PointerEvent<HTMLElement>, target: Corner | 'move') => {
     if (disabled || e.button !== 0) return;
@@ -312,7 +328,7 @@ export function OverlayBox({
     const dy = dyPx / d.pageHeight;
     d.last =
       d.target === 'move'
-        ? moveRect(d.start, dx, dy)
+        ? move(d.start, dx, dy)
         : resizeFromCorner(d.start, d.target, dx, dy, { lockAspect, minWidth });
     onChange(d.last, 'preview', 'pointer');
   };
@@ -335,23 +351,25 @@ export function OverlayBox({
     let next: RectNorm;
     switch (e.key) {
       case 'ArrowLeft':
-        next = moveRect(rect, -stepX, 0);
+        next = move(rect, -stepX, 0);
         break;
       case 'ArrowRight':
-        next = moveRect(rect, stepX, 0);
+        next = move(rect, stepX, 0);
         break;
       case 'ArrowUp':
-        next = moveRect(rect, 0, -stepY);
+        next = move(rect, 0, -stepY);
         break;
       case 'ArrowDown':
-        next = moveRect(rect, 0, stepY);
+        next = move(rect, 0, stepY);
         break;
       case '+':
       case '=':
+        if (!resizable) return;
         next = scaleRect(rect, RESIZE_STEP, { minWidth });
         break;
       case '-':
       case '_':
+        if (!resizable) return;
         next = scaleRect(rect, 1 / RESIZE_STEP, { minWidth });
         break;
       case 'Delete':
@@ -442,6 +460,7 @@ export function OverlayBox({
 
       {selected &&
         !disabled &&
+        resizable &&
         CORNERS.map((corner) => (
           <button
             key={corner}
