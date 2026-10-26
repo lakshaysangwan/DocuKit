@@ -61,7 +61,7 @@ test.describe('Compress PDF', () => {
     assertPdf(bytes);
   });
 
-  test('Custom level reveals DPI / quality / grayscale / font controls', async ({ page }) => {
+  test('Custom level reveals DPI / quality / grayscale controls', async ({ page }) => {
     await page.goto('/compress-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf5page);
     await page.getByRole('button', { name: 'Custom' }).click();
@@ -72,11 +72,20 @@ test.describe('Compress PDF', () => {
     await expect(sliders).toHaveCount(2); // DPI + JPEG quality
     await page.getByRole('checkbox', { name: /grayscale/i }).check();
     await expect(page.getByRole('checkbox', { name: /grayscale/i })).toBeChecked();
+    // "Strip embedded fonts" made text vanish and is gone; nothing removes fonts.
+    await expect(page.getByRole('checkbox', { name: /font/i })).toHaveCount(0);
 
     await page.getByTestId('tool-action').click();
     await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 45_000 });
     const { bytes } = await expectDownload(page, () => page.getByTestId('download-button').click());
     assertPdf(bytes);
+    // Every page keeps the fonts its text is drawn with.
+    const { PDFDocument, PDFName, PDFDict } = await import('pdf-lib');
+    const fontCount = async (pdf: Uint8Array) =>
+      (await PDFDocument.load(pdf)).getPages().map((p) => p.node.Resources()?.lookup(PDFName.of('Font'), PDFDict)?.keys().length ?? 0);
+    const before = await fontCount(await readFile(FIXTURE.pdf5page));
+    expect(before.every((n) => n > 0)).toBe(true);
+    expect(await fontCount(bytes)).toEqual(before);
   });
 });
 

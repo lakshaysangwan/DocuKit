@@ -46,7 +46,6 @@ export type CompressPdfOptions = {
   dpi?: number;
   jpegQuality?: number;   // 1-100
   grayscale?: boolean;
-  stripFonts?: boolean;
   /** Linear scale applied to embedded images (0–1). Overrides the DPI-derived scale. */
   imageScale?: number;
   /**
@@ -76,7 +75,6 @@ export interface CompressApplied {
   /** Linear factor applied to each image's width and height (1 = unchanged). */
   imageScale: number;
   grayscale: boolean;
-  stripFonts: boolean;
   /** Target-size mode: the step chosen (0 = lossless) and the number of steps. */
   ladderStep?: number;
   ladderSteps?: number;

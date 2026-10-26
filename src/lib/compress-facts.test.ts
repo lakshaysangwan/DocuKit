@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { buildFacts, pageBytesLine } from './compress-facts';
 import type { CompressApplied, CompressImageOutcome } from '../types/worker-messages';
 
-const HIGH: CompressApplied = { lossless: false, jpegQuality: 50, imageScale: 0.48, grayscale: false, stripFonts: false };
-const LOW: CompressApplied = { lossless: true, jpegQuality: 90, imageScale: 1, grayscale: false, stripFonts: false };
+const HIGH: CompressApplied = { lossless: false, jpegQuality: 50, imageScale: 0.48, grayscale: false };
+const LOW: CompressApplied = { lossless: true, jpegQuality: 90, imageScale: 1, grayscale: false };
 
 function image(over: Partial<CompressImageOutcome>): CompressImageOutcome {
   return {
@@ -95,10 +95,9 @@ describe('buildFacts', () => {
     expect(text.lines.join(' ')).not.toMatch(/selectable/);
   });
 
-  it('stripping fonts is not passed off as leaving text alone', () => {
-    const facts = buildFacts({ phase: 'result', pageIndex: 0, applied: { ...HIGH, stripFonts: true }, images: [image({})] });
-    expect(facts.lines.join(' ')).not.toMatch(/Text and vector graphics are not changed/);
-    expect(facts.lines[1]).toMatch(/fonts are removed/);
+  it('says text is left alone: no setting removes fonts', () => {
+    const facts = buildFacts({ phase: 'result', pageIndex: 0, applied: HIGH, images: [image({})] });
+    expect(facts.lines[1]).toBe('Text and vector graphics are not changed; document properties are cleared.');
   });
 
   it('the original handed back is said plainly', () => {

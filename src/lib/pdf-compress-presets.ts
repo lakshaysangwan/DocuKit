@@ -25,8 +25,6 @@ export interface CompressSettings {
   jpegQuality: number;
   /** Custom only. */
   grayscale: boolean;
-  /** Custom only. */
-  stripFonts: boolean;
   /** Target size only, in bytes. */
   targetBytes: number;
 }
@@ -41,10 +39,10 @@ export const HARSH_IMAGE_SCALE = 0.5;
 export function compressOptionsFor(s: CompressSettings): CompressPdfOptions {
   if (s.level === 'target') return { level: 'custom', targetBytes: s.targetBytes, report: true };
   if (s.level === 'custom') {
-    return { level: 'custom', dpi: s.dpi, jpegQuality: s.jpegQuality, grayscale: s.grayscale, stripFonts: s.stripFonts, report: true };
+    return { level: 'custom', dpi: s.dpi, jpegQuality: s.jpegQuality, grayscale: s.grayscale, report: true };
   }
   const preset = LEVEL_PRESETS[s.level];
-  return { level: s.level, dpi: preset.dpi, jpegQuality: preset.jpegQuality, grayscale: false, stripFonts: false, report: true };
+  return { level: s.level, dpi: preset.dpi, jpegQuality: preset.jpegQuality, grayscale: false, report: true };
 }
 
 /** The same, for a one-page quality preview. */
@@ -58,5 +56,5 @@ export function previewOptionsFor(s: CompressSettings): CompressPdfOptions {
  */
 export function settingsKey(s: CompressSettings): string {
   const o = compressOptionsFor(s);
-  return JSON.stringify([o.level, o.dpi, o.jpegQuality, o.grayscale, o.stripFonts, o.targetBytes]);
+  return JSON.stringify([o.level, o.dpi, o.jpegQuality, o.grayscale, o.targetBytes]);
 }

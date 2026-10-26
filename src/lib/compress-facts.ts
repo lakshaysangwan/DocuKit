@@ -111,11 +111,7 @@ export function buildFacts(input: FactsInput): Facts {
       }
       lines.push(`${parts.join('; ')}.`);
     }
-    lines.push(
-      applied.stripFonts
-        ? 'Embedded fonts are removed from every page, so text may not display; document properties are cleared.'
-        : 'Text and vector graphics are not changed; document properties are cleared.',
-    );
+    lines.push('Text and vector graphics are not changed; document properties are cleared.');
   }
 
   if (pageHasText === false) {

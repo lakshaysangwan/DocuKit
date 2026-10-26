@@ -225,7 +225,7 @@ describe('compressPdf', () => {
   it('reports, from the same plan, why each image a page draws was left alone', async () => {
     const input = await makeMaskedImagesPdf();
     const result = await compressPdf(toArrayBuffer(input), { level: 'high', dpi: 72, jpegQuality: 50, report: true }, noProgress);
-    expect(result.applied).toEqual({ lossless: false, jpegQuality: 50, imageScale: 72 / 150, grayscale: false, stripFonts: false });
+    expect(result.applied).toEqual({ lossless: false, jpegQuality: 50, imageScale: 72 / 150, grayscale: false });
 
     const { planned, byName } = await plansByName(input, 0);
     const images = result.images!;

@@ -162,7 +162,6 @@ async function compressPdfOnce(
     jpegQuality: options.jpegQuality ?? 75,
     imageScale: lossless ? 1 : scale,
     grayscale: !lossless && !!options.grayscale,
-    stripFonts: !!options.stripFonts,
   };
   let imagesTotal = 0;
   let imagesRecompressed = 0;
@@ -193,23 +192,6 @@ async function compressPdfOnce(
   doc.setKeywords([]);
   doc.setProducer('');
   doc.setCreator('');
-
-  // Strip embedded fonts if requested
-  if (options.stripFonts) {
-    sendProgress(12, 'Stripping fonts (warning: text may become invisible)…');
-    // We clear out the /Font mappings in every page's Resource dictionary
-    doc.getPages().forEach((page) => {
-      const res = page.node.Resources();
-      if (res) {
-        const fonts = res.get(PDFName.of('Font'));
-        if (fonts && fonts.constructor.name === 'PDFDict') {
-          const fDict = fonts as any;
-          const kArray = fDict.keys();
-          kArray.forEach((k: any) => fDict.delete(k));
-        }
-      }
-    });
-  }
 
   // Re-encode embedded images as JPEG — only those on the allow-list in
   // `planImagePass`; every other image is left exactly as it is.

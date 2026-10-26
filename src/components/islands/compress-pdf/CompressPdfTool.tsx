@@ -140,10 +140,9 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
   const [dpi, setDpi] = useState(150);
   const [jpegQuality, setJpegQuality] = useState(75);
   const [grayscale, setGrayscale] = useState(false);
-  const [stripFonts, setStripFonts] = useState(false);
   const settings = useMemo<CompressSettings>(
-    () => ({ level, dpi, jpegQuality, grayscale, stripFonts, targetBytes }),
-    [level, dpi, jpegQuality, grayscale, stripFonts, targetBytes],
+    () => ({ level, dpi, jpegQuality, grayscale, targetBytes }),
+    [level, dpi, jpegQuality, grayscale, targetBytes],
   );
 
   const run = useToolRun<CompressOutput>();
@@ -614,15 +613,6 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
                 className="accent-[var(--color-primary)]"
               />
               Convert images to grayscale
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-              <input
-                type="checkbox"
-                checked={stripFonts}
-                onChange={(e) => change(setStripFonts)(e.target.checked)}
-                className="accent-[var(--color-primary)]"
-              />
-              Strip embedded fonts (text may stop displaying)
             </label>
           </div>
         </section>
