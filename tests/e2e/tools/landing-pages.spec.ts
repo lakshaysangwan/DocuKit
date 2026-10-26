@@ -11,6 +11,7 @@ import {
 } from '../helpers/harness';
 import { convertAndDownload, openConvert } from '../helpers/convert-image';
 import { openOrganize, saveAndDownload, filePageOrder, fileRotations } from '../helpers/organize-pages';
+import { openSplit } from '../helpers/split-pdf';
 
 /**
  * Task landing pages are existing tools opened with a preset. Two things can
@@ -134,8 +135,11 @@ test.describe('Landing pages — the preset is applied', () => {
   });
 
   test('Extract PDF Pages opens in Extract mode: the pages clicked are the pages delivered', async ({ page }) => {
-    await page.goto('/extract-pdf-pages/');
-    await addSingleFileAndWait(page, FIXTURE.pdf5page);
+    // Every page drawn before the first click, as the Split specs do. The cards
+    // start at A4 proportions and resize once the pages' real sizes are read,
+    // so a click aimed before that could land beside the card it measured
+    // (seen on WebKit and Firefox in CI).
+    await openSplit(page, FIXTURE.pdf5page, 5, '/extract-pdf-pages/');
     await expect(page.getByTestId('split-modes').getByRole('button', { name: /^Extract Pages/ })).toHaveAttribute('aria-pressed', 'true');
     // Each click is seen to land before the next, so a miss names the page it missed.
     await page.getByTestId('page-select-1').click();
