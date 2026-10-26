@@ -418,7 +418,7 @@ export const TOOLS: ToolDef[] = [
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
       { q: 'Can I watermark specific pages only?', a: 'Yes — apply to all pages, odd pages, even pages, or the pages you list, such as "1-3, 5". Pages left out are marked "Not watermarked" in the preview.' },
-      { q: 'Can I use my company logo as a watermark?', a: 'Yes — switch to Image watermark and choose your logo as a PNG, JPEG or WebP file (PNG keeps transparency), then set its width, opacity, rotation and position.' },
+      { q: 'Can I use my company logo as a watermark?', a: 'Yes — switch to Image watermark and choose your logo as a JPEG, PNG, WebP, GIF, BMP, AVIF or HEIC file (transparency is kept), then set its width, opacity, rotation and position.' },
       { q: 'Can I place the watermark behind the content?', a: 'Yes — choose Behind content and the page is painted over the watermark. On pages with an opaque background, such as scans, that hides it, so On top is the right choice there.' },
       { q: 'Can I put the watermark exactly where I want it?', a: 'Yes — drag it on the page with a mouse, finger or pen, move it with the arrow keys (hold Shift for bigger steps), or type where its centre goes in millimetres. It goes in the same spot on every watermarked page, measured as a share of the width and height of each page. Pick one of the nine positions to snap it back.' },
       { q: 'Can I tile the watermark across the page?', a: 'Yes — choose Tiled to repeat the watermark across the whole page, turned with it; the Spacing slider sets the gap between copies.' },
@@ -455,7 +455,7 @@ export const TOOLS: ToolDef[] = [
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
       { q: 'Can I edit existing text in a PDF?', a: 'No. Edit PDF adds new things on top of the page: text, images, shapes, highlights and stamps. It cannot change text that is already in the PDF. You can cover old text with a whiteout box and type new text over it, but the old text is still in the file underneath; use Redact PDF to remove it for good.' },
-      { q: 'What can I add?', a: 'Text, images (JPEG, PNG, WebP, GIF, BMP and HEIC), rectangles, ellipses, lines, arrows, freehand drawing, highlights, whiteout boxes, and stamps reading APPROVED, DRAFT, CONFIDENTIAL, COPY or VOID.' },
+      { q: 'What can I add?', a: 'Text, images (JPEG, PNG, WebP, GIF, BMP, AVIF and HEIC iPhone photos, the right way up), rectangles, ellipses, lines, arrows, freehand drawing, highlights, whiteout boxes, and stamps reading APPROVED, DRAFT, CONFIDENTIAL, COPY or VOID.' },
       { q: 'How do I make something bigger or smaller?', a: 'Select it on the page, then pull one of its corner handles, press Smaller or Larger, or type its width and height in millimetres. Text also has a font size field from 6 to 144 pt, and pulling a corner of a text box changes its font size. Images and stamps keep their proportions while you resize them unless you untick Keep proportions.' },
       { q: 'Will it be in the same place in the saved PDF?', a: 'Yes. Everything is saved where and at the size it was shown, including on pages that are rotated or cropped.' },
       { q: 'What is the difference between Part of the page and Separate annotations?', a: 'Part of the page draws everything into the page itself, so it cannot be moved afterwards. Separate annotations saves each item as a PDF annotation, which other PDF apps can select, move or delete.' },

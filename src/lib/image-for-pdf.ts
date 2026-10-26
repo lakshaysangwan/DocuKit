@@ -11,18 +11,38 @@
  *   JPEG with an orientation   redrawn upright, re-encoded as JPEG
  *   PNG                        embedded as it is
  *   anything else              decoded, re-encoded as PNG when it has
- *   (WebP, GIF, BMP, HEIC)     transparency and as JPEG when it has none
+ *   (WebP, GIF, BMP, AVIF,     transparency and as JPEG when it has none
+ *   HEIC/HEIF)
  *
  * The result carries the pixel size the page layout must use and the exact
  * bytes that will be embedded, so a preview drawn from it cannot differ from
  * the file.
  */
-import { decodeHeic } from './image-codec';
+import { decodeToBitmap } from './image-codec';
 
 /** JPEG quality used whenever an image has to be re-encoded (canvas scale, 0–1). */
 export const REENCODE_JPEG_QUALITY = 0.92;
 
 export type EmbedMime = 'image/jpeg' | 'image/png';
+
+/**
+ * What a file picker should offer for an image that goes into a PDF: every
+ * type `prepareImageForPdf` can turn into a JPEG or PNG. HEIC/HEIF are also
+ * listed by extension, because Windows and Firefox often give a .heic file no
+ * MIME type at all.
+ */
+export const PDF_IMAGE_ACCEPT = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  '.heic',
+  '.heif',
+];
 
 export interface PreparedImage {
   /** What will be embedded. The original file when nothing had to change. */
@@ -228,7 +248,8 @@ interface Decoded {
 /**
  * Decode with an <img>, which is what the preview uses and which applies EXIF
  * orientation in every current browser. For what the browser cannot decode
- * (HEIC outside Safari) fall back to libheif.
+ * (HEIC outside Safari, AVIF in some WebKit builds) fall back to the shared
+ * decoder, which brings in libheif or libavif as the file needs.
  */
 async function decode(file: Blob): Promise<Decoded> {
   const url = URL.createObjectURL(file);
@@ -250,7 +271,7 @@ async function decode(file: Blob): Promise<Decoded> {
   } catch {
     URL.revokeObjectURL(url);
   }
-  const bitmap = await decodeHeic(file);
+  const bitmap = await decodeToBitmap(file);
   return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
 }
 

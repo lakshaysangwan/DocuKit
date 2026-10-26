@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { FIXTURE } from '../fixtures/generate';
 import { PageDiagnostics, countPdfPagesStrict, readPdfAnnotationSubtypes } from '../helpers/harness';
 import { expectSameRect, type ViewRect } from '../helpers/sign';
+import { expectHeicPhotoOnPage } from '../helpers/heic-photo';
 import {
   addObject,
   dragCorner,
@@ -249,6 +250,29 @@ test.describe('Edit PDF', () => {
     expect(end.width / start.width).toBeCloseTo(1.1, 2);
     const drawn = await readDrawnObjects(await saveAndDownload(page));
     expectDrawn(drawn[0], 'image', end, 'picture after Larger, Larger, Smaller');
+  });
+
+  test('an iPhone HEIC photo is added upright at its own size and is the photo in the file', async ({ page }) => {
+    // HEIC is decoded by a WASM library where the browser cannot do it itself.
+    test.slow();
+    const diag = new PageDiagnostics(page);
+    await openEdit(page, FIXTURE.pdf1page);
+    await expect(page.getByTestId('add-image-input')).toHaveAttribute('accept', /image\/heic.*\.heic/);
+    await page.getByTestId('add-image-input').setInputFiles(FIXTURE.heic);
+    await expect(selectedObject(page)).toHaveAttribute('data-kind', 'image', { timeout: 60_000 });
+    await expect(page.getByTestId('image-reading')).toHaveCount(0);
+    const shown = await objectViewRect(selectedObject(page));
+    // Landscape on the page, as the photo is.
+    expect((shown.width * PAGE_MM.width) / (shown.height * PAGE_MM.height)).toBeCloseTo(1.5, 1);
+
+    const bytes = await saveAndDownload(page);
+    const drawn = await readDrawnObjects(bytes);
+    expect(drawn).toHaveLength(1);
+    expectDrawn(drawn[0], 'image', shown, 'HEIC photo');
+    // One 600 × 400 image, and the rendered page shows the photo where the box was.
+    const placed = await expectHeicPhotoOnPage(bytes);
+    expectSameRect(placed, shown, TOLERANCE, 'photo on the rendered page');
+    expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 
   for (const [name, pdf] of [

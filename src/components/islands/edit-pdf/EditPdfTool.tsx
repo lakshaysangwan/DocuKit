@@ -32,7 +32,7 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import type { PageGeometry, RectNorm } from '@/lib/pdf/page-geometry';
 import { moveRect } from '@/lib/workspace/overlay-math';
 import { helveticaWidthEm, isPlainAscii } from '@/lib/sign/date-text';
-import { prepareImageForPdf } from '@/lib/image-for-pdf';
+import { PDF_IMAGE_ACCEPT, prepareImageForPdf } from '@/lib/image-for-pdf';
 import {
   DEFAULT_COLOUR,
   KIND_LABEL,
@@ -82,7 +82,7 @@ import ObjectPreview from './ObjectPreview';
  */
 
 const ACCEPT = ['application/pdf'];
-const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/heic,image/heif';
+const IMAGE_ACCEPT = PDF_IMAGE_ACCEPT.join(',');
 /** "Smaller" / "Larger" change the size by this much per press. */
 const SIZE_STEP = 1.1;
 const DUPLICATE_OFFSET = 0.03;
@@ -249,6 +249,7 @@ export default function EditPdfTool() {
   const [announcement, setAnnouncement] = useState('');
   const [compare, setCompare] = useState<'after' | 'before'>('after');
   const [imageError, setImageError] = useState<string | null>(null);
+  const [imageReading, setImageReading] = useState(false);
   const [pageGeom, setPageGeom] = useState<{ doc: unknown; pageIndex: number; geom: PageGeometry } | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const textField = useRef<HTMLTextAreaElement>(null);
@@ -375,6 +376,8 @@ export default function EditPdfTool() {
     async (picked: File | undefined) => {
       if (!picked) return;
       setDrawing(false);
+      // A HEIC photo can take a few seconds to decode; say so meanwhile.
+      setImageReading(true);
       try {
         const prepared = await prepareImageForPdf(picked);
         const src = await readAsDataUrl(prepared.blob);
@@ -395,6 +398,8 @@ export default function EditPdfTool() {
         );
       } catch (err) {
         setImageError(err instanceof Error ? err.message : 'This image could not be read.');
+      } finally {
+        setImageReading(false);
       }
     },
     [pageGeometry, pageIndex, objects, place, style.opacity],
@@ -1112,6 +1117,11 @@ export default function EditPdfTool() {
             e.target.value = '';
           }}
         />
+        {imageReading && (
+          <p role="status" className="text-xs text-[var(--color-text-secondary)]" data-testid="image-reading">
+            Reading the image…
+          </p>
+        )}
         {imageError && (
           <p role="alert" className="text-xs font-medium text-[var(--color-error)]">
             {imageError}

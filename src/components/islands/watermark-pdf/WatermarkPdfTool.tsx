@@ -11,7 +11,7 @@ import { useToolRun } from '@/components/islands/workspace/use-tool-run';
 import WatermarkPreview from './WatermarkPreview';
 import { usePdfDocument } from '@/hooks/use-pdf-document';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import { prepareImageForPdf, type EmbedMime } from '@/lib/image-for-pdf';
+import { PDF_IMAGE_ACCEPT, prepareImageForPdf, type EmbedMime } from '@/lib/image-for-pdf';
 import { parsePageRange } from '@/lib/pdf-page-range';
 import { notifyPdfLoadError } from '@/lib/notify';
 import { downloadBlob } from '@/lib/download';
@@ -51,8 +51,6 @@ type WatermarkType = 'text' | 'image';
 type Placement = 'single' | 'tiled';
 
 const ACCEPT = ['application/pdf'];
-/** What the image picker takes. PNG and JPEG are embedded as they are; WebP is re-encoded to one of them first. */
-const IMAGE_ACCEPT = ['image/png', 'image/jpeg', 'image/webp'];
 
 const POSITION_LABEL: Record<WatermarkPosition, string> = {
   'top-left': 'Top left',
@@ -172,6 +170,7 @@ export default function WatermarkPdfTool() {
   const [imageScale, setImageScale] = useState(50);
   const [image, setImage] = useState<WatermarkImage | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [imageReading, setImageReading] = useState(false);
   const [applyTo, setApplyTo] = useState<WatermarkApplyTo>('all');
   const [pageRangeText, setPageRangeText] = useState('');
   const [layer, setLayer] = useState<'front' | 'behind'>('front');
@@ -234,6 +233,8 @@ export default function WatermarkPdfTool() {
     async (chosen: File | undefined) => {
       if (!chosen) return;
       setImageError(null);
+      // A HEIC photo can take a few seconds to decode; say so meanwhile.
+      setImageReading(true);
       try {
         const prepared = await prepareImageForPdf(chosen);
         const bytes = await prepared.blob.arrayBuffer();
@@ -249,6 +250,8 @@ export default function WatermarkPdfTool() {
         invalidate();
       } catch (err) {
         setImageError(err instanceof Error ? err.message : 'This image could not be read.');
+      } finally {
+        setImageReading(false);
       }
     },
     [invalidate],
@@ -673,7 +676,7 @@ export default function WatermarkPdfTool() {
             id="wm-image-input"
             data-testid="wm-image-input"
             type="file"
-            accept={IMAGE_ACCEPT.join(',')}
+            accept={PDF_IMAGE_ACCEPT.join(',')}
             aria-label="Watermark image"
             className="sr-only"
             tabIndex={-1}
@@ -695,7 +698,11 @@ export default function WatermarkPdfTool() {
                 {image ? image.name : 'No image chosen'}
               </p>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                {image?.reencoded ? `Converted to ${image.mime === 'image/png' ? 'PNG' : 'JPEG'} for the PDF.` : 'PNG, JPEG or WebP. PNG keeps transparency.'}
+                {imageReading
+                  ? 'Reading the image…'
+                  : image?.reencoded
+                    ? `Converted to ${image.mime === 'image/png' ? 'PNG' : 'JPEG'} for the PDF.`
+                    : 'JPEG, PNG, WebP, GIF, BMP, AVIF or HEIC. Transparency is kept.'}
               </p>
             </div>
             <button
