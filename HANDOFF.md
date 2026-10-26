@@ -21,8 +21,7 @@ Read sections 1–5 before spawning anything. Section 6 is the queue.
   `.claude/settings.local.json` and regenerated fixtures under `tests/e2e/fixtures/files/`. Never
   stage them. `remediation/phases-0-3` is an old unused branch.
 - **CI** (`.github/workflows/ci.yml`): job `ci` = typecheck, lint, unit tests, build, Lighthouse
-  (non-blocking), `npm audit --audit-level=critical`; job `e2e` = full Playwright suite on four
-  projects against a production build. `gh run list --branch main --limit 5`.
+  (non-blocking), `npm audit --audit-level=critical`; job `e2e` = Playwright suite sharded into 9 jobs (Chromium+mobile ×2, Firefox ×3, WebKit ×4) in the Playwright Docker image against a production build, ~15 min (CI3). `gh run list --branch main --limit 5`.
 - **Stack:** Astro 7 (static output) + React islands + Tailwind 4, Vite 8. PDF work via pdf-lib,
   pdf.js, MuPDF and qpdf (all WASM, in Web Workers). Image codecs via jSquash; HEIC via `heic-to/csp`.
   Cloudflare Pages Functions in `functions/` back the view-once tool.
@@ -255,7 +254,7 @@ renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 ### 2. Follow-ups found during the migration
 
 - Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5); Compress PDF dedupe, real DPI, soft-masked images, fonts option removed, preview copies once (F6); Watermark drag-to-position (F7).
-- CI flakes still unexplained: WebKit `protect-pdf-permissions.spec.ts:108` (goto load timeout), Firefox `organize-pages.spec.ts:102` (lost first click), Firefox `compress-image-preview.spec.ts:241` (HEIC slow), Firefox/WebKit `landing-pages.spec.ts` Extract PDF Pages lost first click. The e2e job takes ~1h–1h20 of its 90 minutes — shard it.
+- CI flakes still unexplained (e2e is now sharded, ~15 min — CI3): WebKit `home-search.spec.ts:298` (island hydrates though its script is blocked), Chromium `sign-pdf-all-pages.spec.ts:164` (drag not registered). The CI container tag `mcr.microsoft.com/playwright:v1.62.1-noble` must be bumped together with `@playwright/test`. Pushing a `task/**` branch runs CI.
 - Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
 
 - Copy truth sweep for anything not yet migrated.
