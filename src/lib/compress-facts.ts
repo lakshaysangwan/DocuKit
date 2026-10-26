@@ -44,7 +44,7 @@ export interface Facts {
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 const REASONS: Record<ImageKeptReason, [one: string, many: string]> = {
-  masked: ['it uses transparency or masking', 'they use transparency or masking'],
+  masked: ['its transparency or mask is of a kind this tool leaves alone', 'their transparency or masks are of a kind this tool leaves alone'],
   unsupported: ['its format is not one this tool re-encodes', 'their format is not one this tool re-encodes'],
   small: ['it is too small to gain anything', 'they are too small to gain anything'],
   'not-smaller': ['re-encoding did not make it smaller', 're-encoding did not make them smaller'],

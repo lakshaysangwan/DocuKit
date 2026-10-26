@@ -11,7 +11,7 @@ import { chromium } from '@playwright/test';
 import { mkdir, writeFile, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeMaskedImagesPdf, makeOnlyMaskedPdf } from './masked-images';
+import { makeMaskedImagesPdf, makeOnlyMaskedPdf, makeSoftMaskedPdf } from './masked-images';
 import { makeDuplicateImagesPdf } from './duplicate-images';
 import { makeCropOffsetPdf, makeMarkerPng, makeMixedPagesPdf, makeRotatedPdf, makeUnbalancedPdf, signaturePhotoScript } from './sign-fixtures';
 
@@ -72,6 +72,9 @@ export const FIXTURE = {
   // The same photo, logo and masked stamp as separate objects on every page,
   // plus two near-copies that must stay separate. See duplicate-images.ts.
   pdfDuplicateImages: path.join(FIXTURES_DIR, 'doc-duplicate-images.pdf'),
+  // Images under a plain soft mask (no stencil), black hidden under their clear
+  // pixels: re-encoded with the mask kept. See masked-images.ts.
+  pdfSoftMasked: path.join(FIXTURES_DIR, 'doc-soft-masked.pdf'),
   // Pages a place-on-page tool gets wrong if it assumes an upright page that
   // starts at 0,0: a /Rotate 90 scan, a CropBox with an offset origin, and a
   // content stream that leaves the coordinate system transformed. See
@@ -205,6 +208,7 @@ export async function generateFixtures(): Promise<void> {
     await makeMaskedImagesPdf({ logo: Buffer.from(encoded.jpg, 'base64'), logoMasked: Buffer.from(encoded.jpg2, 'base64') })
   );
   await writeFile(FIXTURE.pdfOnlyMasked, await makeOnlyMaskedPdf());
+  await writeFile(FIXTURE.pdfSoftMasked, await makeSoftMaskedPdf());
   await writeFile(FIXTURE.pdfDuplicateImages, await makeDuplicateImagesPdf(Buffer.from(encoded.jpg, 'base64')));
 
   // ── Place-on-page geometry ─────────────────────────────────────────────────

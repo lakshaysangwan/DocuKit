@@ -123,7 +123,7 @@ export const OVERLAY_PAGE = {
   names: { overlay: 'I0', logo: 'Logo', logoMasked: 'LogoMasked' },
 } as const;
 
-function addOverlay(ctx: PDFContext, page: PDFPage): void {
+function addOverlay(ctx: PDFContext, page: PDFPage, withStencil = true): void {
   const rand = seeded(1);
   const W = OVERLAY_W;
   const H = OVERLAY_H;
@@ -156,15 +156,14 @@ function addOverlay(ctx: PDFContext, page: PDFPage): void {
 
   const softMask = imageStream(ctx, alpha, W, H, { BitsPerComponent: 8, ColorSpace: 'DeviceGray' });
   // Stencil: a set bit masks the pixel out.
-  const stencil = imageStream(ctx, packBits(W, H, (x, y) => alpha[y * W + x] === 0), W, H, {
-    BitsPerComponent: 1,
-    ImageMask: true,
-  });
+  const stencil = withStencil
+    ? imageStream(ctx, packBits(W, H, (x, y) => alpha[y * W + x] === 0), W, H, { BitsPerComponent: 1, ImageMask: true })
+    : undefined;
   const overlay = imageStream(ctx, colour, W, H, {
     BitsPerComponent: 8,
     ColorSpace: 'DeviceRGB',
     SMask: softMask,
-    Mask: stencil,
+    ...(stencil ? { Mask: stencil } : {}),
     Interpolate: true,
   });
   place(page, OVERLAY_PAGE.names.overlay, overlay, 0, 0, PAGE[0], PAGE[1]);
@@ -412,6 +411,78 @@ export async function makeMaskedImagesPdf(jpgs?: { logo: Uint8Array; logoMasked:
   const doc = await PDFDocument.create();
   await addOverlayPage(doc, jpgs);
   addSweepPage(doc);
+  return doc.save();
+}
+
+// ── Soft masks the lossy pass may re-encode under ───────────────────────────
+
+const BADGE_W = 240;
+const BADGE_H = 160;
+
+/** Where the soft-mask tests sample, in points from the page's bottom-left. */
+export const SOFT_MASK_PAGE = {
+  bandColour: OVERLAY_PAGE.bandColour,
+  /** Resource names: the page-1 overlay with only its /SMask, and two photo-like badges. */
+  names: { overlay: OVERLAY_PAGE.names.overlay, badge: 'Badge', greyBadge: 'GreyBadge' },
+  /** Where each badge is drawn (one point per image pixel ÷ 2). */
+  badge: { x: 60, y: 520, w: BADGE_W / 2 * 1.5, h: BADGE_H / 2 * 1.5 },
+  greyBadge: { x: 330, y: 520, w: BADGE_W / 2 * 1.5, h: BADGE_H / 2 * 1.5 },
+  /** Badge-relative points (fractions of its box from the top-left): clear corner, half band, opaque middle. */
+  badgePoints: {
+    clear: { x: 0.015, y: 0.02 },
+    half: { x: 0.5, y: 0.9 },
+    opaque: { x: 0.5, y: 0.45 },
+  },
+} as const;
+
+/**
+ * A photo-like image under a soft mask: opaque inside a rounded box, clear in
+ * the corners, half transparent along the bottom band; black under every
+ * clear pixel, as exporters leave it.
+ */
+function badge(ctx: PDFContext, grey: boolean, seed: number): PDFRef {
+  const rand = seeded(seed);
+  const n = grey ? 1 : 3;
+  const colour = new Uint8Array(BADGE_W * BADGE_H * n);
+  const alpha = new Uint8Array(BADGE_W * BADGE_H);
+  const r = 28;
+  for (let y = 0; y < BADGE_H; y++) {
+    for (let x = 0; x < BADGE_W; x++) {
+      const dx = Math.max(0, r - x, x - (BADGE_W - 1 - r));
+      const dy = Math.max(0, r - y, y - (BADGE_H - 1 - r));
+      const inside = dx * dx + dy * dy <= r * r;
+      if (!inside) continue;
+      const i = y * BADGE_W + x;
+      alpha[i] = y > BADGE_H * 0.8 ? 128 : 255;
+      for (let c = 0; c < n; c++) colour[i * n + c] = tone(x, y, c * 40, rand);
+    }
+  }
+  const mask = imageStream(ctx, alpha, BADGE_W, BADGE_H, { BitsPerComponent: 8, ColorSpace: 'DeviceGray' });
+  return imageStream(ctx, colour, BADGE_W, BADGE_H, { BitsPerComponent: 8, ColorSpace: grey ? 'DeviceGray' : 'DeviceRGB', SMask: mask });
+}
+
+/**
+ * One page: the page-1 overlay with only its soft mask (no stencil), and two
+ * photo-like images, RGB and grey, each under a soft mask with black hidden
+ * beneath its clear pixels — the kinds the lossy pass may re-encode while
+ * keeping the mask. Drawn over white and over a coloured band.
+ */
+export async function makeSoftMaskedPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const ctx = doc.context;
+  const page = doc.addPage(PAGE);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Soft masks (synthetic)', { x: 150, y: 790, size: 16, font, color: rgb(0, 0, 0) });
+  const [br, bg, bb] = OVERLAY_PAGE.bandColour;
+  const top = PAGE[1] * (1 - BAND_ROWS[0] / OVERLAY_H);
+  const bottom = PAGE[1] * (1 - BAND_ROWS[1] / OVERLAY_H);
+  page.drawRectangle({ x: 0, y: bottom, width: PAGE[0], height: top - bottom, color: rgb(br / 255, bg / 255, bb / 255) });
+  // A band under the badges' lower edge too, so their half-transparent strip is seen over colour.
+  page.drawRectangle({ x: 0, y: 515, width: PAGE[0], height: 30, color: rgb(br / 255, bg / 255, bb / 255) });
+  const { badge: b, greyBadge: g, names } = SOFT_MASK_PAGE;
+  place(page, names.badge, badge(ctx, false, 31), b.x, b.y, b.w, b.h);
+  place(page, names.greyBadge, badge(ctx, true, 32), g.x, g.y, g.w, g.h);
+  addOverlay(ctx, page, false);
   return doc.save();
 }
 

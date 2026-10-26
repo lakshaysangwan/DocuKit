@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as pdfLib from 'pdf-lib';
 import { PDFDocument, PDFName, PDFDict, PDFRef, type PDFContext } from 'pdf-lib';
 import { compressPdf, planImagePass, replacementImageDict, readJpegFrame } from './pdf-compress';
-import { makeMaskedImagesPdf, makeOnlyMaskedPdf, OVERLAY_PAGE, SWEEP_TILES } from '../../tests/e2e/fixtures/masked-images';
+import { makeMaskedImagesPdf, makeOnlyMaskedPdf, makeSoftMaskedPdf, OVERLAY_PAGE, SOFT_MASK_PAGE, SWEEP_TILES } from '../../tests/e2e/fixtures/masked-images';
 
 /**
  * The lossy image pass turned a real document's pages black by re-encoding an
@@ -72,6 +72,50 @@ describe('planImagePass — the fixture document', () => {
     expect(planned).toHaveLength(3);
     expect(planned.filter((p) => p.plan.reencode)).toEqual([]);
   });
+});
+
+describe('planImagePass — images under a plain soft mask', () => {
+  it('re-encodes a Flate image under a plain soft mask, keeping the mask, and never the mask itself', async () => {
+    const { planned, byName } = await plansByName(await makeSoftMaskedPdf(), 0);
+    for (const name of Object.values(SOFT_MASK_PAGE.names)) {
+      const image = byName(name);
+      expect(image.plan.reencode, name).toBe(true);
+      const mask = image.stream.dict.lookup(PDFName.of('SMask'));
+      expect(image.plan.reencode && image.plan.alpha, `${name}: its own /SMask`).toBe(mask);
+      const maskPlan = planned.find((p) => p.stream === mask)!;
+      expect(maskPlan.plan, `${name}: mask`).toEqual({ reencode: false, reason: 'is the mask of another image' });
+    }
+  });
+
+  /** A 16 × 16 Flate RGB image with `mask` (a 16 × 16 grey alpha unless overridden) as its /SMask. */
+  const withMask = (mask: Record<string, unknown> = {}, base: Record<string, unknown> = {}) =>
+    planFor({ Filter: 'FlateDecode', ...base }, (ctx) => ({
+      SMask: ctx.register(ctx.flateStream(new Uint8Array(256), {
+        Type: 'XObject', Subtype: 'Image', Width: 16, Height: 16, BitsPerComponent: 8, ColorSpace: 'DeviceGray', ...mask,
+      })),
+    }));
+
+  it('accepts exactly that shape', () => {
+    expect(withMask()).toMatchObject({ reencode: true, source: 'flate', channels: 3 });
+    expect(withMask({}, { ColorSpace: 'DeviceGray' })).toMatchObject({ reencode: true, channels: 1 });
+  });
+
+  const refused: Array<[string, Record<string, unknown>, Record<string, unknown>?]> = [
+    ['a JPEG under the mask', {}, { Filter: 'DCTDecode' }],
+    ['a stencil /Mask as well', {}, { Mask: [0, 0, 0, 0, 0, 0] }],
+    ['a mask of another size', { Width: 8 }],
+    ['/Matte (premultiplied colour)', { Matte: [0, 0, 0] }],
+    ['an inverting /Decode on the mask', { Decode: [1, 0] }],
+    ['a predictor on the mask', { DecodeParms: { Predictor: 15, Columns: 16 } }],
+    ['a 1-bit mask', { BitsPerComponent: 1 }],
+    ['a mask that is not grey', { ColorSpace: 'DeviceRGB' }],
+    ['a base image the allow-list refuses anyway', {}, { ColorSpace: 'DeviceCMYK' }],
+  ];
+  for (const [name, mask, base] of refused) {
+    it(`leaves alone, as masked: ${name}`, () => {
+      expect(withMask(mask, base)).toEqual({ reencode: false, reason: 'has a soft mask' });
+    });
+  }
 });
 
 describe('planImagePass — one shape at a time', () => {

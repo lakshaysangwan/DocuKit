@@ -34,7 +34,7 @@ describe('buildFacts', () => {
     expect(facts.heading).toBe('Result for page 1');
     expect(facts.lines[0]).toBe(
       '12 of 14 images on this page re-encoded at JPEG quality 50, scaled to 48% of their width and height; ' +
-        '2 left as they were (they use transparency or masking).',
+        '2 left as they were (their transparency or masks are of a kind this tool leaves alone).',
     );
     expect(facts.lines[1]).toBe('Text and vector graphics are not changed; document properties are cleared.');
     expect(facts.pageImageBytes).toEqual({ before: 14 * 100_000, after: 12 * 20_000 + 2 * 100_000 });
@@ -85,11 +85,11 @@ describe('buildFacts', () => {
       images: [kept('masked'), kept('unsupported'), kept('unsupported'), kept('small')],
     });
     expect(facts.lines[0]).toBe(
-      'None of the 4 images on this page is re-encoded; 1 left as it was (it uses transparency or masking); ' +
+      'None of the 4 images on this page is re-encoded; 1 left as it was (its transparency or mask is of a kind this tool leaves alone); ' +
         '2 left as they were (their format is not one this tool re-encodes); 1 left as it was (it is too small to gain anything).',
     );
     const one = buildFacts({ phase: 'result', pageIndex: 0, applied: HIGH, images: [kept('masked')] });
-    expect(one.lines[0]).toBe('The image on this page is not re-encoded (it uses transparency or masking).');
+    expect(one.lines[0]).toBe('The image on this page is not re-encoded (its transparency or mask is of a kind this tool leaves alone).');
   });
 
   it('a page with no images', () => {

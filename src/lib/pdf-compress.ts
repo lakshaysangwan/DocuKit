@@ -255,7 +255,8 @@ async function compressPdfOnce(
       };
       if (!plan.reencode) { keep(keptReason(plan.reason)); continue; }
 
-      const scale = scaleFor(ref);
+      // A soft-masked image keeps its size: its mask must still fit it pixel for pixel.
+      const scale = plan.reencode && plan.alpha ? { x: 1, y: 1 } : scaleFor(ref);
       let bmp: ImageBitmap | undefined;
       try {
         const { width, height, channels } = plan;
@@ -282,6 +283,9 @@ async function compressPdfOnce(
           const pixelData = await inflate(rawBytes);
           // Exactly one byte per sample, or this is not the layout we think it is.
           if (pixelData.length !== width * height * channels) { keep('unsupported'); continue; }
+          // The mask itself is not touched; it only has to be readable as the
+          // one-alpha-per-pixel plane the plan took it for.
+          if (plan.alpha && (await inflate(plan.alpha.contents)).length !== width * height) { keep('masked'); continue; }
 
           const { canvas, ctx } = createCanvas2D(width, height);
           const imageData = ctx.createImageData(width, height);
@@ -408,9 +412,15 @@ type PdfLib = typeof import('pdf-lib');
  *
  *  - it is not used as another image's /SMask or /Mask, and is not a stencil
  *    (/ImageMask true) — a mask is alpha, not a picture;
- *  - it has no /SMask and no /Mask of its own (a JPEG has no alpha channel, and
- *    resampling or JPEG ringing would drag the colour hidden under transparent
- *    pixels into the visible ones);
+ *  - it has no /Mask (stencil or colour key: a JPEG would no longer match it);
+ *  - it has no /SMask — except a FlateDecode image whose /SMask is itself a
+ *    plain mask: 8-bit /DeviceGray FlateDecode, the same width and height, no
+ *    /Decode, /DecodeParms or /Matte. That image is re-encoded at its own size
+ *    (so the mask still fits it pixel for pixel) and keeps the very same
+ *    /SMask. The colour under hidden pixels is kept too: renderers blend it
+ *    into edge pixels when they scale an image, so replacing it changes how
+ *    edges look, and on MuPDF renders a JPEG of the original samples stays
+ *    closest to the original page. A JPEG under a soft mask is left alone;
  *  - /Filter is exactly /DCTDecode or /FlateDecode, with no /DecodeParms
  *    (so no PNG/TIFF predictor, and nothing chained);
  *  - /BitsPerComponent is 8;
@@ -420,7 +430,15 @@ type PdfLib = typeof import('pdf-lib');
  */
 export type ImagePlan =
   | { reencode: false; reason: string }
-  | { reencode: true; source: 'jpeg' | 'flate'; width: number; height: number; channels: 1 | 3 };
+  | {
+      reencode: true;
+      source: 'jpeg' | 'flate';
+      width: number;
+      height: number;
+      channels: 1 | 3;
+      /** The image's soft mask, kept as it is; present only for a soft-masked image. */
+      alpha?: PDFRawStream;
+    };
 
 export interface PlannedImage {
   ref: PDFRef;
@@ -461,6 +479,41 @@ export function planImagePass(lib: PdfLib, context: PDFContext): PlannedImage[] 
 }
 
 function planImage(lib: PdfLib, dict: PDFDict): ImagePlan {
+  const softMask = dict.lookup(lib.PDFName.of('SMask'));
+  if (softMask === undefined) return planPlainImage(lib, dict);
+  // One reason for every soft-masked image left alone, whatever else it is.
+  const masked: ImagePlan = { reencode: false, reason: 'has a soft mask' };
+  if (dict.lookup(lib.PDFName.of('Mask')) !== undefined) return masked;
+  const plan = planPlainImage(lib, dict, true);
+  if (!plan.reencode || plan.source !== 'flate') return masked;
+  const alpha = plainSoftMask(lib, softMask, plan.width, plan.height);
+  return alpha ? { ...plan, alpha } : masked;
+}
+
+/**
+ * The soft mask as a stream whose inflated bytes are exactly one alpha value
+ * per pixel of an image of this size, or undefined when it is anything else.
+ */
+function plainSoftMask(lib: PdfLib, mask: PDFObject, width: number, height: number): PDFRawStream | undefined {
+  const { PDFName, PDFNumber, PDFRawStream } = lib;
+  if (!(mask instanceof PDFRawStream)) return undefined;
+  const get = (key: string) => mask.dict.lookup(PDFName.of(key));
+  const int = (key: string) => {
+    const value = get(key);
+    return value instanceof PDFNumber ? value.asNumber() : undefined;
+  };
+  if (get('Subtype') !== PDFName.of('Image')) return undefined;
+  if (get('Filter') !== PDFName.of('FlateDecode')) return undefined;
+  for (const key of ['DecodeParms', 'DP', 'Decode', 'Matte', 'ImageMask', 'SMask', 'Mask']) {
+    if (get(key) !== undefined) return undefined;
+  }
+  if (get('ColorSpace') !== PDFName.of('DeviceGray')) return undefined;
+  if (int('BitsPerComponent') !== 8 || int('Width') !== width || int('Height') !== height) return undefined;
+  return mask;
+}
+
+/** The decision for an image apart from any soft mask (`softMaskChecked`: the caller handles it). */
+function planPlainImage(lib: PdfLib, dict: PDFDict, softMaskChecked = false): ImagePlan {
   const { PDFName, PDFNumber, PDFBool, PDFArray } = lib;
   const get = (key: string) => dict.lookup(PDFName.of(key));
   const skip = (reason: string): ImagePlan => ({ reencode: false, reason });
@@ -470,7 +523,7 @@ function planImage(lib: PdfLib, dict: PDFDict): ImagePlan {
   };
 
   if (get('ImageMask') === PDFBool.True) return skip('is a stencil mask');
-  if (get('SMask') !== undefined) return skip('has a soft mask');
+  if (!softMaskChecked && get('SMask') !== undefined) return skip('has a soft mask');
   if (get('Mask') !== undefined) return skip('has a stencil or colour-key mask');
 
   const filter = get('Filter');
