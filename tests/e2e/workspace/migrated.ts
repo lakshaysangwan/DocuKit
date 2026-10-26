@@ -233,9 +233,17 @@ export const MIGRATED: MigratedTool[] = [
     // The first image tool: the image large on a checkerboard, Original vs
     // Compressed in the compare view. WebP at quality 75 is chosen on entry, so
     // the action is available once the image has been read — no `makeReady`.
+    // The image can be drawn a moment before it has been read, so entry waits
+    // for the action to finish fading in: axe on Linux WebKit otherwise graded
+    // the button mid-fade from its disabled 40% opacity.
     slug: 'compress-image',
     name: 'Compress Image',
-    enter: (page) => openCompressImage(page, FIXTURE.jpg),
+    enter: async (page) => {
+      await openCompressImage(page, FIXTURE.jpg);
+      const action = page.getByTestId('tool-action');
+      await expect(action).toBeEnabled();
+      await expect.poll(() => action.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    },
   },
   {
     // An image tool whose stage is the output frame: the chosen size at its
