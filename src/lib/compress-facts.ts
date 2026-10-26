@@ -60,11 +60,24 @@ const REASON_ORDER: ImageKeptReason[] = ['masked', 'unsupported', 'quality-90-pl
 /** "48%": the share of each side an image keeps. */
 export const scalePercent = (scale: number) => `${Math.round(scale * 100)}%`;
 
-function settingsPhrase(applied: CompressApplied): string {
+/** How the re-encoded images on a page were written: quality, colour, size. */
+function settingsPhrase(applied: CompressApplied, recompressed: CompressImageOutcome[]): string {
+  const one = recompressed.length === 1;
   let out = `JPEG quality ${applied.jpegQuality}`;
-  out += applied.imageScale < 1 ? `, scaled to ${scalePercent(applied.imageScale)} of their width and height` : ' at full width and height';
-  if (applied.grayscale) out += ', in grayscale';
-  return out;
+  if (applied.grayscale) out += ', in grayscale,';
+  if (applied.targetDpi) {
+    const reduced = recompressed.filter((image) => image.outWidth < image.width || image.outHeight < image.height);
+    if (reduced.length === 0) return `${out} at full width and height`;
+    if (one) {
+      const from = reduced[0].placedDpi;
+      return `${out.replace(/,$/, '')} and reduced to ${applied.targetDpi} DPI as drawn on the page${from ? ` (from ${from} DPI)` : ''}`;
+    }
+    const which = reduced.length === recompressed.length ? (reduced.length === 2 ? 'both' : 'all') : `${reduced.length} of them`;
+    return `${out.replace(/,$/, '')}; ${which} reduced to ${applied.targetDpi} DPI as drawn on the page`;
+  }
+  return applied.imageScale < 1
+    ? `${out.replace(/,$/, '')}, scaled to ${scalePercent(applied.imageScale)} of ${one ? 'its' : 'their'} width and height`
+    : `${out} at full width and height`;
 }
 
 export function buildFacts(input: FactsInput): Facts {
@@ -84,7 +97,8 @@ export function buildFacts(input: FactsInput): Facts {
     if (n === 0) {
       lines.push('There are no images on this page, so nothing on it is re-encoded.');
     } else {
-      const done = onPage.filter((image) => image.action === 'recompressed').length;
+      const recompressed = onPage.filter((image) => image.action === 'recompressed');
+      const done = recompressed.length;
       const kept = new Map<ImageKeptReason, number>();
       for (const image of onPage) {
         if (image.action === 'kept' && image.reason) kept.set(image.reason, (kept.get(image.reason) ?? 0) + 1);
@@ -93,8 +107,8 @@ export function buildFacts(input: FactsInput): Facts {
       if (done > 0) {
         parts.push(
           n === 1
-            ? `The image on this page is re-encoded at ${settingsPhrase(applied).replace('their', 'its')}`
-            : `${done} of ${n} images on this page re-encoded at ${settingsPhrase(applied)}`,
+            ? `The image on this page is re-encoded at ${settingsPhrase(applied, recompressed)}`
+            : `${done} of ${n} images on this page re-encoded at ${settingsPhrase(applied, recompressed)}`,
         );
       } else {
         parts.push(n === 1 ? 'The image on this page is not re-encoded' : `None of the ${n} images on this page is re-encoded`);

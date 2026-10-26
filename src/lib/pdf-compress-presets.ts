@@ -7,19 +7,21 @@ import type { CompressPdfOptions } from '../types/worker-messages';
 export type CompressLevel = 'low' | 'medium' | 'high' | 'custom' | 'target';
 
 /**
- * The three fixed levels. `dpi` is what the Custom slider calls "Image DPI"; it
- * is not a resolution — `pdf-compress.ts` turns it into a scale factor
- * (dpi / 150 below 150, otherwise 1), and that factor is what the facts report.
+ * The three fixed levels. `dpi` is a real resolution: an image drawn on the
+ * page sharper than this is reduced to it (`pdf-image-placement.ts` works out
+ * how sharp each image is where it is drawn). Low re-encodes nothing, so its
+ * values are not used. High's 96 DPI is what the page shows at 100% on an
+ * ordinary screen.
  */
 export const LEVEL_PRESETS = {
   low: { dpi: 300, jpegQuality: 90 },
   medium: { dpi: 150, jpegQuality: 75 },
-  high: { dpi: 72, jpegQuality: 50 },
+  high: { dpi: 96, jpegQuality: 50 },
 } as const;
 
 export interface CompressSettings {
   level: CompressLevel;
-  /** Custom only. */
+  /** Custom only: target resolution in DPI. */
   dpi: number;
   /** Custom only, 1–100. */
   jpegQuality: number;

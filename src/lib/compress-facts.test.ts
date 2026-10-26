@@ -59,8 +59,22 @@ describe('buildFacts', () => {
       applied: { ...HIGH, jpegQuality: 75, imageScale: 1, grayscale: true },
       images: [image({}), image({})],
     });
-    expect(facts.lines[0]).toBe('2 of 2 images on this page re-encoded at JPEG quality 75 at full width and height, in grayscale.');
+    expect(facts.lines[0]).toBe('2 of 2 images on this page re-encoded at JPEG quality 75, in grayscale, at full width and height.');
     expect(facts.lines.join(' ')).not.toMatch(/dpi/i);
+  });
+
+  it('a DPI setting is reported per image, from what was actually reduced', () => {
+    const dpi = { ...HIGH, imageScale: 1, targetDpi: 96 };
+    const reduced = image({ width: 1000, outWidth: 320, placedDpi: 300 });
+    const kept = image({ width: 480, outWidth: 480, height: 480, outHeight: 480, placedDpi: 80 });
+    const one = buildFacts({ phase: 'result', pageIndex: 0, applied: dpi, images: [reduced] });
+    expect(one.lines[0]).toBe('The image on this page is re-encoded at JPEG quality 50 and reduced to 96 DPI as drawn on the page (from 300 DPI).');
+    const some = buildFacts({ phase: 'result', pageIndex: 0, applied: dpi, images: [reduced, kept, image({ outWidth: 1000, outHeight: 1000 })] });
+    expect(some.lines[0]).toBe('3 of 3 images on this page re-encoded at JPEG quality 50; 1 of them reduced to 96 DPI as drawn on the page.');
+    const both = buildFacts({ phase: 'result', pageIndex: 0, applied: { ...dpi, grayscale: true }, images: [reduced, reduced] });
+    expect(both.lines[0]).toBe('2 of 2 images on this page re-encoded at JPEG quality 50, in grayscale; both reduced to 96 DPI as drawn on the page.');
+    const none = buildFacts({ phase: 'result', pageIndex: 0, applied: dpi, images: [kept] });
+    expect(none.lines[0]).toBe('The image on this page is re-encoded at JPEG quality 50 at full width and height.');
   });
 
   it('every image left as it was, each kind of reason grouped', () => {

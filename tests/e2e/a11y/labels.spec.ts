@@ -86,7 +86,7 @@ test.describe('P4.1 — every tool control has an accessible name', () => {
     await page.goto('/compress-pdf');
     await addSingleFileAndWait(page, FIXTURE.pdf3page);
     await page.getByRole('button', { name: 'Custom' }).click();
-    await expect(page.getByLabel('Image DPI')).toBeVisible();
+    await expect(page.getByLabel(/Image resolution/)).toBeVisible();
     await assertAllLabelled(page);
   });
 

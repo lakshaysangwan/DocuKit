@@ -43,10 +43,11 @@ export type SplitOptions = {
 
 export type CompressPdfOptions = {
   level: 'low' | 'medium' | 'high' | 'custom';
+  /** Target resolution: an image drawn sharper than this on the page is reduced to it. */
   dpi?: number;
   jpegQuality?: number;   // 1-100
   grayscale?: boolean;
-  /** Linear scale applied to embedded images (0–1). Overrides the DPI-derived scale. */
+  /** Linear scale applied to every embedded image (0–1), as target-size mode does. Overrides `dpi`. */
   imageScale?: number;
   /**
    * Target-size mode: fit the output under this many bytes, keeping as much
@@ -72,8 +73,10 @@ export interface CompressApplied {
   lossless: boolean;
   /** JPEG quality, 1–100, images were written at (meaningless when `lossless`). */
   jpegQuality: number;
-  /** Linear factor applied to each image's width and height (1 = unchanged). */
+  /** Linear factor applied to each image's width and height (1 = unchanged). 1 with `targetDpi`, which works per image. */
   imageScale: number;
+  /** The DPI setting: images drawn sharper than this on the page were reduced to it. */
+  targetDpi?: number;
   grayscale: boolean;
   /** Target-size mode: the step chosen (0 = lossless) and the number of steps. */
   ladderStep?: number;
@@ -98,6 +101,8 @@ export interface CompressImageOutcome {
   bytesAfter: number;
   action: 'recompressed' | 'kept';
   reason?: ImageKeptReason;
+  /** Its resolution where it is drawn largest, in pixels per inch (the sharper of width and height); absent when that could not be worked out. */
+  placedDpi?: number;
   /** Identical copies of this image the file held as separate objects, now merged into it. */
   copiesMerged?: number;
 }

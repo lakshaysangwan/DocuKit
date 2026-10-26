@@ -64,12 +64,11 @@ test.describe('Compress PDF — the result, compared page by page', () => {
     const facts = page.getByTestId('quality-facts');
     await expect(facts).toContainText('Result for page 1');
     await expect(facts).toContainText(
-      'The image on this page is re-encoded at JPEG quality 50, scaled to 48% of its width and height.',
+      'The image on this page is re-encoded at JPEG quality 50 and reduced to 96 DPI as drawn on the page (from 141 DPI).',
     );
     await expect(facts).toContainText('Text and vector graphics are not changed; document properties are cleared.');
     await expect(facts).toContainText('This page has no selectable text');
     await expect(page.getByTestId('page-image-bytes')).toHaveText(/^Images on this page: [\d.]+ KB → [\d.]+ KB$/);
-    await expect(facts).not.toContainText(/DPI/i);
     await expect(page.getByTestId('preview-status')).toContainText('Result for page 1 · Images on this page:');
     // The result is the file's: nothing about the whole file's size before a run.
     await expect(page.getByText(/Before: /)).toBeVisible();

@@ -8,6 +8,7 @@
  */
 import { createCanvas2D } from './canvas-2d';
 import { deduplicateImages } from './pdf-dedupe';
+import { imageEffectiveDpi, type PlacedDpi } from './pdf-image-placement';
 import { encodeImageData } from './image-codec';
 import { imagePages, pageImageRefs } from './pdf-page-images';
 import type {
@@ -159,14 +160,19 @@ async function compressPdfOnce(
 
   // The settings, worked out once: the pass and the report read the same values.
   const jpegQuality = (options.jpegQuality ?? 75) / 100;
-  // Downscale factor: explicit (target-size mode), or derived from the requested DPI.
-  const scale = options.imageScale ?? (options.dpi && options.dpi < 150 ? options.dpi / 150 : 1);
   const lossless = options.level === 'low';
+  // Resolution: either one factor for every image (target-size mode), or a
+  // target DPI — an image drawn sharper than that on the page is reduced to it,
+  // judged by its largest placement and along width and height separately
+  // (see pdf-image-placement.ts).
+  const targetDpi = options.imageScale === undefined && options.dpi && options.dpi > 0 ? options.dpi : undefined;
+  const fixedScale = Math.min(1, options.imageScale ?? 1);
   const applied: CompressApplied = {
     lossless,
     jpegQuality: options.jpegQuality ?? 75,
-    imageScale: lossless ? 1 : scale,
+    imageScale: lossless || targetDpi ? 1 : fixedScale,
     grayscale: !lossless && !!options.grayscale,
+    ...(!lossless && targetDpi ? { targetDpi } : {}),
   };
   let imagesTotal = 0;
   let imagesRecompressed = 0;
@@ -182,6 +188,23 @@ async function compressPdfOnce(
   } catch {
     /* leave the document as it was loaded */
   }
+
+  // How sharp each image is where it is drawn; images without a reliable
+  // figure are absent and keep their resolution.
+  let placedDpi = new Map<PDFRef, PlacedDpi>();
+  if (!lossless && targetDpi) {
+    try {
+      placedDpi = imageEffectiveDpi(pdfLib, doc);
+    } catch {
+      /* no figures: nothing is reduced for resolution */
+    }
+  }
+  const scaleFor = (ref: PDFRef): { x: number; y: number } => {
+    if (!targetDpi) return { x: fixedScale, y: fixedScale };
+    const dpi = placedDpi.get(ref);
+    if (!dpi) return { x: 1, y: 1 };
+    return { x: dpi.x > targetDpi ? targetDpi / dpi.x : 1, y: dpi.y > targetDpi ? targetDpi / dpi.y : 1 };
+  };
 
   // Per-image outcomes, for the images some page draws, in page order.
   const outcomes = new Map<PDFRef, CompressImageOutcome>();
@@ -199,6 +222,7 @@ async function compressPdfOnce(
       outcomes.set(ref, {
         pages, width, height, outWidth: width, outHeight: height, bytesBefore: bytes, bytesAfter: bytes, action: 'kept',
         ...(copies.has(ref) ? { copiesMerged: copies.get(ref) } : {}),
+        ...(placedDpi.has(ref) ? { placedDpi: Math.round(Math.max(placedDpi.get(ref)!.x, placedDpi.get(ref)!.y)) } : {}),
       });
     }
   }
@@ -231,6 +255,7 @@ async function compressPdfOnce(
       };
       if (!plan.reencode) { keep(keptReason(plan.reason)); continue; }
 
+      const scale = scaleFor(ref);
       let bmp: ImageBitmap | undefined;
       try {
         const { width, height, channels } = plan;
@@ -240,7 +265,7 @@ async function compressPdfOnce(
         if (plan.source === 'jpeg') {
           // Re-encoding a JPEG at high quality and the same size only costs a
           // generation of quality; it is worth doing when it is also downsampled.
-          if (jpegQuality >= 0.9 && scale >= 1) { keep('quality-90-plus'); continue; }
+          if (jpegQuality >= 0.9 && scale.x >= 1 && scale.y >= 1) { keep('quality-90-plus'); continue; }
           // The stream has to be the image its dictionary describes: a baseline
           // or progressive 8-bit JPEG of that size with that many components.
           // A CMYK JPEG labelled RGB, say, is not something to guess at.
@@ -277,10 +302,8 @@ async function compressPdfOnce(
 
         let targetW = width;
         let targetH = height;
-        if (scale < 1) {
-          targetW = Math.max(1, Math.round(width * scale));
-          targetH = Math.max(1, Math.round(height * scale));
-        }
+        if (scale.x < 1) targetW = Math.max(1, Math.round(width * scale.x));
+        if (scale.y < 1) targetH = Math.max(1, Math.round(height * scale.y));
 
         const { ctx } = createCanvas2D(targetW, targetH);
 

@@ -89,6 +89,38 @@ test.describe('Compress PDF', () => {
   });
 });
 
+test.describe('Compress PDF — the DPI setting is a real resolution', () => {
+  /** Width and height of the image page 1 draws, read from the file. */
+  async function firstImageSize(bytes: Uint8Array) {
+    const { PDFDocument, PDFName, PDFDict, PDFRawStream, PDFNumber } = await import('pdf-lib');
+    const doc = await PDFDocument.load(bytes);
+    const xobjects = doc.getPages()[0].node.Resources()!.lookup(PDFName.of('XObject'), PDFDict);
+    const stream = doc.context.lookup(xobjects.values()[0]);
+    if (!(stream instanceof PDFRawStream)) throw new Error('no image on page 1');
+    const n = (key: string) => {
+      const value = stream.dict.lookup(PDFName.of(key));
+      if (!(value instanceof PDFNumber)) throw new Error(`no /${key}`);
+      return value.asNumber();
+    };
+    return { width: n('Width'), height: n('Height') };
+  }
+
+  // The photo fixture draws a 1200 × 800 px photo over a whole 612 × 792 pt
+  // page: 1200 / 8.5 in = 141 DPI across, 800 / 11 in = 73 DPI down.
+  for (const [level, dpi] of [['Medium', 150], ['High', 96]] as const) {
+    test(`${level} reduces only what is sharper than ${dpi} DPI on the page`, async ({ page }) => {
+      await page.goto('/compress-pdf');
+      const original = await firstImageSize(await readFile(FIXTURE.pdfPhoto));
+      expect(original).toEqual({ width: 1200, height: 800 });
+      const { bytes } = await runLevel(page, level, FIXTURE.pdfPhoto);
+      const across = original.width / (612 / 72);
+      const out = await firstImageSize(bytes);
+      expect(out.width).toBe(across > dpi ? Math.round(original.width * (dpi / across)) : original.width);
+      expect(out.height, 'already below the setting down the page').toBe(original.height);
+    });
+  }
+});
+
 /** Compress the image-heavy fixture in Target size mode and return the download. */
 async function runTarget(page: import('@playwright/test').Page, value: number, unit: 'KB' | 'MB' = 'KB') {
   await page.goto('/compress-pdf');

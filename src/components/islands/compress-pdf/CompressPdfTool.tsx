@@ -12,7 +12,7 @@ import { useCompressPreview } from './use-compress-preview';
 import { usePdfDocument } from '@/hooks/use-pdf-document';
 import { usePageRender } from '@/hooks/use-page-render';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import { buildFacts, pageBytesLine, scalePercent } from '@/lib/compress-facts';
+import { buildFacts, pageBytesLine } from '@/lib/compress-facts';
 import { comparePage, pagesByImageChange, pagesToCheck } from '@/lib/compress-check';
 import { compressOptionsFor, LEVEL_PRESETS, type CompressLevel, type CompressSettings } from '@/lib/pdf-compress-presets';
 import type { GridComparison } from '@/lib/render-compare';
@@ -50,9 +50,9 @@ const ACCEPT = ['application/pdf'];
 
 const LEVELS: { value: CompressLevel; label: string; description: string }[] = [
   { value: 'low', label: 'Low', description: 'Lossless — images untouched' },
-  { value: 'medium', label: 'Medium', description: `Images at JPEG quality ${LEVEL_PRESETS.medium.jpegQuality}` },
-  { value: 'high', label: 'High', description: `JPEG quality ${LEVEL_PRESETS.high.jpegQuality}, images scaled down` },
-  { value: 'custom', label: 'Custom', description: 'Choose quality and scale' },
+  { value: 'medium', label: 'Medium', description: `JPEG quality ${LEVEL_PRESETS.medium.jpegQuality}, images at most ${LEVEL_PRESETS.medium.dpi} DPI` },
+  { value: 'high', label: 'High', description: `JPEG quality ${LEVEL_PRESETS.high.jpegQuality}, images at most ${LEVEL_PRESETS.high.dpi} DPI` },
+  { value: 'custom', label: 'Custom', description: 'Choose quality and resolution' },
   { value: 'target', label: 'Target size', description: 'Fit under a size limit' },
 ];
 
@@ -457,7 +457,6 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
   /* ── Controls ─────────────────────────────────────────────────────────── */
 
   const heading = 'text-sm font-semibold text-[var(--color-text-primary)]';
-  const customScale = dpi < 150 ? dpi / 150 : 1;
 
   const controls = (
     <div className="flex flex-col gap-5 p-3 sm:p-4" inert={run.phase === 'running'}>
@@ -571,8 +570,8 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
           <div className="flex flex-col gap-4">
             <div>
               <label htmlFor="cp-dpi" className="mb-1 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
-                <span>Image DPI</span>
-                <span className="font-medium tabular-nums">{dpi}</span>
+                <span>Image resolution</span>
+                <span className="font-medium tabular-nums">{dpi} DPI</span>
               </label>
               <input
                 id="cp-dpi"
@@ -585,9 +584,8 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
                 className="w-full accent-[var(--color-primary)]"
               />
               <p id="cp-dpi-note" className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                {customScale < 1
-                  ? `Images are scaled to ${scalePercent(customScale)} of their width and height (this value ÷ 150).`
-                  : 'From 150 up, images keep their width and height.'}
+                An image drawn on the page sharper than {dpi} DPI is reduced to {dpi} DPI. One whose size on the page cannot
+                be worked out keeps its resolution.
               </p>
             </div>
             <div>
@@ -728,11 +726,12 @@ export default function CompressPdfTool({ initialTargetKb }: CompressPdfToolProp
 
   let hint: string;
   if (level === 'low') hint = 'Low keeps every image as it is and only tightens the file.';
-  else if (level === 'medium') hint = `Medium re-encodes images at JPEG quality ${LEVEL_PRESETS.medium.jpegQuality}, at full size.`;
+  else if (level === 'medium')
+    hint = `Medium re-encodes images at JPEG quality ${LEVEL_PRESETS.medium.jpegQuality} and reduces any drawn sharper than ${LEVEL_PRESETS.medium.dpi} DPI to ${LEVEL_PRESETS.medium.dpi} DPI.`;
   else if (level === 'high')
-    hint = `High re-encodes images at JPEG quality ${LEVEL_PRESETS.high.jpegQuality}, scaled to ${scalePercent(LEVEL_PRESETS.high.dpi / 150)} of their width and height.`;
+    hint = `High re-encodes images at JPEG quality ${LEVEL_PRESETS.high.jpegQuality} and reduces any drawn sharper than ${LEVEL_PRESETS.high.dpi} DPI to ${LEVEL_PRESETS.high.dpi} DPI.`;
   else if (level === 'custom')
-    hint = `Custom: images re-encoded at JPEG quality ${jpegQuality}, ${customScale < 1 ? `scaled to ${scalePercent(customScale)}` : 'at full size'}.`;
+    hint = `Custom: images re-encoded at JPEG quality ${jpegQuality}; any drawn sharper than ${dpi} DPI reduced to ${dpi} DPI.`;
   else hint = `Images are compressed only as far as needed to fit under ${targetLabel}.`;
 
   const disabledReason = status !== 'ready' ? 'Opening your PDF…' : targetInvalid ? 'Enter a target size' : null;
