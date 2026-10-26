@@ -10,7 +10,7 @@ import OutputPagePreview from '@/components/islands/workspace/OutputPagePreview'
 import { useToolRun } from '@/components/islands/workspace/use-tool-run';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { downloadBlob } from '@/lib/download';
-import { prepareImageForPdf, type PreparedImage } from '@/lib/image-for-pdf';
+import { PDF_IMAGE_ACCEPT, prepareImageForPdf, type PreparedImage } from '@/lib/image-for-pdf';
 import {
   FIT_DEFAULT_DPI,
   FIT_MAX_LONG_EDGE,
@@ -35,20 +35,7 @@ type PageSize = 'fit' | 'a4' | 'letter' | 'legal';
 type Placement = 'fit' | 'stretch' | 'cover';
 type Orientation = 'auto' | 'portrait' | 'landscape';
 
-/**
- * What the dropzone takes. JPEG and PNG go into the PDF as they are; the rest
- * are decoded and re-encoded first (see lib/image-for-pdf.ts).
- */
-const ACCEPTED_MIMES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/bmp',
-  'image/gif',
-  'image/heic',
-  'image/heif',
-];
-const FORMATS_HINT = 'JPEG, PNG, WebP, GIF, BMP, HEIC · Drop multiple images';
+const FORMATS_HINT = 'JPEG, PNG, WebP, GIF, BMP, AVIF, HEIC · Drop multiple images';
 
 type MarginUnit = 'mm' | 'in' | 'pt';
 
@@ -427,7 +414,7 @@ export default function ImageToPdfTool() {
           Images
         </h3>
         <DropZone
-          accept={ACCEPTED_MIMES}
+          accept={PDF_IMAGE_ACCEPT}
           multiple
           onFiles={addFiles}
           hint={FORMATS_HINT}
@@ -435,7 +422,7 @@ export default function ImageToPdfTool() {
           compactLabel="Add images"
           showAccepted={justAdded}
         />
-        <p className={note}>Each image becomes one page. JPEG, PNG, WebP, GIF, BMP or HEIC.</p>
+        <p className={note}>Each image becomes one page. JPEG, PNG, WebP, GIF, BMP, AVIF or HEIC.</p>
       </section>
 
       <section className="flex flex-col gap-2" aria-labelledby="i2p-size">
@@ -611,7 +598,7 @@ export default function ImageToPdfTool() {
     <ToolWorkspace
       toolId="image-to-pdf"
       active={count > 0}
-      empty={<DropZone accept={ACCEPTED_MIMES} multiple onFiles={addFiles} hint={FORMATS_HINT} />}
+      empty={<DropZone accept={PDF_IMAGE_ACCEPT} multiple onFiles={addFiles} hint={FORMATS_HINT} />}
       title="Images to PDF"
       prompt={prompt}
       promptTone={promptTone}
@@ -623,7 +610,7 @@ export default function ImageToPdfTool() {
           noun="image"
           onAdd={addFiles}
           onRemove={removeAll}
-          accept={ACCEPTED_MIMES}
+          accept={PDF_IMAGE_ACCEPT}
           disabled={busy}
         />
       }

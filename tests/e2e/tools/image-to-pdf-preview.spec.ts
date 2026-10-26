@@ -4,7 +4,8 @@ import { basename } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { FIXTURE } from '../fixtures/generate';
 import { makeMarkerBmp, makeMarkerGif, makeSidewaysJpeg } from '../fixtures/image-fixtures';
-import { uploadBuffer } from '../helpers/harness';
+import { dropFile, uploadBuffer } from '../helpers/harness';
+import { expectHeicPhotoOnPage } from '../helpers/heic-photo';
 import {
   openImages,
   previewPages,
@@ -585,6 +586,23 @@ test.describe('Image to PDF — images a PDF cannot hold as they are', () => {
       if (marker) await expectMarkerUpright(page, pdf);
     });
   }
+
+  test('a HEIC dropped with no MIME type (as Windows gives it) is taken and is the photo in the PDF', async ({ page }) => {
+    test.slow();
+    await page.goto('/image-to-pdf');
+    await expect(page.locator('input[type="file"]').first()).toHaveAttribute('accept', /\.heic/);
+    const buffer = await readFile(FIXTURE.heic);
+    await dropFile(page.getByTestId('dropzone').first(), { name: 'IMG_0001.HEIC', mimeType: '', buffer });
+    await expect(page.getByTestId('output-page')).toHaveCount(1, { timeout: 30_000 });
+    await expect(page.getByTestId('file-card')).toContainText('saved as JPEG', { timeout: 60_000 });
+
+    const [shown] = await previewPages(page);
+    const pdf = await createAndDownload(page);
+    const [written] = await readOutputPages(pdf);
+    expectPreviewMatchesFile([shown], [written]);
+    expect(written.image.filter).toContain('DCTDecode');
+    await expectHeicPhotoOnPage(pdf, 0);
+  });
 
   test('an image with transparency becomes a PNG page and keeps its transparency', async ({ page }) => {
     const gif = makeMarkerGif({ transparentQuadrant: 'bottomRight' });

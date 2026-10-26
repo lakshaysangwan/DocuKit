@@ -20,7 +20,7 @@ test.describe('Image to PDF', () => {
     await expect(page.getByTestId('dropzone')).toBeVisible();
     // Before an image is added there is only the dropzone: no workspace, no options.
     await expect(page.getByTestId('workspace')).toHaveCount(0);
-    await expect(page.getByTestId('dropzone')).toContainText('JPEG, PNG, WebP, GIF, BMP, HEIC');
+    await expect(page.getByTestId('dropzone')).toContainText('JPEG, PNG, WebP, GIF, BMP, AVIF, HEIC');
     expect(diag.allErrors, `errors: ${diag.allErrors.join(' | ')}`).toEqual([]);
   });
 

@@ -1,4 +1,4 @@
-import { type Page, type Download, expect } from '@playwright/test';
+import { type Page, type Download, type Locator, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 /** Dev-server artifacts (Vite optimize-dep re-bundling, Astro dev toolbar). */
@@ -135,6 +135,27 @@ export async function uploadBuffer(
     timeout: 15_000,
   });
   await page.locator('input[type="file"]').first().setInputFiles(file);
+}
+
+/**
+ * Drag and drop a file onto `target` the way a desktop does, with the MIME
+ * type given — `''` for a file the system has no type for, such as a .heic on
+ * Windows. Fails unless the browser really hands the page a file of that type.
+ */
+export async function dropFile(target: Locator, file: { name: string; mimeType: string; buffer: Buffer }) {
+  await expect(target).toHaveAttribute('data-hydrated', 'true', { timeout: 15_000 });
+  const dataTransfer = await target.page().evaluateHandle(
+    ({ name, type, base64 }) => {
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const dt = new DataTransfer();
+      dt.items.add(new File([bytes], name, { type }));
+      return dt;
+    },
+    { name: file.name, type: file.mimeType, base64: file.buffer.toString('base64') },
+  );
+  expect(await dataTransfer.evaluate((dt) => dt.files[0].type)).toBe(file.mimeType);
+  for (const type of ['dragenter', 'dragover', 'drop']) await target.dispatchEvent(type, { dataTransfer });
+  await dataTransfer.dispose();
 }
 
 /** Click something and capture the resulting download; assert it's non-empty. */

@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { FIXTURE } from '../fixtures/generate';
 import { SIGNATURE_PHOTO, signaturePhotoInkBox } from '../fixtures/sign-fixtures';
 import { renderPage } from '../helpers/redact-pdf';
+import { dropFile } from '../helpers/harness';
+import { expectHeicPhotoOnPage } from '../helpers/heic-photo';
 import {
   chooseSignaturePicture,
   openSign,
@@ -247,5 +249,25 @@ test.describe('Sign PDF — signature from a photo', () => {
     const heic = await previewInk(page);
     expect([heic.width, heic.height]).toEqual([600, 400]);
     await expect(page.getByTestId('use-signature')).toBeEnabled();
+  });
+
+  test('a HEIC dropped with no MIME type (as Windows gives it) is taken and is the photo in the signed PDF', async ({ page }) => {
+    test.slow();
+    await openSign(page, FIXTURE.pdf1page);
+    await page.getByTestId('signature-mode-upload').click();
+    const zone = page.getByTestId('signature-upload');
+    await expect(zone.locator('[data-testid="dropzone"][data-hydrated="true"]')).toBeVisible();
+    const input = zone.locator('input[type="file"]');
+    await expect(input).toHaveAttribute('accept', /image\/gif.*image\/avif.*\.heic/);
+    // Dropped: a file input given a .heic name gets image/heic from the browser, a drop keeps the empty type.
+    await dropFile(zone.getByTestId('dropzone'), { name: 'IMG_0001.HEIC', mimeType: '', buffer: readFileSync(FIXTURE.heic) });
+    await expect(page.getByTestId('signature-upload-preview')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('signature-view-original').click();
+    await expect(page.getByTestId('signature-upload-preview')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+    await page.getByTestId('use-signature').click();
+    await expect(page.getByTestId('overlay-item').first()).toBeVisible();
+
+    const pdf = await signAndDownload(page);
+    await expectHeicPhotoOnPage(pdf, 0);
   });
 });

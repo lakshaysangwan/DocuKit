@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import DropZone from '@/components/islands/shared/DropZone';
 import { cn } from '@/lib/utils';
+import { PDF_IMAGE_ACCEPT } from '@/lib/image-for-pdf';
 import type { RgbaImage } from '@/lib/sign/signature-extract';
 import {
   InkExtractor,
@@ -11,8 +12,11 @@ import {
   type SignaturePhoto,
 } from './signature-image';
 
-/** What the Upload tab takes: the common photo formats, and iPhone HEIC through the shared decoder. */
-const UPLOAD_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
+/**
+ * What the Upload tab takes: every type the photo decoder (`decodeToBitmap`)
+ * reads, iPhone HEIC included, and HEIC/HEIF by extension too.
+ */
+const UPLOAD_TYPES = PDF_IMAGE_ACCEPT;
 
 export interface SignatureUploadHandle {
   /** The signature as it will be stamped: the cleaned PNG, or the picture as it is. */
@@ -191,7 +195,7 @@ const SignatureUpload = forwardRef<SignatureUploadHandle, SignatureUploadProps>(
           multiple={false}
           onFiles={choose}
           prompt={reading ? 'Reading the picture…' : 'Drop a photo or scan of your signature'}
-          hint="JPEG, PNG, WebP or HEIC. The paper is taken out in your browser."
+          hint="JPEG, PNG, WebP, HEIC, GIF, BMP or AVIF. The paper is taken out in your browser."
           className="min-h-28"
         />
         {problem && (

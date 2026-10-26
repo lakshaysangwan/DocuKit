@@ -197,7 +197,7 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['digital-signature-pdf', 'edit-pdf', 'protect-pdf'],
     wasmDeps: ['pdf-lib', 'pdfjs'],
     faqs: [
-      { q: 'What signature methods are supported?', a: 'Draw with a mouse, finger or pen, type your name and pick one of four handwriting styles, or upload a photo or scan of your signature (JPEG, PNG, WebP or HEIC). Whichever you choose is trimmed to the signature itself and keeps its proportions.' },
+      { q: 'What signature methods are supported?', a: 'Draw with a mouse, finger or pen, type your name and pick one of four handwriting styles, or upload a photo or scan of your signature (JPEG, PNG, WebP, HEIC, GIF, BMP or AVIF). Whichever you choose is trimmed to the signature itself and keeps its proportions.' },
       { q: 'Can I use a photo of my signature on paper?', a: 'Yes. Upload the photo and the paper is taken out and the picture cropped to the ink, in your browser: only the signature is placed on the page, and the page shows through around it. The ink keeps its own colour, or tick "Make ink black". Shadows, lined paper or printed text behind the signature can leave marks; move the Sensitivity slider left to drop them, or choose Original to use the picture as it is. Sign on plain paper in good light for the cleanest result.' },
       { q: 'Is this a legally binding signature?', a: 'We cannot tell you that. Whether a signature is accepted depends on the law where you are, the kind of document and what the other party agrees to, so ask them or someone qualified to advise you. Sign PDF places an image of your signature on the page; it is not a certificate-based digital signature. Digital Signature PDF adds one of those — a cryptographic signature that shows whether the file was changed after signing — but that does not make a document legally binding on its own either.' },
       { q: 'Can I move or resize the signature after placing it?', a: 'Yes. Drag it to move it and pull a corner to resize it — it keeps its proportions. You can also use the Smaller and Larger buttons, type an exact position in millimetres, or nudge it with the arrow keys. Remove deletes a stamp, and Undo and Redo cover every change until you download.' },
@@ -369,7 +369,7 @@ export const TOOLS: ToolDef[] = [
     slug: 'image-to-pdf',
     name: 'Image to PDF',
     shortDescription: 'Convert images to a PDF document',
-    longDescription: 'Turn one or more images into a single PDF, one image per page. Add JPEG, PNG, WebP, GIF, BMP or HEIC images and see every page exactly as it will be saved — page size, orientation, image placement and margins — before you create the PDF.',
+    longDescription: 'Turn one or more images into a single PDF, one image per page. Add JPEG, PNG, WebP, GIF, BMP, AVIF or HEIC images and see every page exactly as it will be saved — page size, orientation, image placement and margins — before you create the PDF.',
     category: 'pdf',
     icon: '/icons/tools/image-to-pdf.svg',
     primaryKeyword: 'image to pdf',
@@ -379,7 +379,7 @@ export const TOOLS: ToolDef[] = [
     relatedSlugs: ['pdf-to-image', 'compress-pdf', 'merge-pdf'],
     wasmDeps: ['pdf-lib'],
     faqs: [
-      { q: 'What image formats are supported?', a: 'JPEG, PNG, WebP, GIF, BMP and HEIC (iPhone photos). JPEG and PNG images go into the PDF unchanged. The others are converted first: to PNG when they have transparency, otherwise to JPEG. An animated image contributes its first frame.' },
+      { q: 'What image formats are supported?', a: 'JPEG, PNG, WebP, GIF, BMP, AVIF and HEIC (iPhone photos). JPEG and PNG images go into the PDF unchanged. The others are converted first: to PNG when they have transparency, otherwise to JPEG. An animated image contributes its first frame.' },
       { q: 'Can I see the PDF before I download it?', a: 'Yes. As soon as you add an image, every page is shown at its real proportions with the image where it will be and a dashed line for the margins. The pages follow the options as you change them, and any page can be opened large.' },
       { q: 'Can I set a specific page size?', a: 'Yes — A4, Letter or Legal, or "Fit Image", which makes each page the shape of its image, with no margin. A Fit Image page is sized from the DPI the image states (a 300 DPI scan of an A4 sheet comes back A4), or at 150 DPI when it states none, and is at most 420 mm (A3) on its long side. The image keeps every pixel whatever the page size.' },
       { q: 'Do landscape photos get landscape pages?', a: 'Yes. On A4, Letter and Legal the orientation is Auto to start with: a landscape image gets a landscape page and a portrait or square one a portrait page, so photos of both shapes can share one PDF. Choose Portrait or Landscape to turn every page the same way.' },
