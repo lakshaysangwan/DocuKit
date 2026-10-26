@@ -250,9 +250,8 @@ renders fixed in `src/lib/pdfjs.ts`). Details in `WORKLOG.md`.
 
 ### 2. Follow-ups found during the migration
 
-- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5); Compress PDF dedupe, real DPI, soft-masked images, fonts option removed, preview copies once (F6); Watermark drag-to-position (F7); copy-truth sweep, free-word guard, fixtures untracked (F8).
-- CI flakes still unexplained (e2e is now sharded, ~15 min — CI3): WebKit `home-search.spec.ts:298` (cause found in F8: Astro retries the island script as `?astro-retry=…`, which the test route pattern misses — fix the pattern), Chromium `sign-pdf-all-pages.spec.ts:164` (drag not registered). The CI container tag `mcr.microsoft.com/playwright:v1.62.1-noble` must be bumped together with `@playwright/test`. Pushing a `task/**` branch runs CI.
-- Design doc `docs/design/tool-workspace.md`: status line and the Edit row are out of date (all 20 migrated; `AnnotationCanvas` gone; `icon` on `ActionBar` download).
+- Done: signature fonts (F1); result gallery, Sign legal FAQ, search synonyms, unused `redact` op, large-file test (F4); Fit Image page size, Redact phrase-only marks (F5); Compress PDF dedupe, real DPI, soft-masked images, fonts option removed, preview copies once (F6); Watermark drag-to-position (F7); copy-truth sweep, free-word guard, fixtures untracked (F8); home-search retry pattern, design doc refreshed (F9).
+- CI flakes still unexplained (e2e is now sharded, ~15 min — CI3): Chromium `sign-pdf-all-pages.spec.ts:164` (drag not registered). The CI container tag `mcr.microsoft.com/playwright:v1.62.1-noble` must be bumped together with `@playwright/test`. Pushing a `task/**` branch runs CI.
 
 
 ### 3. Older backlog still open
