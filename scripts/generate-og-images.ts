@@ -33,6 +33,16 @@ const CATEGORY_COLORS: Record<string, string> = {
   image: '#7C3AED',
 };
 
+/**
+ * The line beside the category badge. View-Once Image is the one tool that
+ * uploads anything (the encrypted image), so it cannot claim "No Uploads".
+ */
+function taglineFor(slug: string): string {
+  return slug === 'view-once-image'
+    ? 'Encrypted in Your Browser · Link Opens Once'
+    : 'No Uploads · 100% Browser-Based';
+}
+
 async function generateOgImage(slug: string, name: string, description: string, category: string): Promise<void> {
   const accent = CATEGORY_COLORS[category] ?? '#1A56DB';
   const categoryLabel = category === 'pdf' ? 'PDF Tools' : 'Image Tools';
@@ -82,7 +92,7 @@ async function generateOgImage(slug: string, name: string, description: string, 
                   type: 'div',
                   props: {
                     style: { color: '#475569', fontSize: '14px' },
-                    children: 'No Uploads · 100% Browser-Based',
+                    children: taglineFor(slug),
                   },
                 },
               ],

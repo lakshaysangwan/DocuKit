@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer.astro';
 
 <BaseLayout
   title="Privacy Policy — Docukit"
-  description="Docukit privacy policy. All processing happens in your browser — no uploads, no tracking, no ads."
+  description="Docukit privacy policy. Files are processed in your browser and not uploaded; View-Once Image uploads only an encrypted copy. No tracking, no ads."
   canonical="https://docukit.uk/privacy/"
 >
   <Header />
@@ -15,32 +15,40 @@ import Footer from '@/components/layout/Footer.astro';
     <section class="privacy">
       <div class="privacy__container">
         <h1 class="privacy__title">Privacy Policy</h1>
-        <p class="privacy__updated">Last updated: March 2026</p>
+        <p class="privacy__updated">Last updated: October 2026</p>
 
         <div class="privacy__section">
           <h2 class="privacy__heading">No File Uploads</h2>
           <p class="privacy__text">
-            All PDF and image processing happens entirely in your browser using
-            WebAssembly and Web Workers. Your files never leave your device.
+            Every tool except View-Once Image works entirely in your browser:
+            your files are processed on your device and are not uploaded. Lock
+            Image, too, encrypts your image in your browser and saves the locked
+            file straight to your device.
           </p>
         </div>
 
         <div class="privacy__section">
           <h2 class="privacy__heading">View-Once Feature</h2>
           <p class="privacy__text">
-            The View-Once Image tool is the only feature that communicates with
-            our servers. The image is encrypted in your browser before upload —
-            the decryption key is only in the share URL fragment and never sent
-            to the server. Encrypted data is stored temporarily with a
-            configurable TTL and permanently deleted after the first view.
+            View-Once Image is the only tool that sends your file to our server.
+            The image is encrypted in your browser first, and only the encrypted
+            image and the expiry you chose are uploaded. The decryption key is
+            only in the link, after the #, which browsers never send to a server,
+            so the server cannot decrypt what it stores. The encrypted image is
+            deleted the first time the link is opened, or when the link expires
+            if nobody opens it. Like any website, the server sees the IP address
+            of whoever uploads or opens an image; Docukit's server code does not
+            store it.
           </p>
         </div>
 
         <div class="privacy__section">
           <h2 class="privacy__heading">No Tracking</h2>
           <p class="privacy__text">
-            We do not use cookies, analytics, or tracking scripts. No personal
-            data is collected.
+            Docukit's code sets no cookies and includes no analytics or tracking
+            scripts, and we do not collect personal data. Settings the site
+            remembers, such as your theme or saved image sizes, stay in your browser's
+            storage and are never sent anywhere.
           </p>
         </div>
 
