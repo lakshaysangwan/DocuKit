@@ -316,23 +316,33 @@ test.describe('Homepage search — the page does not move', () => {
       firstCard: await documentTop(page, FIRST_CARD),
     };
 
-    expect(after).toEqual(before);
+    // Sub-pixel tolerance: engines round a fractional layout position
+    // differently from one layout pass to the next; a real shift is whole pixels.
+    expect(after.field).not.toBeNull();
+    for (const key of ['x', 'y', 'width', 'height'] as const) {
+      expect(after.field![key]).toBeCloseTo(before.field![key], 1);
+    }
+    expect(after.heading).toBeCloseTo(before.heading, 1);
+    expect(after.firstCard).toBeCloseTo(before.firstCard, 1);
   });
 
   test('results and the "no results" message open over the grid, not above it', async ({ page }) => {
     const input = await openHome(page);
     const heading = await documentTop(page, '#tools-heading');
     const firstCard = await documentTop(page, FIRST_CARD);
+    // toBeCloseTo(…, 1): the grid must not move, but engines may round a
+    // fractional position differently once the listbox opens (Firefox: 695.59999
+    // vs 695.60000).
 
     await input.fill('pdf');
     await expect(page.getByRole('listbox', { name: 'Matching tools' })).toBeVisible();
-    expect(await documentTop(page, '#tools-heading')).toBe(heading);
-    expect(await documentTop(page, FIRST_CARD)).toBe(firstCard);
+    expect(await documentTop(page, '#tools-heading')).toBeCloseTo(heading, 1);
+    expect(await documentTop(page, FIRST_CARD)).toBeCloseTo(firstCard, 1);
 
     await input.fill('spreadsheet');
     await expect(page.getByTestId('tool-search-empty')).toBeVisible();
-    expect(await documentTop(page, '#tools-heading')).toBe(heading);
-    expect(await documentTop(page, FIRST_CARD)).toBe(firstCard);
+    expect(await documentTop(page, '#tools-heading')).toBeCloseTo(heading, 1);
+    expect(await documentTop(page, FIRST_CARD)).toBeCloseTo(firstCard, 1);
   });
 
   test('the results are brought into view when they would open below the fold', async ({ page }) => {
